@@ -1,0 +1,8 @@
+{
+  "appId": "com.zhenli.unifieddms",
+  "appName": "ZHENLI Unified DMS",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#172e4a" />
+  <meta name="description" content="A company secretarial task dashboard, ready for secure personal online hosting and private company-list import." />
+  <title>ZHENLI | Secretarial Task Hub</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell" id="appShell">
+    <div id="mobileBackdrop" class="mobile-backdrop" hidden></div>
+    <aside class="sidebar" id="sidebar" aria-label="Primary navigation">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="34" height="34" fill="none"><path d="M8 9h9v17H8zm11 0h9v17h-9z" fill="#F8FBFF" opacity=".95"/><path d="M17 10v16M11 14h3m-3 5h3m8-5h3m-3 5h3" stroke="#2B5D92" stroke-width="1.7" stroke-linecap="round"/><path d="m8 29 10-4 10 4" stroke="#A9D7FF" stroke-width="2.2" stroke-linecap="round"/></svg></div>
+        <div><div class="brand-title">ZHENLI<span> / TASK HUB</span></div><div class="brand-subtitle">COMPANY SECRETARIAL</div></div>
+      </div>
+      <div class="workspace-label">WORKSPACE <span class="mini-pill">LOCAL</span></div>
+      <nav class="nav-group" id="mainNav">
+        <button class="nav-link selected" data-view="dashboard" type="button"><span class="nav-icon" data-icon="layout-dashboard"></span><span>Overview</span></button>
+        <button class="nav-link" data-view="all" type="button"><span class="nav-icon" data-icon="list-todo"></span><span>All tasks</span><span id="navAllCount" class="nav-count">0</span></button>
+        <button class="nav-link" data-view="today" type="button"><span class="nav-icon" data-icon="sun"></span><span>Today</span><span id="navTodayCount" class="nav-count">0</span></button>
+        <button class="nav-link" data-view="upcoming" type="button"><span class="nav-icon" data-icon="calendar-days"></span><span>Next 7 days</span></button>
+        <button class="nav-link" data-view="overdue" type="button"><span class="nav-icon" data-icon="alert-circle"></span><span>Overdue</span><span id="navOverdueCount" class="nav-count danger-count">0</span></button>
+        <button class="nav-link" data-view="board" type="button"><span class="nav-icon" data-icon="columns-3"></span><span>Kanban board</span></button>
+        <button class="nav-link" data-view="calendar" type="button"><span class="nav-icon" data-icon="calendar-range"></span><span>Calendar</span></button>
+        <button class="nav-link" data-view="completed" type="button"><span class="nav-icon" data-icon="check-circle-2"></span><span>Completed</span></button>
+      </nav>
+      <div class="sidebar-rule"></div>
+      <div class="workspace-label">MANAGEMENT</div>
+      <nav class="nav-group">
+        <button class="nav-link" data-view="deadlines" type="button"><span class="nav-icon" data-icon="calendar-days"></span><span>Statutory deadlines</span></button>
+        <button class="nav-link" data-view="companies" type="button"><span class="nav-icon" data-icon="building-2"></span><span>Companies</span><span id="navCompanyCount" class="nav-count">0</span></button>
+        <button class="nav-link" data-view="activity" type="button"><span class="nav-icon" data-icon="history"></span><span>Activity history</span></button>
+      </nav>
+      <div class="sidebar-grow"></div>
+      <div class="sidebar-tip"><div class="tip-top"><span data-icon="shield-check"></span> Private workspace</div><p>Tasks are saved only in this browser. Export backups regularly.</p><button type="button" id="sidebarBackup" class="tip-action">Export backup <span aria-hidden="true">↗</span></button></div>
+      <div class="sidebar-footer"><span class="status-dot"></span> Browser storage active <span>v3.0</span></div>
+    </aside>
+
+    <div class="content-shell">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="menuToggle" type="button" class="icon-button menu-toggle" aria-label="Open menu"><span data-icon="menu"></span></button>
+          <div class="breadcrumbs"><span>Workspace</span><span class="crumb-sep">/</span><strong id="breadcrumbName">Overview</strong></div>
+        </div>
+        <div class="topbar-actions">
+          <div class="topbar-date" id="headerDate"></div>
+          <button type="button" id="themeToggle" class="icon-button" aria-label="Toggle dark mode" title="Change appearance"><span data-icon="moon"></span></button>
+          <button type="button" id="openSettings" class="icon-button" aria-label="Data and settings" title="Data and settings"><span data-icon="settings-2"></span></button>
+          <button type="button" id="topAddTask" class="primary-btn"><span data-icon="plus"></span><span>New task</span></button>
+        </div>
+      </header>
+
+      <main class="main-area" id="mainArea">
+        <section class="page-heading">
+          <div><div class="eyebrow" id="pageEyebrow">YOUR WORKSPACE</div><h1 id="pageTitle">Good day, let's get things done<span class="heading-dot">.</span></h1><p id="pageDescription">All your company secretarial work, in one organized place.</p></div>
+          <button type="button" class="outline-btn page-heading-action" id="quickCompanyBtn"><span data-icon="building-2"></span> Add company</button>
+        </section>
+        <div id="pageContent" aria-live="polite"></div>
+      </main>
+      <footer class="content-footer">ZHENLI Task Hub <span aria-hidden="true">·</span> Online-ready · browser storage <span aria-hidden="true">·</span> <button type="button" id="footerExport">Backup my data</button></footer>
+    </div>
+  </div>
+
+  <dialog class="modal" id="taskDialog" aria-labelledby="taskDialogTitle">
+    <form id="taskForm" class="form-modal" novalidate>
+      <header class="modal-head"><div><span class="eyebrow">SECRETARIAL WORK ITEM</span><h2 id="taskDialogTitle">Create a task</h2></div><button type="button" class="icon-button close-dialog" data-close="taskDialog" aria-label="Close"><span data-icon="x"></span></button></header>
+      <div class="modal-body">
+        <input type="hidden" id="taskId" />
+        <div class="field"><label for="taskTitle">Task title <span class="required">*</span></label><input id="taskTitle" maxlength="180" required placeholder="e.g. Prepare Annual Return 2027" autocomplete="off" /><div class="field-error" id="taskTitleError" hidden>Please enter a task title.</div></div>
+        <div class="field-row"><div class="field"><label for="taskCompany">Company (dropdown)</label><div class="company-picker"><input id="taskCompanySearch" type="search" placeholder="Search company name or registration number" autocomplete="off" aria-label="Search company options" /><select id="taskCompany" aria-label="Choose company from dropdown"><option value="">General / No company selected</option></select></div><span class="field-hint">Choose from your imported Master Listing or a company you added.</span></div><div class="field"><label for="taskCategory">Category</label><select id="taskCategory"></select></div></div>
+        <div class="field-row"><div class="field"><label for="taskDue">Due date</label><input id="taskDue" type="date" /></div><div class="field"><label for="taskPriority">Priority</label><select id="taskPriority"></select></div></div>
+        <div class="field-row"><div class="field"><label for="taskStatus">Status</label><select id="taskStatus"></select></div><div class="field"><label for="taskRepeat">Repeat after completion</label><select id="taskRepeat"><option value="none">Does not repeat</option><option value="daily">Every day</option><option value="weekly">Every week</option><option value="monthly">Every month</option><option value="yearly">Every year</option></select></div></div>
+        <div class="field-row"><div class="field"><label for="taskAssignee">Assigned to</label><input id="taskAssignee" maxlength="100" placeholder="Team member (optional)" /></div><div class="field"><label for="taskReference">SSM / Client reference</label><input id="taskReference" maxlength="120" placeholder="e.g. QL..., OTC..., file reference" /></div></div>
+        <div id="taskCompanyDeadlineHint" class="task-date-hint" aria-live="polite" hidden></div>
+        <div class="field"><label for="taskNotes">Notes / next action</label><textarea id="taskNotes" rows="3" maxlength="8000" placeholder="Instructions, outstanding documents, follow-up details..."></textarea></div>
+        <div class="field"><label>Checklist</label><div id="checklistEditor" class="checklist-editor"></div><div class="inline-add"><input id="newChecklistText" maxlength="180" placeholder="Add a checklist item" aria-label="Add checklist item" /><button class="outline-btn small" id="addChecklistItem" type="button">Add step</button></div></div>
+      </div>
+      <footer class="modal-actions"><button id="deleteTaskBtn" type="button" class="danger-text-btn" hidden>Delete task</button><div class="action-spacer"></div><button type="button" class="outline-btn" data-close="taskDialog">Cancel</button><button type="submit" class="primary-btn" id="saveTaskBtn"><span data-icon="check"></span> Save task</button></footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal small-modal" id="companyDialog" aria-labelledby="companyDialogTitle">
+    <form id="companyForm" novalidate>
+      <header class="modal-head"><div><span class="eyebrow">CLIENT PORTFOLIO</span><h2 id="companyDialogTitle">Add company</h2></div><button type="button" class="icon-button close-dialog" data-close="companyDialog" aria-label="Close"><span data-icon="x"></span></button></header>
+      <div class="modal-body"><input type="hidden" id="companyId" /><div class="field"><label for="companyName">Company name <span class="required">*</span></label><input id="companyName" required maxlength="160" placeholder="ABC HOLDINGS SDN. BHD." /></div><div class="field"><label for="companyReg">Registration number</label><input id="companyReg" maxlength="80" placeholder="202601012345 (1234567-X)" /></div><div class="form-subhead">Annual Return / Annual Return 申报</div>
+      <div class="field-row"><div class="field"><label for="companyAr">Next AR anniversary date</label><input id="companyAr" type="date" /></div><div class="field"><label for="companyArDue">AR lodgement due date</label><input id="companyArDue" type="date" /></div></div>
+      <div class="form-subhead">Audited Financial Statements / 财务报表</div>
+      <div class="field-row"><div class="field"><label for="companyAfsDue">AFS lodgement due date</label><input id="companyAfsDue" type="date" /></div><div class="field"><label for="companyAfsStatus">If AFS date is missing</label><select id="companyAfsStatus"><option value="not provided">Not provided</option><option value="TBC">TBC / To be confirmed</option></select></div></div>
+      <div class="field-row"><div class="field"><label for="companyFinYearEnded">Financial Year Ended (source)</label><input id="companyFinYearEnded" type="date" /></div><div class="field"><label for="companyFye">Subsequent FYE (source)</label><input id="companyFye" type="date" /></div></div><div class="field"><label for="companyNotes">Internal notes</label><textarea id="companyNotes" rows="3" maxlength="2000" placeholder="Company contact, filing reminders, other notes..."></textarea></div></div>
+      <footer class="modal-actions"><button type="button" id="deleteCompanyBtn" class="danger-text-btn" hidden>Delete company</button><div class="action-spacer"></div><button type="button" class="outline-btn" data-close="companyDialog">Cancel</button><button type="submit" class="primary-btn">Save company</button></footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal settings-modal" id="settingsDialog" aria-labelledby="settingsDialogTitle">
+    <div><header class="modal-head"><div><span class="eyebrow">WORKSPACE CONTROL</span><h2 id="settingsDialogTitle">Data & settings</h2></div><button class="icon-button close-dialog" type="button" data-close="settingsDialog" aria-label="Close"><span data-icon="x"></span></button></header>
+      <div class="modal-body settings-body"><div class="setting-callout"><span data-icon="shield-check"></span><div><strong>Secure DMS sync / standalone browser storage</strong><p>When opened within the signed-in ZHENLI DMS and its Task Hub SQL migration is installed, tasks sync privately through Supabase. Opened by itself, this page stores data only in this browser. Avoid unnecessary NRIC or sensitive personal data in task notes.</p></div></div>
+      <div class="setting-block"><h3>Backup and portability</h3><p>Export JSON to keep all tasks, companies and activity. Import a backup to restore or move between devices.</p><div class="btn-row"><button class="primary-btn" id="exportJson" type="button"><span data-icon="download"></span> Export JSON backup</button><button class="outline-btn" id="importJsonBtn" type="button"><span data-icon="upload"></span> Import JSON backup</button><input type="file" accept=".json,application/json" id="importJsonFile" hidden /></div></div>
+      <div class="setting-block"><h3>Import company list / Master Listing</h3><p>Load your private Master Listing company list into this browser. Imported names, registration numbers, AR anniversary, AR lodgement due dates, AFS lodgement due dates and financial year-end records populate the company register and deadline dashboard. Existing tasks and edited companies are preserved. No company list is sent to the website host.</p><div class="btn-row"><button class="primary-btn" id="importCompaniesBtn" type="button"><span data-icon="building-2"></span> Import company list (JSON)</button><input type="file" accept=".json,application/json" id="importCompaniesFile" hidden /></div><label class="toggle-row import-option"><input id="overwriteStatutoryDates" type="checkbox" /> Update existing AR/AFS dates from this import (otherwise only fill empty fields)</label><p class="import-guide">Import <strong>ZHENLI_Master_Listing_Companies_And_Deadlines_PRIVATE.json</strong>. Do not upload the private JSON to your public website. Importing does not create or close tasks and does not prove whether historical filings were lodged.</p></div>
+<div class="setting-block"><h3>Spreadsheet export</h3><p>Download all tasks as a CSV file to open in Excel.</p><button type="button" class="outline-btn" id="exportCsv"><span data-icon="file-spreadsheet"></span> Download tasks CSV</button></div>
+      <div class="setting-block"><h3>Display</h3><label class="toggle-row"><input id="compactToggle" type="checkbox" /> Compact task rows</label></div>
+      <div class="setting-block danger-setting"><h3>Reset all data</h3><p>Delete all Task Hub records for the current workspace. When embedded inside DMS this can affect synced cloud data. Export a backup first.</p><button id="resetData" type="button" class="danger-outline-btn">Erase local data</button></div></div>
+      <footer class="modal-actions"><button type="button" class="outline-btn" data-close="settingsDialog">Close</button></footer></div>
+  </dialog>
+  <div class="toast-wrap" id="toastWrap" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
