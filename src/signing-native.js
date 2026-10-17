@@ -141,11 +141,32 @@ export function createNativeSigning({update,getCompanies}) {
     if(action==='remove-box'){
       placementRows=captureRows();placementRows.splice(Number(id),1);update();return;
     }
-    if(action==='save-boxes')return work(async()=>{
-      const boxes=captureRows().map(row=>({...row,x:row.x/100,y:row.y/100,width:row.width/100,height:row.height/100}));
-      await api(`/requests/${detail.id}/placements`,{method:'POST',json:{placements:boxes}});
-      await open(detail.id);feedback(`Saved ${boxes.length} signature box(es).`);
-    });
+    // ZS_DMS_SIGNING_V1_6_1_HOTFIX: snapshot edited inputs BEFORE work() re-renders the DMS.
+    if(action==='save-boxes'){
+      const rows=captureRows();
+      if(!rows.length)return feedback('Add a signature box before saving.',true);
+      let boxes;
+      try {
+        boxes=rows.map((row,i)=>{
+          const doc=detail.docs.find(d=>d.id===row.docId);
+          const signer=detail.signers.find(s=>s.id===row.signerId);
+          if(!doc||!signer||!Number.isInteger(row.page)||row.page<1||row.page>doc.pages)
+            throw new Error(`Box ${i+1}: select a valid PDF, signer and page.`);
+          if(![row.x,row.y,row.width,row.height].every(Number.isFinite)
+             ||row.x<0||row.y<0||row.width<4||row.height<2.5
+             ||row.x+row.width>100.00001||row.y+row.height>100.00001)
+            throw new Error(`Box ${i+1}: signature box must fit entirely within the page.`);
+          return {...row,x:row.x/100,y:row.y/100,width:row.width/100,height:row.height/100};
+        });
+      }catch(ex){return feedback(ex.message||String(ex),true);}
+      // Preserve the edits even if the request fails. Never reset existing records.
+      placementRows=rows;
+      return work(async()=>{
+        const result=await api(`/requests/${detail.id}/placements`,{method:'POST',json:{placements:boxes}});
+        await open(detail.id);
+        feedback(`Saved ${Number.isInteger(result.count)?result.count:boxes.length} signature box(es).`);
+      });
+    }
     if(action==='activate'){
       if(!confirm('Activate this signing request? The first signer may receive an email immediately.'))return;
       return work(async()=>{const r=await api(`/requests/${detail.id}/activate`,{method:'POST'});await open(detail.id);feedback(r.mailResult||'Signing request activated.');});
@@ -159,8 +180,23 @@ export function createNativeSigning({update,getCompanies}) {
     if(action==='archive')return work(()=>openBlob(`/requests/${detail.id}/archive`,`Signing-${detail.id}.zip`,'application/zip'));
     if(action==='copy-link'){
       const signer=detail.signers.find(s=>s.id===id);if(!signer)return;
-      try {await navigator.clipboard.writeText(signer.link);feedback('Signer invitation link copied.');}
-      catch{feedback('Unable to copy. Check browser clipboard permissions.',true);}return;
+      // Never share an unactivated draft link: signer PDFs are unavailable in draft state.
+      if(detail.status==='draft')return feedback('This request is still a draft. Save positions for every signer and activate the request before sharing links.',true);
+      try {
+        if(!signer.link)throw new Error('No signing URL was returned by the API.');
+        // The API sometimes returns a link with an incorrect frontend origin.
+        // Rebuild only the host/path, preserving the opaque token unchanged.
+        const source=new URL(signer.link,API_ORIGIN);
+        const ticket=source.searchParams.get('token');
+        if(source.pathname!=='/sign.html'||!ticket||!/^[A-Za-z0-9._-]{15,400}$/.test(ticket))
+          throw new Error('The signing API returned an invalid signer link.');
+        const canonical=new URL('/sign.html',API_ORIGIN);
+        canonical.searchParams.set('token',ticket);
+        await navigator.clipboard.writeText(canonical.href);
+        feedback(detail.status==='pending'&&!signer.signedAt
+          ? 'Signing link copied. The signer can sign only during their turn and before expiry.'
+          : 'Signing link copied. Check request status before sharing.');
+      }catch(ex){feedback(`Unable to copy a working signer link: ${ex.message||ex}`,true);}return;
     }
   }
   function onClick(a,id,event){if(!a.startsWith('zs-'))return false;click(a.slice(3),id,event.target.closest('[data-action]'));return true;}
@@ -187,7 +223,7 @@ export function createNativeSigning({update,getCompanies}) {
   }
   return {mount:()=>{if(view==='detail'&&detail?.status==='draft')preview.mount(document.getElementById('zs-pdf-preview'));},
     input:target=>{if(target?.closest?.('.zs-placement-row'))preview.drawBoxes(document.getElementById('zs-pdf-preview'));return false;},
-    render:()=>`<div class="integration-heading"><div><p class="eyebrow">DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Administrator login and signing requests directly inside ZHENLI DMS</p></div><span class="zs-version">Native Signing V1.6</span></div>
+    render:()=>`<div class="integration-heading"><div><p class="eyebrow">DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Administrator login and signing requests directly inside ZHENLI DMS</p></div><span class="zs-version">Native Signing V1.6.1</span></div>
     ${message?`<div class="zs-message ${error?'zs-error':''}" role="status">${e(message)}</div>`:''}
     ${busy?'<div class="zs-message">Connecting to the private signing service…</div>':''}${main()}`,
     onClick,submit,changed};
