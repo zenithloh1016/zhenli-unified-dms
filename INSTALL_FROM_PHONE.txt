@@ -1,0 +1,32 @@
+ZHENLI DMS - SIGNING V1.3 (FIRST-PARTY LOGIN) - PHONE/CODESPACES
+
+PROBLEM: The old DMS Signing tab embeds EdgeOne login in a cross-site iframe. EdgeOne admin cookie uses SameSite=Strict, so login can work in Chrome but fail inside the iframe.
+
+THIS FIX changes ONLY src/main.js. It deliberately stops embedding EdgeOne in the DMS, using Capacitor Browser/Custom Tabs on Android and a new browser tab on Web. It does NOT change EdgeOne source, signed PDFs, signing requests, audit history, admin password, or Supabase.
+
+STEP 1: Upload ZHENLI_DMS_Signing_Fix_V1_3.zip to your existing zhenli-unified-dms GitHub repository and commit that ZIP.
+
+STEP 2: In GitHub Codespaces terminal at /workspaces/zhenli-unified-dms, run:
+
+  git pull --ff-only origin main
+  unzip -o ZHENLI_DMS_Signing_Fix_V1_3.zip -d .
+  python3 scripts/apply_signing_fix_v1_3.py
+  python3 scripts/verify_signing_fix_v1_3.py
+  node --check src/main.js
+  git add src/main.js scripts/apply_signing_fix_v1_3.py scripts/verify_signing_fix_v1_3.py INSTALL_FROM_PHONE.txt
+  git commit -m "Force EdgeOne Signing V1.3 secure browser login"
+  git push origin main
+
+STEP 3: GitHub Actions must BUILD the new commit. In Actions verify the most recent run was triggered by that commit, not an earlier one. Download the NEW APK artifact from the Android job; install it as an update over the existing com.zhenli.unifieddms app. (Back up any locally stored files/settings before uninstalling if an update is not possible.)
+
+STEP 4: In the Android DMS Signing tab, first confirm this literal text appears:
+  Signing connection V1.3 — external secure login enabled.
+If this is absent, you are looking at the old APK, wrong app icon, cached GitHub Pages build, or another DMS site URL. Do NOT change EdgeOne passwords or session cookies.
+
+STEP 5: Press "Open Signing / Administrator Login". It opens first-party EdgeOne signing page, rather than showing the admin login embedded in the DMS tab.
+
+WEB CHECK: Reload your correct GitHub Pages DMS with a fresh browser tab. The deployment base is usually https://zenithloh1016.github.io/zhenli-unified-dms/ (only if GitHub Pages deployment has succeeded). Test with a query parameter ?v=13 to bypass a stale HTML response; if still old, inspect the Pages deployment job.
+
+EDGEONE PROTECTED LINK: If EdgeOne needs a tokenized preview URL, request a fresh access link from EdgeOne console. Do not commit tokens to a PUBLIC GitHub repository. The old temporary token supplied in the chat has expired.
+
+IMPORTANT: A cross-origin signing site cannot reliably keep SameSite=Strict authenticated within the very same DMS webpage. For an actually embedded, seamless signing administration interface, a supported same-origin gateway and API/auth integration would be necessary; this quick fix is a reliable first-party browser transition, not single sign-on.
