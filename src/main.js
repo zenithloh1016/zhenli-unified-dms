@@ -262,6 +262,7 @@ function render() {
   ${state.busy ? '<div class="busy-bar">Working… please keep this page open</div>' : ''}
   ${state.modal?.kind==='taskLink'?renderLinkModal():modalHTML()}
   <input id="document-upload" type="file" multiple hidden />`;
+  if(state.tab==='signing') signingUI.mount();
 }
 
 function openCompany(id){state.companyId=id;state.folderId=null;state.search='';busyDo(reloadContent);}
@@ -467,7 +468,7 @@ ROOT.addEventListener('submit',event=>{
     state.modal=null;await refresh();toast('Saved successfully.');
   });
 });
-ROOT.addEventListener('input',e=>{if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
+ROOT.addEventListener('input',e=>{signingUI.input(e.target);if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
 ROOT.addEventListener('change',e=>{
   if(signingUI.changed(e.target))return;
   if(e.target.id==='document-upload'){const files=[...e.target.files];if(files.length)busyDo(()=>uploadFiles(files));}

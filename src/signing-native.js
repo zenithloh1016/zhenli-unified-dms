@@ -1,3 +1,4 @@
+import {createPdfSignaturePreview} from './signature-preview.js'; // ZS_PDF_SIGNATURE_PREVIEW_V1_6
 /* ZHENLI_DMS_NATIVE_SIGNING_V1_5
  * Administrator screens live entirely in DMS (no EdgeOne iframe, no external login).
  * Existing EdgeOne Blob request and document storage remains the system of record.
@@ -13,7 +14,7 @@ export function createNativeSigning({update,getCompanies}) {
   let signerCount=2;
   function feedback(msg,isError=false){message=msg;error=isError;update();}
   function resetAuth(msg='Sign in to manage your existing signing requests.'){
-    token='';requests=[];detail=null;view='login';feedback(msg);
+    token='';requests=[];detail=null;preview.reset();view='login';feedback(msg);
   }
   async function api(path,{method='GET',json,body,headers={},binary=false}={}){
     const h={'X-ZH-Request':'1',...headers};
@@ -46,6 +47,24 @@ export function createNativeSigning({update,getCompanies}) {
       <label>Height %<input type="number" name="height" min="2.5" max="100" step="0.1" value="${e(row.height)}" required></label>
       ${b('Remove','remove-box',String(idx))}</div>`;
   }
+  // ZS_PDF_SIGNATURE_PREVIEW_V1_6: draft-only visual placement using existing API.
+  const preview = createPdfSignaturePreview({
+    fetchPdf: docId => api(`/requests/${detail.id}/docs/${encodeURIComponent(docId)}`, {binary:true}),
+    getRows: () => captureRows(),
+    setRow: (index, row) => {
+      const element = document.querySelector(`.zs-placement-row[data-index="${index}"]`);
+      if (!element) return;
+      for (const field of ['x','y','width','height']) {
+        const input = element.querySelector(`[name="${field}"]`);
+        if (input) input.value = String(row[field]);
+      }
+    },
+    addRow: row => {
+      placementRows = captureRows();
+      placementRows.push(row);
+      update(); // Existing Save positions handler continues to own persistence.
+    }
+  });
   function main(){
     if(!token){return `<section class="zs-panel zs-login"><h2>Signing administrator login</h2><p class="muted">Sign in here, inside DMS, using the administrator password already configured on Tencent EdgeOne. No external site will open.</p>
     <form id="zs-login-form"><label class="input-label">Sequential Signing administrator password<input type="password" name="password" minlength="12" autocomplete="current-password" required></label><button class="btn primary" type="submit" ${busy?'disabled':''}>Sign in to Signing</button></form>
@@ -78,14 +97,14 @@ export function createNativeSigning({update,getCompanies}) {
       <div class="zs-actions">${b('Activate signing request','activate','','primary')}</div>`:''}
       ${r.status==='pending'?`<div class="zs-actions">${b('Resend invitation to next signer','invite','','primary')}</div>`:''}
       ${r.status==='finalizing'?`<div class="zs-actions">${b('Retry PDF finalization','finalize','','primary')}</div>`:''}
-      <div id="zs-pdf-preview"></div>
+      ${pending?preview.html(r.docs,r.signers):''}
       <p class="fineprint">Existing signer links continue to use your Tencent EdgeOne signing service. Administrator functions are handled directly inside DMS.</p></section>`;
     }
     return '<section class="zs-panel">Loading signing workspace…</section>';
   }
   function signerField(n){return `<div class="zs-signer-input"><b>${n}.</b><label>Full name<input name="zs-name" maxlength="180" required placeholder="Signer name"></label><label>Email<input type="email" name="zs-email" required placeholder="Email address"></label>${b('Remove','remove-signer')}</div>`;}
   async function list(){requests=(await api('/requests')).requests||[];view='list';detail=null;update();}
-  async function open(rid){detail=await api('/requests/'+encodeURIComponent(rid));view='detail';placementRows=(detail.placements||[]).map(x=>({...x,x:+(100*x.x).toFixed(1),y:+(100*x.y).toFixed(1),width:+(100*x.width).toFixed(1),height:+(100*x.height).toFixed(1)}));update();}
+  async function open(rid){const oldId=detail?.id;detail=await api('/requests/'+encodeURIComponent(rid));if(oldId!==detail.id)preview.reset();view='detail';placementRows=(detail.placements||[]).map(x=>({...x,x:+(100*x.x).toFixed(1),y:+(100*x.y).toFixed(1),width:+(100*x.width).toFixed(1),height:+(100*x.height).toFixed(1)}));update();}
   function captureRows(){
     const rows=[...document.querySelectorAll('.zs-placement-row')];
     return rows.map((el,i)=>{
@@ -166,7 +185,9 @@ export function createNativeSigning({update,getCompanies}) {
       await api(`/requests/${detail.id}/docs`,{method:'POST',body:f,headers:{'Content-Type':'application/pdf','X-File-Name':encodeURIComponent(f.name)}});
     }await open(detail.id);feedback(`${files.length} PDF(s) uploaded successfully.`);});return true;
   }
-  return {render:()=>`<div class="integration-heading"><div><p class="eyebrow">DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Administrator login and signing requests directly inside ZHENLI DMS</p></div><span class="zs-version">Native Signing V1.5</span></div>
+  return {mount:()=>{if(view==='detail'&&detail?.status==='draft')preview.mount(document.getElementById('zs-pdf-preview'));},
+    input:target=>{if(target?.closest?.('.zs-placement-row'))preview.drawBoxes(document.getElementById('zs-pdf-preview'));return false;},
+    render:()=>`<div class="integration-heading"><div><p class="eyebrow">DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Administrator login and signing requests directly inside ZHENLI DMS</p></div><span class="zs-version">Native Signing V1.6</span></div>
     ${message?`<div class="zs-message ${error?'zs-error':''}" role="status">${e(message)}</div>`:''}
     ${busy?'<div class="zs-message">Connecting to the private signing service…</div>':''}${main()}`,
     onClick,submit,changed};
