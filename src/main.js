@@ -1,3 +1,4 @@
+import {createNativeSigning} from './signing-native.js';
 import { createClient } from '@supabase/supabase-js';
 import readExcelFile from 'read-excel-file/browser';
 import { Capacitor } from '@capacitor/core';
@@ -238,17 +239,9 @@ function renderTasks(){
 }
 // ZHENLI_SIGNING_COOKIE_SAFE_LAUNCH_V1_2
 // ZHENLI_SIGNING_DIRECT_LAUNCH_V1_3
-function renderSigning(){
-  const url = getSigningUrl();
-  const protectedLink = url !== SIGNING_BASE;
-  return `<div class="integration-heading"><div><p class="eyebrow">ELECTRONIC DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Original Tencent EdgeOne signing service · Secure browser mode</p></div>
-    <div class="header-buttons">${action('Open Signing / Administrator Login','open-signing','','primary')}</div></div>
-    <div class="integration-info"><b>Signing connection V1.3 — external secure login enabled.</b> The signing login no longer runs inside the DMS page. Android opens it in a Chrome Custom Tab; the website opens it in a separate tab. This preserves the original EdgeOne administrator session and its secure cookies.</div>
-    <section class="info-panel"><h2>Signing workspace</h2><p>Tap <b>Open Signing / Administrator Login</b> to manage your original signing requests, signer links, signature coordinates and signed documents. Your signing database is not copied or modified.</p>
-    <div class="quick-actions">${action('Open Signing / Administrator Login','open-signing','','primary')}</div>
-    <p class="fineprint">Signing connection version: <b>V1.3</b>. If you still see a signing login screen directly inside this DMS tab, you are running an outdated website or APK.</p></section>
-    <form class="link-form" id="signing-link-form"><label for="signing-link">Temporary EdgeOne access URL (only if EdgeOne requests one)</label><div class="link-entry"><input id="signing-link" name="signingLink" type="url" inputmode="url" autocomplete="off" placeholder="https://zhenli-sequential-signing.edgeone.cool/?eo_token=..." value=""><button type="submit" class="btn primary">Save link for session</button>${action('Clear','clear-signing','','quiet')}</div><p class="fineprint">Protected access tokens are stored only in this browser session, never in GitHub or Supabase. Generate a fresh link when the token expires.</p></form>`;
-}
+// ZHENLI_DMS_NATIVE_SIGNING_V1_5
+const signingUI=createNativeSigning({update:()=>render(),getCompanies:()=>state.companies});
+function renderSigning(){return signingUI.render();}
 
 function renderLinkModal() {
   return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="Task Hub connection settings"><div class="modal-heading"><h3>Task Hub connection</h3>${action('✕','close-modal')}</div>
@@ -369,6 +362,7 @@ async function runImport() {
 ROOT.addEventListener('click', event=>{
   const button=event.target.closest('[data-action]');if(!button)return;
   const a=button.dataset.action,id=button.dataset.id;
+  if(signingUI.onClick(a,id,event))return;
   if(a==='modal-bg' && event.target===button){state.modal=null;render();return;}
   if(a==='dismiss'){state.notice='';render();return;}
   if(a==='close-modal' && !state.busy){state.modal=null;state.importData=null;render();return;}
@@ -424,6 +418,7 @@ ROOT.addEventListener('click', event=>{
   if(a==='run-import') {busyDo(runImport);return;}
 });
 ROOT.addEventListener('submit',event=>{
+  if(signingUI.submit(event.target)){event.preventDefault();return;}
   if(event.target.id==='signing-link-form'){
     event.preventDefault();
     const input=event.target.elements.signingLink.value;
@@ -474,6 +469,7 @@ ROOT.addEventListener('submit',event=>{
 });
 ROOT.addEventListener('input',e=>{if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
 ROOT.addEventListener('change',e=>{
+  if(signingUI.changed(e.target))return;
   if(e.target.id==='document-upload'){const files=[...e.target.files];if(files.length)busyDo(()=>uploadFiles(files));}
   if(e.target.id==='excel-input'){
     const file=e.target.files[0];if(!file)return;

@@ -14,3 +14,34 @@
 .import-paste-wrap summary{color:#234b70;font-size:13px;font-weight:650;cursor:pointer}
 .import-paste-wrap textarea{box-sizing:border-box;width:100%;min-height:100px;border:1px solid #cbd9e8;border-radius:9px;font:inherit;font-size:13px;line-height:1.5;color:#1c3649;padding:10px;resize:vertical;margin:8px 0}
 .import-modal .alert{max-height:180px;overflow:auto;overflow-wrap:anywhere;margin:9px 0 0}
+
+
+/* ZHENLI Native Signing V1.4 (Administrator workspace within DMS) */
+.zs-version{border:1px solid #c7daea;background:#eaf3fb;color:#24597c;border-radius:20px;padding:8px 13px;font-size:12px;font-weight:700}
+.zs-panel{background:#fff;border:1px solid #dce4ee;border-radius:18px;padding:clamp(18px,3vw,30px);margin-top:18px;box-shadow:0 4px 18px #132f5008}
+.zs-panel h2{font-size:22px;margin:0 0 15px;color:#193f64}
+.zs-panel h3{font-size:16px;margin:25px 0 13px;color:#234b6d}
+.zs-login{max-width:650px}
+.zs-login form{max-width:430px;margin:24px 0}
+.zs-message{background:#edf6fc;border:1px solid #c7dfed;border-radius:10px;padding:14px 16px;color:#2e607c;margin:12px 0;font-size:13px}
+.zs-error{background:#fff0f2;border-color:#ecc6ce;color:#9f2139}
+.zs-toolbar,.zs-actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
+.zs-count{background:#eaf2f7;border-radius:20px;padding:4px 10px;font-size:13px;color:#42617c}
+.zs-table-wrap{overflow:auto;max-width:100%}.zs-table{border-collapse:collapse;width:100%;text-align:left;font-size:13px}
+.zs-table th{color:#648099;font-size:11px;text-transform:uppercase;letter-spacing:.05em;background:#f7fafc}
+.zs-table th,.zs-table td{padding:13px 10px;border-bottom:1px solid #e6edf3;vertical-align:middle}
+.zs-table td small{display:block;color:#7a8e9f;font-size:11px;margin-top:4px}
+.zs-table .btn{font-size:12px;padding:8px 13px}.zs-tag{background:#edf4fb;border-radius:14px;color:#275677;padding:5px 9px}
+.zs-formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.zs-formgrid .zs-span{grid-column:span 2}
+.zs-panel label{display:flex;flex-direction:column;gap:6px;color:#536b81;font-size:12px;font-weight:700}
+.zs-panel input,.zs-panel select,.zs-panel textarea{min-width:0;width:100%;border:1px solid #d7e3ed;border-radius:9px;padding:11px;background:#fff;color:#18364c;font:inherit;font-size:13px}
+.zs-signer-input{display:grid;grid-template-columns:28px 1fr 1fr auto;gap:10px;align-items:end;padding:10px 0;border-bottom:1px solid #e8eff5}
+.zs-signer-input b{margin-bottom:13px}.zs-signer-input .btn{font-size:11px;padding:9px}
+.zs-doc,.zs-signer{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #e9eff4;padding:13px 4px;font-size:13px}
+.zs-doc small,.zs-signer small{display:block;color:#7e91a4;font-size:11px;margin-top:5px}
+.zs-placement-row{display:grid;grid-template-columns:repeat(7,minmax(0,1fr)) auto;gap:9px;align-items:end;margin:8px 0;padding:12px;border:1px solid #e2eaf1;border-radius:10px}
+.zs-placement-row label{font-size:11px}.zs-placement-row input,.zs-placement-row select{padding:9px 5px}
+.zs-placement-row .btn{padding:9px}.zs-details-heading{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.zs-upload{margin:15px 0 20px;max-width:430px}.zs-login .input-label{margin-bottom:15px}
+@media(max-width:850px){.zs-formgrid{grid-template-columns:1fr}.zs-formgrid .zs-span{grid-column:span 1}.zs-signer-input{grid-template-columns:20px 1fr}.zs-signer-input .btn{grid-column:span 2}.zs-placement-row{grid-template-columns:repeat(2,minmax(0,1fr))}.zs-placement-row label:first-child,.zs-placement-row label:nth-child(2){grid-column:span 2}.zs-details-heading .btn{white-space:normal}.zs-doc,.zs-signer{flex-wrap:wrap}}
