@@ -8,3 +8,9 @@
 @media(max-width:400px){.top-title{font-size:11px}.top-right{font-size:9px}.tab{font-size:12px}.company-name{font-size:18px}}
 
 .frame-shell.task-expanded{position:fixed;inset:0;z-index:150;border:0;border-radius:0;display:flex;flex-direction:column;min-height:100dvh}.task-expanded .integration-frame{min-height:0;height:auto;flex:1}.frame-toolbar{flex:none;min-height:60px;display:flex;align-items:center;justify-content:space-between;padding:8px 16px;gap:12px;background:#eff4f8;border-bottom:1px solid #d9e3ee;color:#244963}.frame-toolbar .btn{font-size:12px;padding:9px 12px}
+
+/* Master Listing Import V1.1 — mobile file/CSV/paste fallback */
+.import-paste-wrap{border:1px solid #dae4ee;border-radius:11px;padding:11px 14px;margin:13px 0 16px;background:#f9fbfd}
+.import-paste-wrap summary{color:#234b70;font-size:13px;font-weight:650;cursor:pointer}
+.import-paste-wrap textarea{box-sizing:border-box;width:100%;min-height:100px;border:1px solid #cbd9e8;border-radius:9px;font:inherit;font-size:13px;line-height:1.5;color:#1c3649;padding:10px;resize:vertical;margin:8px 0}
+.import-modal .alert{max-height:180px;overflow:auto;overflow-wrap:anywhere;margin:9px 0 0}

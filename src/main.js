@@ -37,7 +37,7 @@ const state = {
   tab: 'documents', totalDocs: 0, taskFullscreen: false,
   modal: null, authMode: 'login', importData: null,
   importSheet: 0, importNameCol: 0, importRegCol: -1, importStartRow: 2,
-  importProgress: null, importFileName: ''
+  importProgress: null, importFileName: '', importError: ''
 };
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, m => ({
@@ -139,6 +139,38 @@ function renderFolder() {
   <section class="items"><div class="section-caption">FOLDERS <span>${childFolders.length}</span></div>${childFolders.map(folderCard).join('') || '<div class="empty-line">No subfolders yet.</div>'}
   ${current ? `<div class="section-caption">DOCUMENTS <span>${docs.length}</span></div>${docs.map(documentCard).join('') || '<div class="empty-line">No documents in this folder. Upload PDFs, Word documents, Excel files or images.</div>'}` : ''}</section>`;
 }
+/** CSV or spreadsheet TSV paste, respecting commas and multiline quoted values. */
+function parseDelimitedRows(value) {
+  const input = String(value || '').replace(/^\uFEFF/, '');
+  const firstLine = input.split(/\r?\n/, 1)[0];
+  const delimiter = (firstLine.match(/\t/g) || []).length > (firstLine.match(/,/g) || []).length ? '\t' : ',';
+  const rows=[];let row=[],cell='',quoted=false;
+  for(let i=0;i<input.length;i++) {
+    const char=input[i];
+    if(quoted){
+      if(char==='"' && input[i+1]==='"'){cell+='"';i++;}
+      else if(char==='"') quoted=false;
+      else cell+=char;
+    }else if(char==='"' && cell==='') quoted=true;
+    else if(char===delimiter){row.push(cell);cell='';}
+    else if(char==='\r' || char==='\n'){
+      if(char==='\r' && input[i+1]==='\n')i++;
+      row.push(cell); if(row.some(x=>String(x).trim())) rows.push(row);
+      cell='';row=[];
+    }else cell+=char;
+  }
+  row.push(cell);if(row.some(x=>String(x).trim()))rows.push(row);
+  if(quoted)throw new Error('CSV contains a quotation mark that is not closed.');
+  return rows;
+}
+function importHint(error) {
+  const message=String(error?.message || error || 'Unknown import error');
+  if(/PGRST202|create_company_with_folders|schema cache/i.test(message))
+    return 'Supabase function unavailable. In Supabase SQL Editor run supabase/setup.sql (the database setup script) and retry. Details: '+message;
+  if(/permission denied|42501|row.level security|JWT|not authenticated/i.test(message))
+    return 'Database permissions or login prevented the import. Sign in again and check the Supabase RLS policies from supabase/setup.sql. Details: '+message;
+  return message;
+}
 function getImportRows() {return state.importData?.[state.importSheet]?.data || [];}
 function importCandidate() {
   const rows = getImportRows(), included = [], seen = new Set(); let rejected=0;
@@ -153,7 +185,7 @@ function importCandidate() {
   return {included, rejected};
 }
 function autoColumns() {
-  const rows=getImportRows(); let best={score:-1, name:0, reg:-1, start:2};
+  const rows=getImportRows(); let best={score:-1, name:0, reg:-1, start:1};
   for(let i=0;i<Math.min(30, rows.length);i++) {
     for(let c=0;c<(rows[i]||[]).length;c++) {
       const s=norm(rows[i][c]).toLowerCase().replace(/[\s_\-]+/g,' ');
@@ -172,17 +204,19 @@ function colName(index) {
 }
 function columnOptions(selected, includeNone=false) {
   const rows=getImportRows(), count=Math.min(80, Math.max(1,...rows.slice(0,30).map(x=>x.length)));
-  return `${includeNone?`<option value="-1" ${selected<0?'selected':''}>Not available</option>`:''}${Array.from({length:count},(_,i)=>`<option value="${i}" ${selected===i?'selected':''}>${colName(i)} — ${esc(norm(rows[state.importStartRow-2]?.[i]).slice(0,48)||'Column '+(i+1))}</option>`).join('')}`;
+  return `${includeNone?`<option value="-1" ${selected<0?'selected':''}>Not available</option>`:''}${Array.from({length:count},(_,i)=>`<option value="${i}" ${selected===i?'selected':''}>${colName(i)} — ${esc(norm(rows[Math.max(0,state.importStartRow-2)]?.[i]).slice(0,48)||'Column '+(i+1))}</option>`).join('')}`;
 }
 function renderImportModal() {
   const sheets=state.importData||[], rows=getImportRows(), c=importCandidate();
   return `<div class="modal-backdrop"><section class="modal import-modal" role="dialog" aria-modal="true" aria-label="Import Excel Master Listing"><div class="modal-heading"><h3>Import Excel Master Listing</h3>${action('✕','close-modal')}</div>
-  <p class="muted">Import company names from an .xlsx Master Listing. Existing company names are reused, and their missing standard folders are restored.</p>
-  <label class="input-label">1. Select Excel file<input type="file" id="excel-input" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/></label>${state.importFileName?`<p class="muted">Selected: ${esc(state.importFileName)}</p>`:''}
+  <p class="muted">Import your Excel Master Listing (.xlsx), a simple CSV, or paste company names. Existing companies are reused; no duplicate folders are created.</p>
+  <label class="input-label">1. Select file (.xlsx or .csv)<input type="file" id="excel-input" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"/></label>${state.importFileName?`<p class="muted">Selected: ${esc(state.importFileName)}</p>`:''}
+  <details class="import-paste-wrap"><summary>File picker not working? Paste company names instead</summary><p class="muted">Paste rows copied from Excel, or one company name per line. Tab-separated registration numbers are also supported.</p><textarea id="import-paste" rows="5" placeholder="Company Name,Registration No.&#10;EXAMPLE SDN. BHD.,202601234567"></textarea>${action('Use pasted list','load-paste','','secondary')}</details>
   ${sheets.length ? `<div class="import-grid"><label class="input-label">Worksheet<select id="sheet-choice">${sheets.map((s,i)=>`<option value="${i}" ${state.importSheet===i?'selected':''}>${esc(s.sheet)}</option>`).join('')}</select></label><label class="input-label">Company name column<select id="name-column">${columnOptions(state.importNameCol)}</select></label><label class="input-label">Registration number column<select id="registration-column">${columnOptions(state.importRegCol,true)}</select></label><label class="input-label">First data row (1-based)<input id="start-row" type="number" min="1" max="${Math.max(rows.length,1)}" value="${state.importStartRow}"/></label></div>
   <div class="import-preview"><strong>Excel preview</strong><div class="preview-scroll"><table><tbody>${rows.slice(0,8).map((row,i)=>`<tr><td class="rowno">${i+1}</td>${row.slice(0,9).map(cell=>`<td>${esc(norm(cell).slice(0,55))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>
   <div class="import-summary"><strong>${c.included.length} unique company names found</strong><span>${c.rejected} empty / duplicate / skipped rows</span><small>First names: ${esc(c.included.slice(0,5).map(x=>x.name).join(' • ')||'None')}</small></div>` : `<div class="info-strip">Your Master Listing stays on your device; only the company names and selected registration numbers are uploaded to your private database.</div>`}
   ${state.importProgress?`<div class="notice">${esc(state.importProgress)}</div>`:''}
+  ${state.importError?`<div class="alert">${esc(state.importError)}</div>`:''}
   <div class="modal-actions">${action('Cancel','close-modal')}<button class="btn primary" data-action="run-import" type="button" ${!c.included.length || state.busy?'disabled':''}>Create company folders (${c.included.length})</button></div></section></div>`;
 }
 function renderOverview() {
@@ -225,7 +259,7 @@ function render() {
   ROOT.innerHTML = `<div class="app-shell"><header class="topbar"><div class="top-title">Document Management System</div><div class="top-right"><span class="online-dot"></span> Private workspace</div></header>
     <nav class="tabbar" aria-label="Main workspace navigation">${tabs.map(t=>`<button type="button" class="tab ${state.tab===t?'current':''}" data-action="tab-${t}" ${state.tab===t?'aria-current="page"':''}>${label[t]}</button>`).join('')}</nav>
     <main class="main-content">${state.tab==='documents'?(state.companyId?renderFolder():renderCompanies()):state.tab==='overview'?renderOverview():state.tab==='tasks'?renderTasks():renderSigning()}</main>
-    <footer class="app-footer"><span>ZHENLI DMS V1.0 · Web + Android</span><span>${esc(state.user.email || '')} · ${action('Sign out','sign-out')}</span></footer></div>
+    <footer class="app-footer"><span>ZHENLI DMS V1.1 · Web + Android</span><span>${esc(state.user.email || '')} · ${action('Sign out','sign-out')}</span></footer></div>
   ${state.notice ? `<div class="toast" role="status">${esc(state.notice)} ${action('✕','dismiss')}</div>` : ''}
   ${state.busy ? '<div class="busy-bar">Working… please keep this page open</div>' : ''}
   ${state.modal?.kind==='taskLink'?renderLinkModal():modalHTML()}
@@ -301,20 +335,30 @@ async function runImport() {
   const chosen=importCandidate().included;
   if(!chosen.length) throw new Error('No valid names found. Check worksheet and column mapping.');
   if(chosen.length>5000) throw new Error('Import is limited to 5,000 companies per file. Split the Master Listing into smaller files.');
+  state.importError=''; state.importProgress=`Starting import of ${chosen.length} companies…`;render();
   let done=0, failures=[];
-  for(let i=0;i<chosen.length;i+=5){
-    const chunk=chosen.slice(i,i+5);
+  for(let i=0;i<chosen.length;i+=4){
+    const chunk=chosen.slice(i,i+4);
     const answers=await Promise.all(chunk.map(async c=> {
-      const {error}=await db.rpc('create_company_with_folders',{p_name:c.name,p_registration_no:c.registration});
-      return error ? `${c.name}: ${error.message}` : null;
+      try {
+        const {error}=await db.rpc('create_company_with_folders',{p_name:c.name,p_registration_no:c.registration});
+        return error ? `${c.name}: ${importHint(error)}` : null;
+      } catch(e){return `${c.name}: ${importHint(e)}`;}
     }));
-    failures.push(...answers.filter(Boolean));done+=chunk.length;
-    state.importProgress=`Processed ${done} of ${chosen.length} company names...`;
+    const failed=answers.filter(Boolean); failures.push(...failed);done+=chunk.length;
+    state.importProgress=`Processed ${done} of ${chosen.length} company names; ${failures.length} errors so far.`;
     render();
+    // Missing RPC/policies will affect every row; stop early instead of making 85 doomed requests.
+    if(i===0 && failed.length===chunk.length){break;}
   }
-  state.importData=null;state.modal=null;state.importProgress=null;
   await refresh();
-  toast(`${done-failures.length} companies processed with 11 folders each. ${failures.length ? `${failures.length} errors: ${failures.slice(0,2).join('; ')}`:'Existing companies were not duplicated.'}`);
+  if(failures.length){
+    state.importError=`Imported or verified ${done-failures.length} of ${done} attempted companies. ${failures.length} failed. ${failures.slice(0,3).join(' | ')}. Your selected data is preserved; fix the error and retry safely.`;
+    state.importProgress=`Import paused. ${state.companies.length} companies are currently in your account.`;
+    render();return;
+  }
+  state.importData=null;state.modal=null;state.importProgress=null;state.importError='';
+  toast(`${done} companies processed successfully. Existing companies were not duplicated; standard folders were ensured.`);
 }
 
 ROOT.addEventListener('click', event=>{
@@ -355,7 +399,17 @@ ROOT.addEventListener('click', event=>{
     if(blankTab) blankTab.opener=null;
     busyDo(()=>openDocument(id,a==='download-file',blankTab));return;
   }
-  if(a==='import'){state.modal={kind:'import'};state.importData=null;state.importProgress=null;state.importFileName='';render();return;}
+  if(a==='import'){state.modal={kind:'import'};state.importData=null;state.importProgress=null;state.importError='';state.importFileName='';render();return;}
+  if(a==='load-paste'){
+    try{
+      const raw=document.getElementById('import-paste')?.value||'';
+      const rows=parseDelimitedRows(raw);
+      if(!rows.length)throw new Error('Paste one or more company names first.');
+      state.importData=[{sheet:'Pasted list',data:rows}];state.importSheet=0;
+      state.importFileName='Pasted list';state.importError='';state.importProgress=null;autoColumns();render();
+    }catch(e){state.importError=importHint(e);render();}
+    return;
+  }
   if(a==='run-import') {busyDo(runImport);return;}
 });
 ROOT.addEventListener('submit',event=>{
@@ -413,16 +467,24 @@ ROOT.addEventListener('change',e=>{
   if(e.target.id==='excel-input'){
     const file=e.target.files[0];if(!file)return;
     busyDo(async()=>{
-      if(!/\.xlsx$/i.test(file.name))throw new Error('Please select an .xlsx Excel file.');
-      if(file.size>20*1024*1024)throw new Error('Excel file exceeds 20 MB.');
-      const sheetNames=await readExcelFile(file,{getSheets:true});
-      const names=(sheetNames||[]).map(x=>x.name).filter(Boolean);
-      if (!names.length) throw new Error('No Excel worksheets found.');
-      state.importData=[];
-      for(const sheetName of names) state.importData.push({sheet:sheetName,data:await readExcelFile(file,{sheet:sheetName})});
-      state.importFileName=file.name;
-      if(!Array.isArray(state.importData)||!state.importData.length)throw new Error('Excel file has no worksheets.');
-      state.importSheet=0;autoColumns();render();
+      state.importError='';state.importProgress='Reading '+file.name+'…';
+      try {
+        if(!/\.(xlsx|csv)$/i.test(file.name))throw new Error('Select an .xlsx Excel file or a .csv file.');
+        if(file.size>20*1024*1024)throw new Error('File exceeds 20 MB.');
+        let sheets=[];
+        if(/\.csv$/i.test(file.name)){
+          sheets=[{sheet:'CSV import',data:parseDelimitedRows(await file.text())}];
+        }else{
+          const sheetNames=await readExcelFile(file,{getSheets:true});
+          const names=(sheetNames||[]).map(x=>x.name).filter(Boolean);
+          if(!names.length)throw new Error('No Excel worksheets found.');
+          sheets=await Promise.all(names.map(async sheetName=>({sheet:sheetName,data:await readExcelFile(file,{sheet:sheetName})})));
+        }
+        if(!sheets.length || !sheets.some(s=>s.data?.length))throw new Error('The file has no readable data.');
+        state.importData=sheets;
+        state.importFileName=file.name;
+        state.importSheet=0;state.importProgress=null;autoColumns();render();
+      }catch(error){state.importData=null;state.importError='Could not read the selected file: '+importHint(error)+'. You can try the cleaned Excel or CSV file instead.';state.importProgress=null;render();}
     });return;
   }
   if(e.target.id==='sheet-choice'){state.importSheet=Number(e.target.value);autoColumns();render();return;}
