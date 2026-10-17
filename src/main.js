@@ -236,15 +236,19 @@ function renderTasks(){
     <div class="integration-info">${external ? 'Hosted Task Hub data is managed by its original site.' : 'The bundled Task Hub syncs with your private DMS Supabase account after applying task_hub_sync.sql. Import your old EdgeOne Task Hub JSON backup once to migrate existing tasks.'}</div>
     <div class="frame-shell ${state.taskFullscreen?'task-expanded':''}">${state.taskFullscreen?'<div class="frame-toolbar"><strong>Task Hub V3</strong><button type="button" class="btn secondary" data-action="exit-tasks">Exit full screen ✕</button></div>':''}<iframe id="zh-task-frame" class="integration-frame" title="ZHENLI Secretarial Task Hub V3" src="${esc(active)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
 }
+// ZHENLI_SIGNING_COOKIE_SAFE_LAUNCH_V1_2
 function renderSigning(){
   const url = getSigningUrl();
   const protectedLink = url !== SIGNING_BASE;
-  return `<div class="integration-heading"><div><p class="eyebrow">ELECTRONIC DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Connected to your existing Tencent EdgeOne signing project.</p></div>
-    <div class="header-buttons">${action('Open in-app browser','open-signing','','primary')}${action('Refresh view','reload-signing','','secondary')}</div></div>
-    <div class="integration-info">${protectedLink ? 'Protected access link applied for this session.' : 'Base signing address configured. If your EdgeOne project requires protected access, paste a fresh signed URL below.'} Some EdgeOne access-protected pages may block embedded views. The in-app browser button is the reliable fallback.</div>
-    <form class="link-form" id="signing-link-form"><label for="signing-link">Protected EdgeOne access link (session only)</label><div class="link-entry"><input id="signing-link" name="signingLink" type="url" inputmode="url" autocomplete="off" placeholder="https://zhenli-sequential-signing.edgeone.cool/?eo_token=…" value="${protectedLink ? esc(url) : ''}"><button type="submit" class="btn primary">Use link</button>${action('Clear','clear-signing','','quiet')}</div></form>
-    <div class="frame-shell"><iframe id="signing-frame" class="integration-frame" title="ZHENLI Sequential Signing" src="${esc(url)}" loading="lazy" referrerpolicy="no-referrer" allow="clipboard-write"></iframe></div>`;
+  return `<div class="integration-heading"><div><p class="eyebrow">ELECTRONIC DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Connected to your existing Tencent EdgeOne signing workspace.</p></div>
+    <div class="header-buttons">${action('Sign in / Open signing workspace','open-signing','','primary')}</div></div>
+    <div class="integration-info"><b>Secure administrator login:</b> The signing website opens as a first-party browser page (Android: in-app Chrome Custom Tab; website: new tab). This allows the existing secure login cookie to work. Login inside an embedded frame is disabled because browser third-party cookie restrictions can cause a repeated login screen.</div>
+    <section class="info-panel"><h2>Your existing signing requests remain available</h2><p>Use the button above to open the <b>original Tencent EdgeOne deployment</b>. You can create signing requests, set signature placements, invite signers, inspect audit logs and download signed PDFs there as before.</p>
+    <p class="muted">${protectedLink ? 'A protected EdgeOne access link is active for this DMS browser session.' : 'The normal signing address is configured. If EdgeOne requires a temporary protected access link, paste a fresh one below.'} The signing administrator login is separate from your DMS login.</p>
+    <div class="quick-actions">${action('Open existing signing website','open-signing','','primary')}</div></section>
+    <form class="link-form" id="signing-link-form"><label for="signing-link">Temporary EdgeOne protected access URL (only if required)</label><div class="link-entry"><input id="signing-link" name="signingLink" type="url" inputmode="url" autocomplete="off" placeholder="https://zhenli-sequential-signing.edgeone.cool/?eo_token=..." value=""><button type="submit" class="btn primary">Save for session</button>${action('Clear link','clear-signing','','quiet')}</div><p class="fineprint">For security, the temporary URL is not shown after saving and is not committed to GitHub. It is cleared when your DMS browser session ends.</p></form>`;
 }
+
 function renderLinkModal() {
   return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="Task Hub connection settings"><div class="modal-heading"><h3>Task Hub connection</h3>${action('✕','close-modal')}</div>
     <p class="muted">The original Task Hub V3 is included in this package. To use your separate live EdgeOne deployment instead, paste its actual HTTPS address.</p>
@@ -372,12 +376,18 @@ ROOT.addEventListener('click', event=>{
   if(a==='task-settings'){state.modal={kind:'taskLink'};render();return;}
   if(a==='reset-task-link'){localStorage.removeItem('zhenli:taskhub:external');state.modal=null;render();return;}
   if(a==='clear-signing'){sessionStorage.removeItem('zhenli:signing:session');render();return;}
-  if(a==='reload-signing'){const f=document.getElementById('signing-frame');if(f){f.src=getSigningUrl();}return;}
   if(a==='open-tasks'||a==='exit-tasks'){
     state.taskFullscreen = a==='open-tasks';render();return;
   }
   if(a==='open-signing'||a==='launch-hosted-task'){
     const url=a==='open-signing'?getSigningUrl():getTaskHubUrl();
+    if(a==='open-signing'){
+      const time = new globalThis.URL(url).searchParams.get('eo_time');
+      if(time && /^\d{10}$/.test(time) && Number(time)*1000 < Date.now()){
+        toast('Your temporary EdgeOne access link has expired. Paste a fresh link from the EdgeOne console and try again.');
+        return;
+      }
+    }
     if(Capacitor.isNativePlatform()) busyDo(()=>Browser.open({url}));
     else window.open(url,'_blank','noopener,noreferrer');
     return;
