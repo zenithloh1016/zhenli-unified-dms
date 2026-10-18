@@ -191,18 +191,11 @@ function addRecord(kind){
  renderSections();status('Added '+rule.label+' '+nextNumber+'. All its fields are blank.');
 }
 
-function companyOptions(search){
- const q=String(search||'').trim().toLowerCase();
- const rows=(q?dmsCompanies.filter(c=>(c.name+' '+c.registrationNo).toLowerCase().includes(q)):dmsCompanies).slice(0,q?35:12); // full list remains in native select
- return rows.length?rows.map(c=>'<button type="button" class="ar-name-option" data-dms-company-id="'+esc(c.id)+'">'+
-  '<strong>'+esc(c.name)+'</strong><small>'+esc(c.registrationNo||'Registration number not recorded')+'</small></button>').join(''):
-  '<span class="msic-help">No matching Documents company. Adjust your search or type the company name manually.</span>';
-}
 function companyNameControl(item,index){
  const value=String(item.value||'');
  if(!dmsCompanies.length||window.parent===window)
   return '<textarea data-item="'+index+'" rows="2" spellcheck="false" placeholder="Enter company name…">'+esc(value)+'</textarea>';
- // The native select contains the COMPLETE DMS company list, not only the 15 search suggestions.
+ // The native select contains the complete DMS company list; no name/registration search is offered.
  // This is populated only from private data sent by the authenticated DMS parent.
  const options=dmsCompanies.map(c=>'<option value="'+esc(c.id)+'" '+(selectedDmsCompanyId===c.id?'selected':'')+'>'+
   esc(c.name)+(c.registrationNo?' · '+esc(c.registrationNo):'')+'</option>').join('');
@@ -210,9 +203,6 @@ function companyNameControl(item,index){
   '<label class="field-label">All Documents companies ('+dmsCompanies.length+')'+
   '<select class="choice-select ar-company-full-list" data-company-select="'+index+'">'+
   '<option value="">— Select a company from the complete list —</option>'+options+'</select></label>'+
-  '<label class="field-label">Or search by company name / registration number'+
-  '<input type="search" data-item="'+index+'" data-company-lookup="'+index+'" value="'+esc(value)+'" autocomplete="off" placeholder="Search company name or registration number"></label>'+
-  '<div class="ar-name-options" data-company-results="'+index+'">'+companyOptions(value)+'</div>'+
   '<p class="msic-help">All '+dmsCompanies.length+' DMS companies are available in the dropdown. Selecting a new company fills its registration number and starts a blank review for that company; export unfinished JSON first.</p></div>';
 }
 function addCustomField({sectionIndex=null,headingIndex=null}={}){
@@ -350,11 +340,6 @@ $('search').addEventListener('input',renderSections);
 $('incomplete').addEventListener('change',renderSections);
 $('signature-fields').addEventListener('input',e=>{const k=e.target.dataset.sign;if(k)doc.signatureDirector[k]=e.target.value;});
 $('particulars').addEventListener('input',e=>{
- if(e.target.dataset.companyLookup!==undefined){
-  const results=e.target.closest('.ar-name-selector')?.querySelector('[data-company-results]');
-  if(results)results.innerHTML=companyOptions(e.target.value);
-  selectedDmsCompanyId=null;
- }
  if(e.target.dataset.msicSearch!==undefined){refreshMSICResults(e.target);return;}
  const index=e.target.dataset.item;
  if(index!==undefined&&doc.particulars[+index]){
@@ -385,11 +370,6 @@ $('particulars').addEventListener('change',e=>{
 $('particulars').addEventListener('click',e=>{
  const del=e.target.closest('[data-delete-field]');
  if(del){removeReviewField(Number(del.dataset.deleteField));return;}
- const company=e.target.closest('[data-dms-company-id]');
- if(company){
-  if(window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_SELECT_COMPANY_REQUEST',id:company.dataset.dmsCompanyId},window.location.origin);
-  return;
- }
  const select=e.target.closest('[data-msic-add]');
  if(select){changeMSIC(Number(select.dataset.msicAdd),select.dataset.msicCode);return;}
  const remove=e.target.closest('[data-msic-remove]');
