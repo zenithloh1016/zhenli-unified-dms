@@ -250,7 +250,19 @@ function addRecord(kind){
  if(section<0){status('Could not find the '+rule.label+' section in this imported script.',true);return;}
  const headings=[];
  for(let i=section+1;i<until;i++)if(doc.particulars[i].type==='heading'&&rule.heading.test(doc.particulars[i].en||''))headings.push(i);
- if(!headings.length){status('No '+rule.label+' template found. Import a current Annual Return script.',true);return;}
+ if(!headings.length&&kind==='bo'){
+  // Restores a clean BO entry if the last placeholder was removed.
+  const blank=cloneBlank().particulars;
+  const heading=blank.findIndex(x=>x.type==='heading'&&rule.heading.test(x.en||''));
+  if(heading<0)return status('Beneficial Owner template is unavailable.',true);
+  let stop=heading+1;
+  while(stop<blank.length&&blank[stop].type==='field')stop++;
+  const next=blank.slice(heading,stop).map(x=>({...x,value:''}));
+  doc.particulars.splice(until,0,...next);
+  renderSections();changedDraft();status('Added Beneficial Owner 1 to this draft.');
+  return;
+ }
+ if(!headings.length){status('No '+rule.label+' template found.');return;}
  const start=headings[0],last=headings[headings.length-1];
  let end=until;
  for(let i=last+1;i<until;i++)if(doc.particulars[i].type==='heading'){end=i;break;}
