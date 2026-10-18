@@ -67,3 +67,15 @@ Company-specific scripts are **not bundled**, to prevent exposing private inform
 - Existing share-type, share-class and BO ownership dropdowns, multiple BO Criteria A–D selections, repeatable Charges/Directors/Members/BO entries and 3-code DOSM/SSM MSIC selector remain.
 - **Privacy:** no private drafts or completed PDFs automatically sync to DMS storage or GitHub. Export a JSON draft before changing the DMS tab, then import it to continue. Downloaded review PDFs can be uploaded to the appropriate company folder under **Documents**.
 - Existing Supabase documents, Task Hub and EdgeOne signing requests are unchanged. Only a review PDF is generated; no SSM submission or eBOS update occurs.
+
+
+## DMS Documents company search and Annual Return V1.5
+
+From **Documents → Companies**, select **Annual Return** on a company card, or open a company's folder and click **Generate Annual Return**. In **DMS → Annual Return**, search the same private Supabase Documents company portfolio by name or registration number, then click the matching company.
+
+The DMS passes only the authenticated company's name and registration number to the bundled, same-origin Annual Return iframe via `postMessage`. No external API or public query-string transfer is used. The company identity populates **Company Details**, not any director, member, charge, or beneficial ownership information. Switching to a different company requires confirmation and starts with blank statutory particulars, preventing accidental reuse of another company's details. Your existing DMS Supabase data is **read-only** for selection and unaffected.
+
+For this V1.5 form, TIN, Company Review and Verification Notes, Director signing date and Signing Acknowledgement are removed from the input, PDF and legacy .gs/JSON imports. Director Confirmation retains name, NRIC/passport, capacity and signature box.
+
+**Storage:** Drafts and generated PDFs are not automatically stored in Documents. Export the editable JSON draft before changing tabs, and upload the final PDF manually to the correct company folder if desired. DMS document storage and EdgeOne sequential signing records are not migrated or modified.
+
