@@ -40,7 +40,7 @@ const db = URL && KEY ? createClient(URL, KEY, {
 const state = {
   user: null, companies: [], folders: [], documents: [],
   companyId: null, folderId: null, search: '', busy: false, notice: '',
-  tab: 'documents', totalDocs: 0, taskFullscreen: false, signingFullscreen: false,
+  tab: 'documents', totalDocs: 0, taskFullscreen: false, signingFullscreen: false, arFullscreen: false,
   arSelectedCompanyId: null,
   modal: null, authMode: 'login', importData: null, importWorkbook: null, importReader: '',
   importSheet: 0, importNameCol: 0, importRegCol: -1, importStartRow: 2,
@@ -294,13 +294,25 @@ function sendAnnualReturnCompany(){
  }},window.location.origin);
 }
 function renderAnnualReturn(){
- return '<section class="annual-return-module" aria-label="Annual Return PDF generator">'+
+ return '<section id="zh-ar-shell" class="annual-return-module '+(state.arFullscreen?'ar-fullscreen-open':'')+'" aria-label="Annual Return PDF generator">'+
+ '<div class="ar-fullscreen-toolbar"><strong>📑 Annual Return PDF Generator</strong><button type="button" class="btn secondary" data-action="exit-ar-fullscreen">Exit full screen ✕</button></div>'+
+ '<div class="ar-module-inner">'+
  '<div class="integration-heading"><div><p class="eyebrow">STATUTORY PARTICULARS REVIEW · V1.8</p>'+
  '<h1>Annual Return PDF Generator</h1>'+
- '<p class="muted">Choose any existing company from the <b>complete Documents company dropdown</b> in Company Details; the registration number fills automatically. The Members section supports Individual and Body Corporate particulars, with custom field additions.</p></div></div>'+
- '<div class="integration-info">There is no separate company search above the form. The DMS shares company names and registration numbers from your signed-in Documents list only with the embedded form. Other Annual Return particulars are entered and verified manually. Drafts are saved locally on this device as you work, separated by your DMS account and company. Select Resume Draft to continue. Drafts are not synchronised across devices.</div>'+
- '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.8" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share"></iframe></div>'+
- '</section>';
+ '<p class="muted">Choose any existing company from the complete Documents company dropdown inside Company Details; registration number fills automatically. Complete the statutory particulars and save your bilingual PDF.</p></div>'+
+ '<div class="header-buttons"><button type="button" class="btn secondary" data-action="open-ar-fullscreen">Full-screen view ⛶</button></div></div>'+
+ '<div class="integration-info">Drafts save locally on this device under the current DMS user and company. Resume Draft reopens your work. No cloud draft synchronisation. The full-screen button will not reload this form.</div>'+
+ '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.8" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share; fullscreen" allowfullscreen></iframe></div>'+
+ '</div></section>';
+}
+function setAnnualReturnFullscreen(open){
+ state.arFullscreen=Boolean(open);
+ const shell=ROOT.querySelector('#zh-ar-shell');
+ shell?.classList.toggle('ar-fullscreen-open',state.arFullscreen);
+ document.body.classList.toggle('zh-ar-fullscreen-open',state.arFullscreen);
+ shell?.querySelector('#zh-annual-return-frame')?.contentWindow?.postMessage({type:'ZHENLI_DMS_AR_FULLSCREEN_STATE',open:state.arFullscreen},window.location.origin);
+ // Do not call render(): it would reload the iframe and interrupt editing.
+ shell?.querySelector('[data-action="'+(state.arFullscreen?'exit-ar-fullscreen':'open-ar-fullscreen')+'"]')?.focus({preventScroll:true});
 }
 function renderTasks(){
   const active = getTaskHubUrl(); const external = active !== TASK_HUB_BUNDLED;
@@ -344,6 +356,7 @@ function renderLinkModal() {
 }
 function render() {
   document.body.classList.toggle('zh-signing-fullscreen-open',!!(state.user && state.tab==='signing' && state.signingFullscreen));
+  document.body.classList.toggle('zh-ar-fullscreen-open',!!(state.user && state.tab==='annual-return' && state.arFullscreen));
   if (!db) { ROOT.innerHTML=`<div class="auth-page"><div class="auth-card"><div class="auth-logo">Z</div><h1>Set up private workspace</h1><p>Connect a Supabase project to enable authenticated documents and synced company folders.</p><p class="muted">Follow START_HERE.md in the downloadable source package. The Task Hub and Signing code is already bundled.</p></div></div>`;return; }
   if (!state.user) {ROOT.innerHTML=renderAuth();return;}
   const tabs = ['overview','documents','tasks','annual-return','signing'];
@@ -489,16 +502,17 @@ ROOT.addEventListener('click', event=>{
   if(a.startsWith('tab-')){
     const nextTab=a.slice(4);
     // Drafts are saved as edits are made; no JSON export is needed before switching modules.
-    state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;render();return;
+    state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;if(state.tab!=='annual-return')state.arFullscreen=false;render();return;
   }
   if(a==='prepare-annual-return'||a==='select-ar-company'){
      const company=state.companies.find(c=>c.id===id);
      if(!company)return toast('Company no longer exists in the Documents list.');
      state.arSelectedCompanyId=id;
-     if(a==='prepare-annual-return'){state.tab='annual-return';state.signingFullscreen=false;render();}
+     if(a==='prepare-annual-return'){state.tab='annual-return';state.signingFullscreen=false;state.arFullscreen=false;render();}
      else{sendAnnualReturnCompany();}
      return;
    }
+   if(a==='open-ar-fullscreen'||a==='exit-ar-fullscreen'){if(state.tab==='annual-return')setAnnualReturnFullscreen(a==='open-ar-fullscreen');return;}
    if(a==='open-signing-fullscreen'||a==='exit-signing-fullscreen'){
     if(state.tab==='signing')setSigningFullscreen(a==='open-signing-fullscreen');
     return;
@@ -523,7 +537,7 @@ ROOT.addEventListener('click', event=>{
     return;
   }
   if(a==='auth-login'||a==='auth-signup'){state.authMode=a==='auth-login'?'login':'signup';state.notice='';render();return;}
-  if(a==='sign-out'){busyDo(async()=>{check((await db.auth.signOut()).error);state.user=null;state.companies=[];state.companyId=null;state.notice='';state.signingFullscreen=false;});return;}
+  if(a==='sign-out'){busyDo(async()=>{check((await db.auth.signOut()).error);state.user=null;state.companies=[];state.companyId=null;state.notice='';state.signingFullscreen=false;state.arFullscreen=false;});return;}
   if(a==='home'){state.tab='documents';state.companyId=null;state.folderId=null;state.search='';render();return;}
   if(a==='open-company'){openCompany(id);return;}
   if(a==='open-folder'){openFolder(id);return;}
@@ -603,7 +617,8 @@ ROOT.addEventListener('submit',event=>{
   });
 });
 document.addEventListener('keydown',event=>{
-  if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
+  if(event.key==='Escape'&&state.arFullscreen){event.preventDefault();setAnnualReturnFullscreen(false);}
+   else if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
 });
 ROOT.addEventListener('input',e=>{
 
@@ -674,6 +689,7 @@ window.addEventListener('message',event=>{
    })();
    return;
  }
+ if(event.data.type==='ZHENLI_AR_FULLSCREEN_TOGGLE'){setAnnualReturnFullscreen(!state.arFullscreen);return;}
  if(event.data.type==='ZHENLI_AR_READY'){sendAnnualReturnCompanyList();sendAnnualReturnCompany();return;}
  if(event.data.type==='ZHENLI_AR_SELECT_COMPANY_REQUEST'){
   const id=event.data.id;

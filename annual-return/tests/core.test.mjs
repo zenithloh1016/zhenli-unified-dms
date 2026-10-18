@@ -326,3 +326,26 @@ test('old .gs and JSON imports drop Constitution while preserving existing non-c
  verify(importAnnualReturnText(JSON.stringify(source),'old.json'));
  verify(importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(source)+';', 'old.gs'));
 });
+
+
+test('Annual Return fullscreen and removal of field search and new section',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const child=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ const parent=readFileSync(new URL('../../src/main.js',import.meta.url),'utf8');
+ const styles=readFileSync(new URL('../../src/style.css',import.meta.url),'utf8');
+ assert.ok(html.includes('id="toggle-fullscreen"'));
+ assert.ok(!html.includes('id="search"'));
+ assert.ok(!html.includes('id="add-section"'));
+ assert.ok(!child.includes("$('search')"));
+ assert.ok(!child.includes("$('add-section')"));
+ assert.ok(child.includes('data-add-to-section'), 'retain the useful add-field control within each section');
+ assert.ok(parent.includes('data-action="open-ar-fullscreen"'));
+ assert.ok(parent.includes('data-action="exit-ar-fullscreen"'));
+ assert.ok(parent.includes('ZHENLI_AR_FULLSCREEN_TOGGLE'));
+ assert.ok(parent.includes('setAnnualReturnFullscreen(!state.arFullscreen)'));
+ assert.ok(styles.includes('.annual-return-module.ar-fullscreen-open'));
+ assert.ok(child.includes('ZHENLI_DMS_AR_FULLSCREEN_STATE'));
+ assert.ok(child.includes('ar-immersive'));
+ assert.ok(parent.includes('Do not call render()'), 'full screen toggles must not reload the form');
+});

@@ -9,6 +9,34 @@ import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,remov
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
+
+let arFullscreen=false;
+function setFullscreenUi(open){
+ arFullscreen=!!open;
+ // DMS owns the containing viewport, while the standalone app uses an immersive CSS layout.
+ document.documentElement.classList.toggle('ar-immersive',arFullscreen&&window.parent===window);
+ const btn=$('toggle-fullscreen');
+ if(btn){btn.textContent=arFullscreen?'Exit full screen ✕':'⛶ Full screen';btn.setAttribute('aria-pressed',String(arFullscreen));}
+}
+async function toggleAnnualReturnFullscreen(){
+ if(window.parent!==window){
+  window.parent.postMessage({type:'ZHENLI_AR_FULLSCREEN_TOGGLE'},window.location.origin);
+  return;
+ }
+ const next=!arFullscreen;
+ if(next&&typeof document.documentElement.requestFullscreen==='function'){
+  try{await document.documentElement.requestFullscreen();}catch{/* Android WebView/Brave may require CSS fallback */}
+ }else if(!next&&document.fullscreenElement&&typeof document.exitFullscreen==='function'){
+  try{await document.exitFullscreen();}catch{/* fallback */}
+ }
+ setFullscreenUi(next);
+}
+$('toggle-fullscreen').addEventListener('click',()=>{void toggleAnnualReturnFullscreen();});
+document.addEventListener('fullscreenchange',()=>{if(window.parent===window)setFullscreenUi(Boolean(document.fullscreenElement));});
+document.addEventListener('keydown',event=>{
+ if(event.key==='Escape'&&arFullscreen&&window.parent===window&&!document.fullscreenElement)setFullscreenUi(false);
+});
+
 let draftScope=window.parent===window?'standalone':'dms:pending',newDraftId='new-'+Date.now().toString(36),draftTimer=null;
 let selectedDmsCompanyId=null,dmsCompanies=[];
 function currentDraftId(){return selectedDmsCompanyId||newDraftId;}
@@ -98,6 +126,7 @@ function applyDmsCompany(company){
 if(window.parent!==window){
  window.addEventListener('message',event=>{
   if(event.source!==window.parent||event.origin!==window.location.origin)return;
+  if(event.data?.type==='ZHENLI_DMS_AR_FULLSCREEN_STATE'){setFullscreenUi(Boolean(event.data.open));return;}
   if(event.data?.type==='ZHENLI_DMS_AR_COMPANY_LIST'){
    const records=Array.isArray(event.data.companies)?event.data.companies:[];
    dmsCompanies=records.slice(0,5000).filter(isValidCompanyRecord).sort((a,b)=>a.name.localeCompare(b.name));
@@ -335,14 +364,13 @@ function groups(){
  return all;
 }
 function renderSections(){
- const q=$('search').value.trim().toLowerCase(),onlyBlank=$('incomplete').checked;
+ const onlyBlank=$('incomplete').checked;
  $('particulars').innerHTML=groups().map((group,i)=>{
   const rows=group.items.filter(({item,index})=>{
    if(!showMemberField(doc.particulars,index))return false;
-   const matches=!q||[item.en,item.cn,item.value,group.title].some(x=>String(x||'').toLowerCase().includes(q));
-   return matches&&(!onlyBlank||item.type==='field'&&!String(item.value||'').trim());
+   return !onlyBlank||(item.type==='field'&&!String(item.value||'').trim());
   });
-  if(!rows.length&&(q||onlyBlank))return '';
+  if(!rows.length&&onlyBlank)return '';
   const body=rows.map(({index,item})=>{
    if(item.type==='heading'){
      const matched=ADDONS.find(x=>x.id!=='charge'&&x.heading.test(item.en||''));
@@ -354,14 +382,14 @@ function renderSections(){
    return '<div class="field-entry '+(item.value?'':'blank')+'"><div class="title">'+esc(item.en||'Untitled')+
     '<small>'+esc(item.cn||'')+'</small>'+(!['Company Name','Company Registration No.'].includes(item.en)?'<button type="button" class="ar-delete-field" data-delete-field="'+index+'">Delete field</button>':'')+'</div>'+controlsFor(item,index)+'</div>';
   }).join('');
-  return '<details class="ar-section" '+(i===0||q||onlyBlank?'open':'')+'><summary class="section-header"><span>'+
+  return '<details class="ar-section" '+(i===0||onlyBlank?'open':'')+'><summary class="section-header"><span>'+
    esc(group.title)+'<small>'+esc(group.cn)+'</small></span><span class="pill">'+
    rows.filter(x=>x.item.type==='field').length+' fields</span></summary><div class="section-fields">'+body+
    (group.index>=0?'<div class="addon-bar">'+ADDONS.filter(x=>x.section.test(group.title)).map(x=>'<button class="button mini" type="button" data-add-record="'+x.id+'">+ Add '+x.label+'</button>').join('')+'<button class="button mini" type="button" data-add-to-section="'+group.index+'">+ Add field to this section</button></div>':'')+'</div></details>';
- }).join('')||'<p class="status">No matching fields. Clear search or disable blank-only filter.</p>';
+ }).join('')||'<p class="status">No blank fields remain. Disable the Blank fields only filter.</p>';
  fieldStatus();
 }
-function resetView(){signingInputs();$('search').value='';$('incomplete').checked=false;renderSections();}
+function resetView(){signingInputs();$('incomplete').checked=false;renderSections();}
 function setBusy(flag){busy=flag;$('generate-pdf').disabled=flag;$('save-draft').disabled=flag;}
 async function generate(){
  if(busy)return;
@@ -398,7 +426,6 @@ $('blank').addEventListener('click',()=>{
  doc=cloneBlank();resetView();generated=null;$('download-box').hidden=true;
  draftOptions();draftStatus('New blank form. Changes will autosave on this device.');
 });
-$('search').addEventListener('input',renderSections);
 $('incomplete').addEventListener('change',renderSections);
 $('signature-fields').addEventListener('input',e=>{const k=e.target.dataset.sign;if(k){doc.signatureDirector[k]=e.target.value;queueDraftSave();}});
 $('particulars').addEventListener('input',e=>{
@@ -451,12 +478,6 @@ $('particulars').addEventListener('click',e=>{
  const add=e.target.closest('[data-add-record]');if(add)addRecord(add.dataset.addRecord);
 });
 $('add-field').addEventListener('click',()=>addCustomField());
-$('add-section').addEventListener('click',()=>{
- const en=prompt('Section heading in English:');if(!en?.trim())return;
- const cn=prompt('Chinese section heading (optional):')||'';
- doc.particulars.push({type:'section',en:en.trim().slice(0,350),cn:cn.trim().slice(0,350),value:''});
- renderSections();queueDraftSave();status('New section added. Click + Add field to add data.');
-});
 $('clear-values').addEventListener('click',()=>{
  if(!confirm('Clear every field and signatory value? Your last saved draft remains until new information is entered.'))return;
  if(!flushDraft())return;
