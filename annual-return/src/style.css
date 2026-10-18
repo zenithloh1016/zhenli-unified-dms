@@ -8,3 +8,10 @@
   .pdf-sheet{width:210mm!important;height:297mm!important;min-height:297mm!important;page-break-after:always;break-after:page;margin:0!important;box-shadow:none!important}
   .pdf-sheet:last-child{page-break-after:auto;break-after:auto}
 }
+
+/* 2026-10-18 controlled statutory particulars and repeatable groups */
+.field-entry .choice-select{width:100%;border:1px solid #d7e2eb;border-radius:8px;padding:11px;background:#fff;color:#183349;font-size:13px}
+.criteria-options{display:grid;gap:8px}
+.criteria-option{display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid #e2eaf1;border-radius:8px;font-size:12px;line-height:1.5;color:#27465a;background:#fafcff}
+.criteria-option input{flex-shrink:0;margin-top:3px;accent-color:#176b82}
+.addon-bar{display:flex;gap:9px;flex-wrap:wrap;padding:16px 0 6px;border-top:1px solid #edf1f5;margin-top:10px}
