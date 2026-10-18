@@ -2,14 +2,60 @@ import './style.css';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField} from './core.js';
+import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord} from './core.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
+import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,removeAnnualReturnDraft,draftIdOfKey} from './drafts.js';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
+let draftScope=window.parent===window?'standalone':'dms:pending',newDraftId='new-'+Date.now().toString(36),draftTimer=null;
 
 let selectedDmsCompanyId=null,dmsCompanies=[];
+
+function currentDraftId(){return selectedDmsCompanyId||newDraftId;}
+function hasDraftData(){return doc.particulars.some(x=>x.type==='field'&&String(x.value||'').trim())||Boolean(doc.signatureDirector?.name||doc.signatureDirector?.nric);}
+function draftStatus(message,error=false){const el=$('draft-status');if(el){el.textContent=message;el.style.color=error?'#b23b44':'#327284';}}
+function draftOptions(preferred=''){
+ const select=$('draft-picker');if(!select)return;
+ const previous=preferred||select.value;let rows=[];
+ try{rows=listAnnualReturnDrafts(localStorage,draftScope);}catch(err){draftStatus('Device storage unavailable: '+err.message,true);return;}
+ select.innerHTML=rows.length?rows.map(x=>'<option value="'+esc(x.key)+'">'+esc(x.name)+(x.registrationNo?' · '+esc(x.registrationNo):'')+' · '+esc(new Date(x.updatedAt).toLocaleString())+'</option>').join(''):'<option value="">No saved drafts</option>';
+ const chosen=rows.find(x=>x.key===previous)||rows.find(x=>x.companyId===currentDraftId())||rows[0];
+ select.value=chosen?.key||'';$('resume-draft').disabled=!rows.length;$('delete-draft').disabled=!rows.length;
+}
+function saveDraftNow({quiet=false}={}){
+ if(!hasDraftData())return true;
+ if(window.parent!==window&&draftScope==='dms:pending'){draftStatus('Waiting for DMS session before saving.',true);return false;}
+ try{
+  const result=saveAnnualReturnDraft(localStorage,draftScope,currentDraftId(),doc);
+  if(!quiet)draftOptions(result.key);
+  draftStatus((quiet?'Autosaved':'Saved draft')+' on this device · '+new Date(result.updatedAt).toLocaleTimeString());
+  return true;
+ }catch(err){draftStatus('Draft NOT saved: '+err.message+'. Keep this page open.',true);return false;}
+}
+function queueDraftSave(){
+ clearTimeout(draftTimer);
+ if(!hasDraftData())return;
+ draftStatus('Saving changes locally…');
+ draftTimer=setTimeout(()=>{draftTimer=null;saveDraftNow({quiet:true});},650);
+}
+function flushDraft(){if(draftTimer){clearTimeout(draftTimer);draftTimer=null;}return saveDraftNow({quiet:true});}
+function resumeLocalDraft(key){
+ if(!key)return false;
+ try{
+  const id=draftIdOfKey(key,draftScope),draft=readAnnualReturnDraft(localStorage,draftScope,id);
+  if(!draft)throw Error('Draft no longer exists.');
+  doc=draft.data;
+  const match=dmsCompanies.find(c=>c.id===id);selectedDmsCompanyId=match?.id||null;
+  if(!match)newDraftId=id;
+  generated=null;$('download-box').hidden=true;
+  resetView();draftOptions(key);
+  draftStatus('Resumed '+draft.name+' · '+new Date(draft.updatedAt).toLocaleString());
+  return true;
+ }catch(err){draftStatus('Could not resume draft: '+err.message,true);return false;}
+}
+
 function isValidCompanyRecord(value){
  return value&&typeof value==='object'&&
  typeof value.id==='string'&&value.id.length>0&&value.id.length<130&&
@@ -27,8 +73,9 @@ function applyDmsCompany(company){
    return {ok:true};
  const changedCompany=Boolean(selectedDmsCompanyId&&selectedDmsCompanyId!==company.id);
  if((changedCompany||hasUnsavedAnnualReturnData())&&!confirm(
-   'Switch to '+name+' from DMS Documents? This starts a new Annual Return form and discards unsaved particulars. Export editable JSON first if you need the current draft.'
+   'Switch to '+name+' from DMS Documents? This starts a new Annual Return form and discards unsaved particulars. Your unfinished form will be saved locally before switching.'
  ))return {ok:false,reason:'Selection cancelled to preserve the current draft.'};
+ if(!flushDraft())return {ok:false,reason:'Unable to save current draft; switch cancelled.'};
  // A new company must never inherit another company's directors, shareholdings,
  // charges or beneficial owner particulars. Start with a fresh clean template.
  doc=cloneBlank();
@@ -40,7 +87,11 @@ function applyDmsCompany(company){
  }
  selectedDmsCompanyId=company.id;
  generated=null;$('download-box').hidden=true;
- resetView();
+ let previous=null;
+ try{previous=readAnnualReturnDraft(localStorage,draftScope,company.id);}
+ catch(err){draftStatus('Saved draft could not be loaded: '+err.message,true);}
+ if(previous&&previous.data.company.name===name&&previous.data.company.no===registrationNo)doc=previous.data;
+ resetView();draftOptions();
  status('Company loaded from DMS Documents: '+name+(registrationNo?' ('+registrationNo+')':' — registration number missing; please enter it before PDF generation')+'. Complete and verify all remaining statutory particulars.');
  return {ok:true};
 }
@@ -50,6 +101,9 @@ if(window.parent!==window){
   if(event.data?.type==='ZHENLI_DMS_AR_COMPANY_LIST'){
    const records=Array.isArray(event.data.companies)?event.data.companies:[];
    dmsCompanies=records.slice(0,5000).filter(isValidCompanyRecord).sort((a,b)=>a.name.localeCompare(b.name));
+   if(typeof event.data.userId==='string'&&/^[a-z0-9-]{16,90}$/i.test(event.data.userId)){
+    draftScope='dms:'+event.data.userId;draftOptions();
+   }
    renderSections();return;
   }
   if(event.data?.type!=='ZHENLI_DMS_AR_SELECT_COMPANY')return;
