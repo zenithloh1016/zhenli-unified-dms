@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {cloneBlank,importAnnualReturnText,normalizeDocument,outputFilename,emptyCount,populatedCount} from '../src/core.js';
 test('blank bilingual template has all current structural fields without real client values',()=>{
   const blank=cloneBlank();
-  assert.equal(blank.particulars.length,139);
-  assert.equal(blank.particulars.filter(x=>x.type==='field').length,121);
+  assert.equal(blank.particulars.length,135);
+  assert.equal(blank.particulars.filter(x=>x.type==='field').length,117);
   assert.equal(populatedCount(blank),0);
-  assert.equal(emptyCount(blank),121);
+  assert.equal(emptyCount(blank),117);
   assert.ok(blank.particulars.some(x=>x.cn.includes('股权')));
   assert.equal(blank.company.name,'');
   assert.equal(blank.signatureDirector.nric,'');
@@ -30,7 +30,7 @@ test('rejects malformed or unsafe scripts and maintains editable draft JSON',()=
   const recovered=importAnnualReturnText(JSON.stringify(draft),'save.json');
   assert.equal(recovered.company.name,'SAMPLE SDN. BHD.');
   assert.equal(recovered.particulars[2].value,'Test');
-  assert.equal(normalizeDocument(draft).particulars.length,139);
+  assert.equal(normalizeDocument(draft).particulars.length,135);
 });
 
 test('preserves multiple BO criteria and signing acknowledgement through draft export',()=>{
@@ -82,10 +82,29 @@ test('Company Profile panel removed and Signing Acknowledgement remains after de
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const pdf=readFileSync(new URL('../src/pdf.js',import.meta.url),'utf8');
  assert.ok(html.includes('01 / COMPANY DETAILS'));
- assert.ok(html.includes('V1.3'));
+ assert.ok(html.includes('V1.4'));
  assert.ok(!html.includes('company-panel'));
  assert.ok(!html.includes('id="company-fields"'));
  assert.ok(html.indexOf('id="company-details"')<html.indexOf('id="signature-fields"'));
  assert.ok(pdf.includes('SIGNING ACKNOWLEDGEMENT'));
  assert.ok(!pdf.includes('const meta=['));
+});
+
+test('excluded internal due dates and register update fields never survive .gs or JSON imports',()=>{
+ const draft=cloneBlank();
+ const forbidden=['Statutory Lodgement Deadline (30 calendar days)','Master Listing Internal Due Date',
+  'Register Last Updated','Master Listing Internal Due vs Statutory 30 Days'];
+ draft.company.lodgementDueDate='2026-11-01';
+ draft.company.masterListingDueDate='2026-10-18';
+ draft.particulars.push(...forbidden.map(en=>({type:'field',en,cn:'',value:'2026-10-18'})));
+ const out=normalizeDocument(draft);
+ assert.equal(out.schemaVersion,2);
+ assert.equal(out.particulars.length,135);
+ assert.equal(out.particulars.some(x=>forbidden.includes(x.en)),false);
+ assert.equal(Object.hasOwn(out.company,'lodgementDueDate'),false);
+ assert.equal(Object.hasOwn(out.company,'masterListingDueDate'),false);
+ const gs='const AR_SINGLE_COMPANY = '+JSON.stringify(draft)+';';
+ const parsed=importAnnualReturnText(gs,'legacy.gs');
+ assert.equal(parsed.particulars.some(x=>forbidden.includes(x.en)),false);
+ assert.ok(parsed.particulars.some(x=>x.en==='Nature of Business / MSIC Code'));
 });

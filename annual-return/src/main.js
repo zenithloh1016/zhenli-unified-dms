@@ -4,6 +4,7 @@ import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
 import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails} from './core.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
+import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
@@ -21,6 +22,67 @@ function signingInputs(){
  $('signature-fields').innerHTML=signs.map(([key,label])=>'<label class="field-label">'+esc(label)+
   '<input data-sign="'+esc(key)+'" type="text" value="'+esc(doc.signatureDirector[key]||'')+'" placeholder="'+
   (key==='date'?'Leave blank until signed':'Enter signatory details')+'" autocomplete="off"></label>').join('');
+}
+
+
+let msicCatalogue=[],msicState='Loading DOSM MSIC 2008 codes…';
+function msicControl(item,index){
+ const selected=extractMSICCodes(item.value);
+ const imported=String(item.value||'').trim()&&!selected.length?String(item.value):'';
+ const full=selected.length>=MAX_MSIC_CODES;
+ const chips=selected.map(c=>'<span class="msic-chip"><span><b>'+esc(c.code)+'</b> · '+esc(c.en)+'</span>'+
+  '<button type="button" data-msic-remove="'+index+'" data-msic-code="'+esc(c.code)+'" aria-label="Remove '+esc(c.code)+'">×</button></span>').join('');
+ const text=selected.length+' / '+MAX_MSIC_CODES+' codes chosen · '+(msicCatalogue.length?msicCatalogue.length+' MSIC descriptions available':esc(msicState));
+ return '<div class="msic-selector" data-msic-index="'+index+'">'+
+  '<p class="msic-help">'+text+'</p>'+
+  '<div class="msic-selected">'+(chips||'<span class="msic-empty">No codes selected</span>')+'</div>'+
+  (imported?'<p class="msic-help"><b>Imported previous value (verify):</b> '+esc(imported)+'</p>':'')+
+  '<label class="field-label">Search MSIC code or business activity / 搜索行业代码'+
+  '<input data-msic-search="'+index+'" class="msic-search" type="search" autocomplete="off" placeholder="e.g. 62010, construction, wholesale" '+(full||!msicCatalogue.length?'disabled':'')+'></label>'+
+  '<div class="msic-options" role="listbox"></div>'+
+  '<div class="msic-links"><a href="'+SSM_MSIC_LOOKUP+'" target="_blank" rel="noopener noreferrer">SSM BizCodEX official search ↗</a> · '+
+  '<a href="'+SSM_MSIC_ROC_PDF+'" target="_blank" rel="noopener noreferrer">SSM ROC code list ↗</a></div>'+
+  '<button type="button" class="button mini" data-msic-manual="'+index+'" '+(full?'disabled':'')+'>+ Add verified SSM code manually</button>'+
+  '<p class="msic-help">Select up to 3 codes. Searchable descriptions come from DOSM MSIC 2008 Ver. 1, used by SSM BizCodEX. Verify SSM ROC suffix codes from the SSM reference.</p></div>';
+}
+async function loadMSIC(){
+ try{
+  const endpoint=import.meta.env.BASE_URL+'msic-2008.json';
+  const response=await fetch(endpoint,{cache:'no-store'});
+  if(!response.ok)throw Error('Catalogue HTTP '+response.status);
+  const data=await response.json();
+  if(!Array.isArray(data.codes)||data.codes.length<800)throw Error('Incomplete government MSIC catalogue.');
+  msicCatalogue=data.codes;
+  msicState='Official DOSM MSIC 2008 catalogue loaded';
+ }catch(err){
+  msicState='Official MSIC catalogue could not load ('+err.message+'). Use the SSM links or verified manual entry.';
+ }
+ renderSections();
+}
+function refreshMSICResults(input){
+ const index=Number(input.dataset.msicSearch),block=input.closest('.msic-selector');
+ if(!block)return;
+ const options=block.querySelector('.msic-options');
+ const selected=new Set(extractMSICCodes(doc.particulars[index]?.value).map(x=>x.code));
+ const found=matchesMSIC(msicCatalogue,input.value).filter(x=>!selected.has(x.code));
+ options.innerHTML=found.map(x=>'<button type="button" class="msic-match" data-msic-add="'+index+'" data-msic-code="'+esc(x.code)+'">'+
+  '<b>'+esc(x.code)+'</b><span>'+esc(x.en)+(x.bm?' · '+esc(x.bm):'')+'</span></button>').join('')+
+  (input.value.trim().length>=2&&!found.length?'<p class="msic-help">No matching codes found. Try a broader search or check SSM BizCodEX.</p>':'');
+}
+function changeMSIC(index,code,remove=false,manualDesc=''){
+ const item=doc.particulars[index];if(!item||!MSIC_FIELD.test(item.en))return;
+ let selected=extractMSICCodes(item.value);
+ if(remove){selected=selected.filter(x=>x.code!==code);}
+ else{
+  const entry=msicCatalogue.find(x=>x.code===code);
+  if(selected.length>=MAX_MSIC_CODES)return status('You may select a maximum of three MSIC codes.',true);
+  if(selected.some(x=>x.code===code))return;
+  if(!entry&&!manualDesc)return status('Verify the code using official SSM reference first.',true);
+  selected.push({code,en:entry?.en||manualDesc});
+ }
+ item.value=formatMSICCodes(selected);
+ renderSections();
+ status((remove?'Removed ':'Selected ')+code+'. '+selected.length+' of 3 MSIC codes.');
 }
 
 const OPTIONS=[
@@ -78,6 +140,7 @@ function addRecord(kind){
 }
 function controlsFor(item,index){
  const value=String(item.value||''),common=' data-item="'+index+'"';
+ if(MSIC_FIELD.test(item.en))return msicControl(item,index);
  if(/^Criteria of Beneficial Ownership$/i.test(item.en)){
   const selected=[...value.matchAll(/(?:criteria\s*)?([ABCD])(?=\b|[,;/\s])/gi)].map(m=>m[1].toUpperCase()); 
   return '<div class="criteria-options">'+Object.entries(CRITERIA).map(([key,desc])=>'<label class="criteria-option"><input type="checkbox" data-criteria="'+index+'" value="'+key+'" '+(selected.includes(key)?'checked':'')+'><span><b>Criteria '+key+'</b> — '+esc(desc)+'</span></label>').join('')+'</div>';
@@ -174,6 +237,7 @@ $('search').addEventListener('input',renderSections);
 $('incomplete').addEventListener('change',renderSections);
 $('signature-fields').addEventListener('input',e=>{const k=e.target.dataset.sign;if(k)doc.signatureDirector[k]=e.target.value;});
 $('particulars').addEventListener('input',e=>{
+ if(e.target.dataset.msicSearch!==undefined){refreshMSICResults(e.target);return;}
  const index=e.target.dataset.item;
  if(index!==undefined&&doc.particulars[+index]){
   doc.particulars[+index].value=e.target.value;
@@ -193,6 +257,20 @@ $('particulars').addEventListener('change',e=>{
  }
 });
 $('particulars').addEventListener('click',e=>{
+ const select=e.target.closest('[data-msic-add]');
+ if(select){changeMSIC(Number(select.dataset.msicAdd),select.dataset.msicCode);return;}
+ const remove=e.target.closest('[data-msic-remove]');
+ if(remove){changeMSIC(Number(remove.dataset.msicRemove),remove.dataset.msicCode,true);return;}
+ const manual=e.target.closest('[data-msic-manual]');
+ if(manual){
+  const code=(prompt('Enter a code verified against the official SSM ROC/MSIC list (5 digits; ROC suffix e/i/u allowed):')||'').trim().toLowerCase();
+  if(!code)return;
+  if(!/^\d{5}(?:[eiu])?$/.test(code)){status('Invalid code format. Use five digits, optionally followed by an SSM ROC e/i/u suffix.',true);return;}
+  const known=msicCatalogue.find(x=>x.code===code);
+  const desc=known?.en||(prompt('Description exactly as shown in the official SSM reference:')||'').trim();
+  if(!desc)return;
+  changeMSIC(Number(manual.dataset.msicManual),code,false,desc.slice(0,250));return;
+ }
  const add=e.target.closest('[data-add-record]');if(add)addRecord(add.dataset.addRecord);
 });
 $('add-field').addEventListener('click',()=>{
@@ -225,4 +303,6 @@ $('print').addEventListener('click',()=>{
  renderPages(doc);window.print();setTimeout(()=>{$('pdf-stage').textContent='';},5000);
 });
 window.addEventListener('afterprint',()=>{$('pdf-stage').textContent='';});
-resetView();status('V1.3 loaded — begin with Company Details. Import .gs / JSON or enter information in the first section.');
+resetView();
+status('V1.4 loaded — Company Details first. SSM MSIC lookup: maximum 3 codes. No deadline or register-last-update fields.');
+void loadMSIC();

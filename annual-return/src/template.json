@@ -1,13 +1,11 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "templateSource": "Annual Return Review Form (revised)(1).gs; latest structured example 2026-10-13",
   "company": {
     "name": "",
     "no": "",
     "arYear": "2026",
-    "arDate": "",
-    "lodgementDueDate": "",
-    "masterListingDueDate": ""
+    "arDate": ""
   },
   "signatureDirector": {
     "name": "",
@@ -61,26 +59,8 @@
     },
     {
       "type": "field",
-      "en": "Statutory Lodgement Deadline (30 calendar days)",
-      "cn": "法定呈交截止日期（30个日历日）",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Master Listing Internal Due Date",
-      "cn": "总表内部截止日期",
-      "value": ""
-    },
-    {
-      "type": "field",
       "en": "Date of Incorporation",
       "cn": "成立日期",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Register Last Updated",
-      "cn": "股东名册最后更新日期",
       "value": ""
     },
     {
@@ -843,12 +823,6 @@
       "type": "field",
       "en": "Current Particulars Cut-off",
       "cn": "最新资料截止日期",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Master Listing Internal Due vs Statutory 30 Days",
-      "cn": "总表内部截止日期与法定30日差异",
       "value": ""
     }
   ]

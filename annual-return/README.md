@@ -38,3 +38,14 @@ Sources in private ChatGPT Library:
 - `/Annual Return Scripts (Sdn Bhd Companies)/AURUMROCK_LABORATORY_SDN_BHD_Annual_Return_2027.gs` (latest structured example)
 
 Company-specific scripts are **not bundled**, to prevent exposing private information on public GitHub Pages. Import them locally when required.
+
+## V1.4 clean fields and SSM MSIC 2008 (18 October 2026)
+
+- The app starts directly from **Company Details**. There is no separate Company Profile.
+- **Statutory Lodgement Deadline**, **Master Listing Internal Due Date**, **Register Last Updated**, and the related internal-vs-statutory deadline comparison are not shown or exported, even when importing older Apps Script / JSON drafts.
+- The **Nature of Business / MSIC Code** field now lets users search and select up to **three** MSIC 2008 Ver.1 codes with English/Malay descriptions. It also accepts a manually verified SSM ROC code (5 digits with optional `e`, `i`, `u` suffix) because SSM ROC's special suffixes are not necessarily present in the national 5-digit dataset. Verify manual entries against the SSM list.
+- Official SSM references: [BizCodEX](https://www.ssm.com.my/Pages/BizCodEX.aspx), [SSM ROC published code list](https://www.ssm.com.my/Pages/Publication/SSM%20MSIC%20Code/ROC/SSM%20MSIC%202008%20CODE%20-%20ROC.pdf).
+- The catalogue is generated **at build/deployment time**, directly from the DOSM government's published [MSIC 2008 CSV](https://storage.dosm.gov.my/dictionaries/msic.csv), using `annual-return/scripts/build-msic.mjs`. The generated `public/msic-2008.json` is bundled into the deployed website/APK for offline searching. This is a versioned **official government-data snapshot**, not a live SSM API connection or automatic update of company details. DOSM data licence: CC BY 4.0, https://data.gov.my/data-catalogue/msic .
+- In case the government CSV download or structure fails, the build stops instead of deploying a partial/fabricated code list.
+- Selected codes appear in the bilingual PDF and editable JSON draft; company records and credentials remain local unless explicitly exported.
+
