@@ -422,7 +422,7 @@ $('particulars').addEventListener('input',e=>{
   doc.particulars[+index].value=e.target.value;
   setCompanyDetail(doc,Number(index),e.target.value);
   e.target.closest('.field-entry')?.classList.toggle('blank',!e.target.value.trim());
-  fieldStatus();
+  fieldStatus();changedDraft();
  }
 });
 $('particulars').addEventListener('change',e=>{
@@ -438,7 +438,7 @@ $('particulars').addEventListener('change',e=>{
   const values=[...$('particulars').querySelectorAll('input[data-criteria="'+i+'"]:checked')].map(x=>x.value);
   doc.particulars[i].value=values.map(x=>'Criteria '+x).join(', ');
   el.closest('.field-entry')?.classList.toggle('blank',!values.length);
-  fieldStatus();
+  fieldStatus();changedDraft();
  }
 });
 $('particulars').addEventListener('click',e=>{
