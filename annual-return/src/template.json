@@ -12,7 +12,8 @@
   "signatureDirector": {
     "name": "",
     "nric": "",
-    "date": ""
+    "date": "",
+    "acknowledged": false
   },
   "particulars": [
     {
@@ -133,6 +134,12 @@
       "type": "field",
       "en": "Currency",
       "cn": "货币",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Type of Shares (Consideration)",
+      "cn": "股份发行对价类型（现金或非现金）",
       "value": ""
     },
     {
