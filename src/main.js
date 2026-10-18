@@ -41,7 +41,7 @@ const state = {
   user: null, companies: [], folders: [], documents: [],
   companyId: null, folderId: null, search: '', busy: false, notice: '',
   tab: 'documents', totalDocs: 0, taskFullscreen: false, signingFullscreen: false,
-  arSearch: '', arSelectedCompanyId: null,
+  arSelectedCompanyId: null,
   modal: null, authMode: 'login', importData: null, importWorkbook: null, importReader: '',
   importSheet: 0, importNameCol: 0, importRegCol: -1, importStartRow: 2,
   importProgress: null, importFileName: '', importError: ''
@@ -277,20 +277,13 @@ function renderOverview() {
   </section>
   <section class="info-panel"><h2>Welcome to your private workspace</h2><p>Import your latest Master Listing under <b>Documents</b>, manage deadlines and tasks under <b>Tasks</b>, and access signing requests under <b>Signing</b>, and prepare review PDFs under <b>Annual Return</b>.</p><div class="quick-actions">${action('View company folders','tab-documents','','primary')}${action('Open Task Hub','tab-tasks','','secondary')}${action('Annual Return PDFs','tab-annual-return','','secondary')}${action('Open Signing','tab-signing','','secondary')}</div></section>`;
 }
-function annualReturnCompanyResults(){
- const q=state.arSearch.trim().toLowerCase();
- const matches=state.companies.filter(c=>(String(c.name||'')+' '+String(c.registration_no||'')).toLowerCase().includes(q));
- const listed=matches.slice(0,q?50:12);
- return '<p class="muted ar-search-summary">'+(q?matches.length+' matching companies':state.companies.length+' available · first '+listed.length+' shown')+'</p>'+
- (listed.length?listed.map(c=>'<button type="button" class="ar-company-option '+(state.arSelectedCompanyId===c.id?'ar-selected':'')+'" data-action="select-ar-company" data-id="'+esc(c.id)+'"><strong>'+esc(c.name)+'</strong><small>'+esc(c.registration_no||'Registration number not recorded')+'</small></button>').join('')
- :'<p class="muted">No matching company. Search by name or registration number under Documents.</p>');
-}
-function refreshAnnualReturnCompanyResults(){
- const results=ROOT.querySelector('#ar-companies-results');
- if(results)results.innerHTML=annualReturnCompanyResults();
- const selected=ROOT.querySelector('#ar-current-company');
- const company=state.companies.find(x=>x.id===state.arSelectedCompanyId);
- if(selected)selected.textContent=company?'Selected: '+company.name+(company.registration_no?' · '+company.registration_no:' · Registration number missing'):'Search and select a Documents company to begin.';
+function sendAnnualReturnCompanyList(){
+ const frame=ROOT.querySelector('#zh-annual-return-frame');
+ if(!frame||!state.user)return;
+ const companies=state.companies.slice(0,5000).map(c=>({
+  id:String(c.id),name:String(c.name||''),registrationNo:String(c.registration_no||'')
+ }));
+ frame.contentWindow?.postMessage({type:'ZHENLI_DMS_AR_COMPANY_LIST',companies},window.location.origin);
 }
 function sendAnnualReturnCompany(){
  const frame=ROOT.querySelector('#zh-annual-return-frame');
@@ -304,16 +297,11 @@ function renderAnnualReturn(){
  return '<section class="annual-return-module" aria-label="Annual Return PDF generator">'+
  '<div class="integration-heading"><div><p class="eyebrow">STATUTORY PARTICULARS REVIEW · V1.6</p>'+
  '<h1>Annual Return PDF Generator</h1>'+
- '<p class="muted">Search and select a company already stored in Documents. Its name and registration number automatically fill Company Details.</p></div></div>'+
- '<div class="ar-company-picker"><label for="ar-company-search"><strong>Documents → Search company</strong></label>'+
- '<input type="search" id="ar-company-search" autocomplete="off" placeholder="Search company name or registration number" value="'+esc(state.arSearch)+'">'+
- '<div id="ar-current-company" class="ar-current-company" role="status">Search and select a Documents company to begin.</div>'+
- '<div id="ar-companies-results" class="ar-companies-results">'+annualReturnCompanyResults()+'</div></div>'+
- '<div class="integration-info">Only the selected company name and registration number are passed to the Annual Return form. Directors, members, charges and BO information must still be verified and entered. Drafts are not automatically saved to DMS: export JSON before switching tabs. Completed PDFs can be uploaded into the appropriate Documents folder.</div>'+
+ '<p class="muted">Choose an existing Documents company in the searchable dropdown beside <b>Company Details → Company Name</b>. Its company number will automatically fill in.</p></div></div>'+
+ '<div class="integration-info">There is no separate company search above the form. The DMS shares company names and registration numbers from your signed-in Documents list only with the embedded form. Other Annual Return particulars are entered and verified manually. Export your editable JSON before leaving; drafts are not saved automatically.</div>'+
  '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.6" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share"></iframe></div>'+
  '</section>';
 }
-
 function renderTasks(){
   const active = getTaskHubUrl(); const external = active !== TASK_HUB_BUNDLED;
   return `<div class="integration-heading"><div><p class="eyebrow">SECRETARIAL TASK MANAGER</p><h1>Task Hub V3</h1><p class="muted">Your original Task Hub source is included directly in this app. ${external ? 'Using your configured hosted site.' : 'Using the bundled local edition.'}</p></div>
@@ -370,8 +358,7 @@ function render() {
   <input id="document-upload" type="file" multiple hidden />`;
   if(state.tab==='signing') signingUI.mount();
    if(state.tab==='annual-return'){
-     refreshAnnualReturnCompanyResults();
-     ROOT.querySelector('#zh-annual-return-frame')?.addEventListener('load',sendAnnualReturnCompany,{once:true});
+     ROOT.querySelector('#zh-annual-return-frame')?.addEventListener('load',()=>{sendAnnualReturnCompanyList();sendAnnualReturnCompany();},{once:true});
    }
 }
 
@@ -508,8 +495,8 @@ ROOT.addEventListener('click', event=>{
      const company=state.companies.find(c=>c.id===id);
      if(!company)return toast('Company no longer exists in the Documents list.');
      state.arSelectedCompanyId=id;
-     if(a==='prepare-annual-return'){state.arSearch='';state.tab='annual-return';state.signingFullscreen=false;render();}
-     else{sendAnnualReturnCompany();refreshAnnualReturnCompanyResults();}
+     if(a==='prepare-annual-return'){state.tab='annual-return';state.signingFullscreen=false;render();}
+     else{sendAnnualReturnCompany();}
      return;
    }
    if(a==='open-signing-fullscreen'||a==='exit-signing-fullscreen'){
@@ -619,7 +606,7 @@ document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
 });
 ROOT.addEventListener('input',e=>{
- if(e.target.id==='ar-company-search'){state.arSearch=e.target.value;refreshAnnualReturnCompanyResults();return;}
+
  signingUI.input(e.target);if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
 ROOT.addEventListener('change',e=>{
   if(signingUI.changed(e.target))return;
@@ -687,15 +674,15 @@ window.addEventListener('message',event=>{
    })();
    return;
  }
- if(event.data.type==='ZHENLI_AR_READY'){sendAnnualReturnCompany();return;}
+ if(event.data.type==='ZHENLI_AR_READY'){sendAnnualReturnCompanyList();sendAnnualReturnCompany();return;}
+ if(event.data.type==='ZHENLI_AR_SELECT_COMPANY_REQUEST'){
+  const id=event.data.id;
+  if(typeof id!=='string'||id.length>130||!state.companies.some(x=>x.id===id))return;
+  state.arSelectedCompanyId=id;sendAnnualReturnCompany();return;
+ }
  if(event.data.type==='ZHENLI_AR_SELECTION_RESULT'){
-   const selected=ROOT.querySelector('#ar-current-company');
-   const company=state.companies.find(x=>x.id===state.arSelectedCompanyId);
-   if(event.data.ok&&company){
-     if(selected)selected.textContent='Loaded: '+company.name+' — company identity transferred from Documents.';
-   }else if(selected&&!event.data.ok){
-     selected.textContent='Company was not applied: '+String(event.data.reason||'Please export the current draft and retry').slice(0,150);
-   }
+  if(!event.data.ok&&event.data.reason)toast('Annual Return company selection: '+String(event.data.reason).slice(0,130));
+  return;
  }
 });
 async function init() {
