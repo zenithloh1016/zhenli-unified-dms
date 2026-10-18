@@ -2,13 +2,13 @@ import './style.css';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails} from './core.js';
+import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField} from './core.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
-let selectedDmsCompanyId=null;
+let selectedDmsCompanyId=null,dmsCompanies=[];
 function isValidCompanyRecord(value){
  return value&&typeof value==='object'&&
  typeof value.id==='string'&&value.id.length>0&&value.id.length<130&&
@@ -16,7 +16,7 @@ function isValidCompanyRecord(value){
  typeof value.registrationNo==='string'&&value.registrationNo.length<=120;
 }
 function hasUnsavedAnnualReturnData(){
- return doc.particulars.some(x=>x.type==='field'&&String(x.value||'').trim()!=='')||
+ return doc.particulars.some(x=>x.type==='field'&&!['Company Name','Company Registration No.'].includes(x.en)&&String(x.value||'').trim()!=='')||
    Boolean(doc.signatureDirector?.name||doc.signatureDirector?.nric);
 }
 function applyDmsCompany(company){
@@ -24,8 +24,7 @@ function applyDmsCompany(company){
  const name=company.name.trim(),registrationNo=company.registrationNo.trim();
  if(selectedDmsCompanyId===company.id&&doc.company.name===name&&doc.company.no===registrationNo)
    return {ok:true};
- const changedCompany=Boolean(doc.company.name&&doc.company.name!==name)||
-   Boolean(selectedDmsCompanyId&&selectedDmsCompanyId!==company.id);
+ const changedCompany=Boolean(selectedDmsCompanyId&&selectedDmsCompanyId!==company.id);
  if((changedCompany||hasUnsavedAnnualReturnData())&&!confirm(
    'Switch to '+name+' from DMS Documents? This starts a new Annual Return form and discards unsaved particulars. Export editable JSON first if you need the current draft.'
  ))return {ok:false,reason:'Selection cancelled to preserve the current draft.'};
@@ -47,6 +46,11 @@ function applyDmsCompany(company){
 if(window.parent!==window){
  window.addEventListener('message',event=>{
   if(event.source!==window.parent||event.origin!==window.location.origin)return;
+  if(event.data?.type==='ZHENLI_DMS_AR_COMPANY_LIST'){
+   const records=Array.isArray(event.data.companies)?event.data.companies:[];
+   dmsCompanies=records.slice(0,5000).filter(isValidCompanyRecord).sort((a,b)=>a.name.localeCompare(b.name));
+   renderSections();return;
+  }
   if(event.data?.type!=='ZHENLI_DMS_AR_SELECT_COMPANY')return;
   let result={ok:false,reason:'Company selection could not be processed.'};
   try{result=applyDmsCompany(event.data.company);}catch(err){result={ok:false,reason:String(err.message||err).slice(0,180)};}
@@ -184,8 +188,34 @@ function addRecord(kind){
  doc.particulars.splice(insertAt,0,...next);
  renderSections();status('Added '+rule.label+' '+nextNumber+'. All its fields are blank.');
 }
+function companyOptions(search){
+ const q=String(search||'').trim().toLowerCase();
+ const rows=(q?dmsCompanies.filter(c=>(c.name+' '+c.registrationNo).toLowerCase().includes(q)):dmsCompanies).slice(0,15);
+ return rows.length?rows.map(c=>'<button type="button" class="ar-name-option" data-dms-company-id="'+esc(c.id)+'">'+
+  '<strong>'+esc(c.name)+'</strong><small>'+esc(c.registrationNo||'Registration number not recorded')+'</small></button>').join(''):
+  '<span class="msic-help">No matching Documents company. Adjust your search or type the company name manually.</span>';
+}
+function companyNameControl(item,index){
+ const value=String(item.value||'');
+ if(!dmsCompanies.length||window.parent===window)return '<textarea data-item="'+index+'" rows="2" spellcheck="false" placeholder="Enter company name…">'+esc(value)+'</textarea>';
+ return '<div class="ar-name-selector"><label class="field-label">Search existing DMS Documents companies'+
+  '<input type="search" data-item="'+index+'" data-company-lookup="'+index+'" value="'+esc(value)+'" autocomplete="off" placeholder="Search company name or registration number"></label>'+
+  '<div class="ar-name-options" data-company-results="'+index+'">'+companyOptions(value)+'</div>'+
+  '<p class="msic-help">Choose an existing company to fill its registered name and number. Switching companies starts a fresh review, so export JSON first.</p></div>';
+}
+function removeReviewField(index){
+ const item=doc.particulars[index];if(!item||item.type!=='field')return;
+ if(['Company Name','Company Registration No.'].includes(item.en)){
+  status(item.en+' is required for PDF generation and cannot be deleted.',true);return;
+ }
+ if(!confirm('Delete "'+item.en+'" and its value from this Annual Return form and generated PDF?'))return;
+ try {deleteParticularField(doc,index);}catch(err){status(err.message,true);return;}
+ renderSections();status('Removed field: '+item.en+'. Export JSON to preserve this customisation.');
+}
+
 function controlsFor(item,index){
  const value=String(item.value||''),common=' data-item="'+index+'"';
+ if(item.en==='Company Name')return companyNameControl(item,index);
  if(MSIC_FIELD.test(item.en))return msicControl(item,index);
  if(/^Criteria of Beneficial Ownership$/i.test(item.en)){
   const selected=[...value.matchAll(/(?:criteria\s*)?([ABCDE])(?=\b|[,;/\s])/gi)].map(m=>m[1].toUpperCase()); 
@@ -219,7 +249,7 @@ function renderSections(){
   const body=rows.map(({index,item})=>{
    if(item.type==='heading')return '<div class="heading-entry">'+esc(item.en)+' <small>'+esc(item.cn)+'</small></div>';
    return '<div class="field-entry '+(item.value?'':'blank')+'"><div class="title">'+esc(item.en||'Untitled')+
-    '<small>'+esc(item.cn||'')+'</small></div>'+controlsFor(item,index)+'</div>';
+    '<small>'+esc(item.cn||'')+'</small>'+(!['Company Name','Company Registration No.'].includes(item.en)?'<button type="button" class="ar-delete-field" data-delete-field="'+index+'">Delete field</button>':'')+'</div>'+controlsFor(item,index)+'</div>';
   }).join('');
   return '<details class="ar-section" '+(i===0||q||onlyBlank?'open':'')+'><summary class="section-header"><span>'+
    esc(group.title)+'<small>'+esc(group.cn)+'</small></span><span class="pill">'+
@@ -236,7 +266,7 @@ async function importFile(file){
   if(file.size>3_000_000)throw Error('Selected file exceeds 3 MB. Choose a company-specific .gs/.json file.');
   const incoming=importAnnualReturnText(await file.text(),file.name);
   if(!confirm('Load '+file.name+'? Unsaved edits in the current form will be replaced.'))return;
-  doc=incoming;resetView();$('download-box').hidden=true;generated=null;
+  doc=incoming;selectedDmsCompanyId=null;resetView();$('download-box').hidden=true;generated=null;
   status('Imported '+file.name+' locally. Review '+populatedCount(doc)+' populated fields before generating the PDF.');
  }catch(error){status('Import failed: '+error.message,true);}
 }
@@ -288,6 +318,11 @@ $('search').addEventListener('input',renderSections);
 $('incomplete').addEventListener('change',renderSections);
 $('signature-fields').addEventListener('input',e=>{const k=e.target.dataset.sign;if(k)doc.signatureDirector[k]=e.target.value;});
 $('particulars').addEventListener('input',e=>{
+ if(e.target.dataset.companyLookup!==undefined){
+  const results=e.target.closest('.ar-name-selector')?.querySelector('[data-company-results]');
+  if(results)results.innerHTML=companyOptions(e.target.value);
+  selectedDmsCompanyId=null;
+ }
  if(e.target.dataset.msicSearch!==undefined){refreshMSICResults(e.target);return;}
  const index=e.target.dataset.item;
  if(index!==undefined&&doc.particulars[+index]){
@@ -308,6 +343,13 @@ $('particulars').addEventListener('change',e=>{
  }
 });
 $('particulars').addEventListener('click',e=>{
+ const del=e.target.closest('[data-delete-field]');
+ if(del){removeReviewField(Number(del.dataset.deleteField));return;}
+ const company=e.target.closest('[data-dms-company-id]');
+ if(company){
+  if(window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_SELECT_COMPANY_REQUEST',id:company.dataset.dmsCompanyId},window.location.origin);
+  return;
+ }
  const select=e.target.closest('[data-msic-add]');
  if(select){changeMSIC(Number(select.dataset.msicAdd),select.dataset.msicCode);return;}
  const remove=e.target.closest('[data-msic-remove]');
