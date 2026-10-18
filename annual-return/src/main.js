@@ -17,7 +17,7 @@ function isValidCompanyRecord(value){
  typeof value.registrationNo==='string'&&value.registrationNo.length<=120;
 }
 function hasUnsavedAnnualReturnData(){
- return doc.particulars.some(x=>x.type==='field'&&String(x.value||'').trim()!=='')||
+ return doc.particulars.some(x=>x.type==='field'&&!['Company Name','Company Registration No.'].includes(x.en)&&String(x.value||'').trim()!=='')||
    Boolean(doc.signatureDirector?.name||doc.signatureDirector?.nric);
 }
 function applyDmsCompany(company){
@@ -25,8 +25,7 @@ function applyDmsCompany(company){
  const name=company.name.trim(),registrationNo=company.registrationNo.trim();
  if(selectedDmsCompanyId===company.id&&doc.company.name===name&&doc.company.no===registrationNo)
    return {ok:true};
- const changedCompany=Boolean(doc.company.name&&doc.company.name!==name)||
-   Boolean(selectedDmsCompanyId&&selectedDmsCompanyId!==company.id);
+ const changedCompany=Boolean(selectedDmsCompanyId&&selectedDmsCompanyId!==company.id);
  if((changedCompany||hasUnsavedAnnualReturnData())&&!confirm(
    'Switch to '+name+' from DMS Documents? This starts a new Annual Return form and discards unsaved particulars. Export editable JSON first if you need the current draft.'
  ))return {ok:false,reason:'Selection cancelled to preserve the current draft.'};
