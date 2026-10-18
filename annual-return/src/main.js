@@ -217,7 +217,7 @@ function changeMSIC(index,code,remove=false,manualDesc=''){
   selected.push({code,en:entry?.en||manualDesc});
  }
  item.value=formatMSICCodes(selected);
- renderSections();
+ renderSections();changedDraft();
  status((remove?'Removed ':'Selected ')+code+'. '+selected.length+' of 3 MSIC codes.');
 }
 
@@ -274,7 +274,7 @@ function addRecord(kind){
  }
  if(doc.particulars.length+next.length>1200)return status('Too many review items; remove unnecessary entries first.',true);
  doc.particulars.splice(insertAt,0,...next);
- renderSections();status('Added '+rule.label+' '+nextNumber+'. All its fields are blank.');
+ renderSections();changedDraft();status('Added '+rule.label+' '+nextNumber+'. All its fields are blank.');
 }
 function companyNameControl(item,index){
  const value=String(item.value||'');
@@ -288,7 +288,7 @@ function companyNameControl(item,index){
   '<label class="field-label">All Documents companies ('+dmsCompanies.length+')'+
   '<select class="choice-select ar-company-full-list" data-company-select="'+index+'">'+
   '<option value="">— Select a company from the complete list —</option>'+options+'</select></label>'+
-  '<p class="msic-help">All '+dmsCompanies.length+' DMS companies are available in the dropdown. Selecting a new company fills its registration number and starts a blank review for that company; export unfinished JSON first.</p></div>';
+  '<p class="msic-help">All '+dmsCompanies.length+' DMS companies are available in the dropdown. Previously saved drafts resume when you select their company.</p></div>';
 }
 function addCustomField({sectionIndex=null,headingIndex=null}={}){
  if(doc.particulars.length>=1200)return status('The Annual Return field limit is reached.',true);
@@ -306,7 +306,7 @@ function addCustomField({sectionIndex=null,headingIndex=null}={}){
   while(pos<doc.particulars.length&&doc.particulars[pos].type!=='section')pos++;
  }
  doc.particulars.splice(pos,0,field);
- renderSections();
+ renderSections();changedDraft();
  status('Added "'+field.en+'" to '+(headingIndex!==null?'the selected member record':'the selected section')+'. It will appear in the PDF.');
 }
 function removeReviewField(index){
@@ -316,7 +316,7 @@ function removeReviewField(index){
  }
  if(!confirm('Delete "'+item.en+'" and its value from this Annual Return form and generated PDF?'))return;
  try {deleteParticularField(doc,index);}catch(err){status(err.message,true);return;}
- renderSections();status('Removed field: '+item.en+'. Export JSON to preserve this customisation.');
+ renderSections();changedDraft();status('Removed field: '+item.en+'. Change saved in your draft.');
 }
 
 function controlsFor(item,index){
@@ -366,35 +366,7 @@ function renderSections(){
  fieldStatus();
 }
 function resetView(){signingInputs();$('search').value='';$('incomplete').checked=false;renderSections();}
-function setBusy(flag){busy=flag;$('generate-pdf').disabled=flag;$('export-json').disabled=flag;}
-async function importFile(file){
- if(!file)return;
- try{
-  if(file.size>3_000_000)throw Error('Selected file exceeds 3 MB. Choose a company-specific .gs/.json file.');
-  const incoming=importAnnualReturnText(await file.text(),file.name);
-  if(!confirm('Load '+file.name+'? Unsaved edits in the current form will be replaced.'))return;
-  doc=incoming;selectedDmsCompanyId=null;resetView();$('download-box').hidden=true;generated=null;
-  status('Imported '+file.name+' locally. Review '+populatedCount(doc)+' populated fields before generating the PDF.');
- }catch(error){status('Import failed: '+error.message,true);}
-}
-async function saveJson(){
- const filename=(doc.company.name||'ZHENLI_Annual_Return').replace(/[\\/:*?"<>|\u0000-\u001f]/g,'_').slice(0,80)+'_Review_Draft.json';
- const payload=JSON.stringify(normalizeDocument(doc),null,2);
- const blob=new Blob([payload],{type:'application/json'});
- if(Capacitor.isNativePlatform()){
-  const data=await new Promise((resolve,reject)=>{
-   const reader=new FileReader();
-   reader.onload=()=>resolve(String(reader.result).split(',')[1]);
-   reader.onerror=()=>reject(Error('Could not prepare JSON export.'));
-   reader.readAsDataURL(blob);
-  });
-  const {uri}=await Filesystem.writeFile({directory:Directory.Cache,path:'annual-return/'+Date.now()+'-'+filename,data,recursive:true});
-  await Share.share({title:filename,url:uri,dialogTitle:'Save Annual Return JSON'});
-  status('Select Files or Drive to save your editable JSON draft.');return;
- }
- const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();
- setTimeout(()=>URL.revokeObjectURL(url),120000);status('Download requested: '+filename+'. Check Brave Downloads.');
-}
+function setBusy(flag){busy=flag;$('generate-pdf').disabled=flag;$('save-draft').disabled=flag;}
 async function generate(){
  if(busy)return;
  if(!String(doc.company.name).trim()||!String(doc.company.no).trim())
@@ -415,15 +387,34 @@ async function generate(){
  }catch(error){status('PDF generation failed: '+error.message+'. Try again after closing other apps to free memory.',true);}
  finally{setBusy(false);}
 }
-$('import-file').addEventListener('change',e=>{const file=e.target.files?.[0];e.target.value='';void importFile(file);});
 $('blank').addEventListener('click',()=>{
- if(!confirm('Start a blank form? Unsaved edits will be discarded.'))return;
- doc=cloneBlank();resetView();generated=null;$('download-box').hidden=true;status('Blank bilingual form ready.');
+ if(!saveCurrentDraft())return status('Your unfinished draft could not be saved; check device storage first.',true);
+ if(!confirm('Start a new blank Annual Return? Your previous draft remains in Saved Drafts.'))return;
+ doc=cloneBlank();selectedDmsCompanyId=null;activeDraftId=crypto.randomUUID();draftDirty=false;
+ resetView();generated=null;$('download-box').hidden=true;drawDrafts();
+ draftStatus('New blank form. Edits save automatically.');status('Blank bilingual form ready.');
 });
-$('export-json').addEventListener('click',()=>saveJson().catch(e=>status('JSON export failed: '+e.message,true)));
+$('save-draft').addEventListener('click',()=>{
+ if(saveCurrentDraft({manual:true}))status('Annual Return draft saved on this device. Use Saved Drafts to resume it.');
+ else status('Draft not saved. Check the storage notice.',true);
+});
+$('show-drafts').addEventListener('click',()=>{draftsVisible=!draftsVisible;drawDrafts();});
+$('close-drafts').addEventListener('click',()=>{draftsVisible=false;drawDrafts();});
+$('draft-list').addEventListener('click',e=>{
+ const resume=e.target.closest('[data-resume-draft]');
+ if(resume){if(resumeDraft(resume.dataset.resumeDraft)){draftsVisible=false;drawDrafts();status('Saved draft restored.');}return;}
+ const del=e.target.closest('[data-delete-draft]');if(!del)return;
+ const id=del.dataset.deleteDraft;
+ if(!confirm('Delete this saved draft from this device? This cannot be undone.'))return;
+ try{
+  if(!draftStore?.remove(draftScope,id))throw Error('Draft no longer exists.');
+  if(activeDraftId===id)activeDraftId=crypto.randomUUID();
+  drawDrafts();draftStatus('Draft deleted from this device.');
+ }catch(err){draftStatus('Delete failed: '+err.message,true);}
+});
 $('search').addEventListener('input',renderSections);
 $('incomplete').addEventListener('change',renderSections);
-$('signature-fields').addEventListener('input',e=>{const k=e.target.dataset.sign;if(k)doc.signatureDirector[k]=e.target.value;});
+$('signature-fields').addEventListener('input',e=>{const k=e.target.dataset.sign;if(k){doc.signatureDirector[k]=e.target.value;changedDraft();}});
 $('particulars').addEventListener('input',e=>{
  if(e.target.dataset.msicSearch!==undefined){refreshMSICResults(e.target);return;}
  const index=e.target.dataset.item;
@@ -441,7 +432,7 @@ $('particulars').addEventListener('change',e=>{
   if(id&&window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_SELECT_COMPANY_REQUEST',id},window.location.origin);
   return;
  }
- if(el.dataset.item!==undefined&&doc.particulars[Number(el.dataset.item)]?.en==='Member Type'){renderSections();return;}
+ if(el.dataset.item!==undefined&&doc.particulars[Number(el.dataset.item)]?.en==='Member Type'){renderSections();changedDraft();return;}
  if(el.dataset.criteria!==undefined){
   const i=Number(el.dataset.criteria);
   const values=[...$('particulars').querySelectorAll('input[data-criteria="'+i+'"]:checked')].map(x=>x.value);
@@ -476,14 +467,14 @@ $('add-section').addEventListener('click',()=>{
  const en=prompt('Section heading in English:');if(!en?.trim())return;
  const cn=prompt('Chinese section heading (optional):')||'';
  doc.particulars.push({type:'section',en:en.trim().slice(0,350),cn:cn.trim().slice(0,350),value:''});
- renderSections();status('New section added. Click + Add field to add data.');
+ renderSections();changedDraft();status('New section added. Click + Add field to add data.');
 });
 $('clear-values').addEventListener('click',()=>{
- if(!confirm('Clear every field, company and signer value? This cannot be undone without an exported JSON file.'))return;
+ if(!confirm('Clear all entered values? Your current draft will save the cleared fields.'))return;
  doc.particulars.forEach(x=>{if(x.type==='field')x.value='';});
  for(const k of Object.keys(doc.company))doc.company[k]='';
  for(const k of Object.keys(doc.signatureDirector))doc.signatureDirector[k]='';
- resetView();status('All values cleared; bilingual labels preserved.');
+ resetView();changedDraft();status('All values cleared; bilingual labels preserved.');
 });
 $('generate-pdf').addEventListener('click',generate);
 $('share-pdf').addEventListener('click',async()=>{
@@ -497,6 +488,7 @@ $('print').addEventListener('click',()=>{
 });
 window.addEventListener('afterprint',()=>{$('pdf-stage').textContent='';});
 resetView();
-status('V1.7.2 loaded — Company Constitution removed and non-cash allotment fields updated. Save PDFs to Downloads or Documents.');
+if(window.parent===window)scopeDrafts('standalone');
+status('V1.8 loaded — Save Draft, Saved Drafts and automatic saving of unfinished work are enabled.');
 void loadMSIC();
 if(window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_READY'},window.location.origin);
