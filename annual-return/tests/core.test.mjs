@@ -181,3 +181,21 @@ test('legacy Beneficial Owner notice date aliases never appear in saved drafts o
    assert.equal(result.particulars.some(x=>extra.includes(x.en)),false);
  }
 });
+
+test('DMS company picker safeguards identity and does not copy statutory particulars to another company',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const parent=readFileSync(new URL('../../src/main.js',import.meta.url),'utf8');
+ const child=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ assert.ok(parent.includes('state.companies.filter'));
+ assert.ok(parent.includes('Search company'));
+ assert.ok(parent.includes('Company no longer exists'));
+ assert.ok(parent.includes("event.origin!==window.location.origin"));
+ assert.ok(child.includes("event.source!==window.parent"));
+ assert.ok(child.includes('selectedDmsCompanyId'));
+ assert.ok(child.includes('doc=cloneBlank()'));
+ assert.ok(child.includes('setCompanyDetail(doc,i,name)'));
+ assert.ok(child.includes('setCompanyDetail(doc,i,registrationNo)'));
+ assert.ok(child.includes('This starts a new Annual Return form')||child.includes('starts a new Annual Return form'));
+ assert.ok(child.includes('ZHENLI_AR_SELECTION_RESULT'));
+ assert.ok(!child.includes('fetch("/api/dms/companies")'));
+});
