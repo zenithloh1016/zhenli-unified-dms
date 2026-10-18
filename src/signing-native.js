@@ -150,6 +150,36 @@ export function createNativeSigning({update,getCompanies}) {
       if(el&&root.children.length>1){el.remove();[...root.children].forEach((row,i)=>row.querySelector('b').textContent=`${i+1}.`);}return;
     }
     if(action==='detail')return work(()=>open(id));
+    if(action==='edit-draft'){
+      if(detail?.status!=='draft')return feedback('Only drafts can be edited.',true);
+      if(JSON.stringify(captureRows())!==JSON.stringify(placementRows)&&!confirm('Unsaved signature positions will be lost. Continue?'))return;
+      view='edit';update();return;
+    }
+    if(action==='cancel-edit'){view='detail';update();return;}
+    if(action==='add-edit-signer'){
+      const root=document.getElementById('zs-edit-signers');if(!root)return;
+      if(root.children.length>=15)return feedback('Maximum 15 signers.',true);
+      root.insertAdjacentHTML('beforeend',editSignerField({},root.children.length+1));return;
+    }
+    if(['edit-up','edit-down','remove-edit-signer'].includes(action)){
+      const row=target?.closest('.zs-edit-signer'),root=document.getElementById('zs-edit-signers');
+      if(!row||!root)return;
+      if(action==='remove-edit-signer'&&root.children.length>1)row.remove();
+      if(action==='edit-up'&&row.previousElementSibling)root.insertBefore(row,row.previousElementSibling);
+      if(action==='edit-down'&&row.nextElementSibling)root.insertBefore(row.nextElementSibling,row);
+      renumberEditedSigners();return;
+    }
+    if(action==='delete-draft-pdf'){
+      if(detail?.status!=='draft')return feedback('PDFs are locked after activation.',true);
+      const doc=detail.docs.find(d=>d.id===id);if(!doc)return;
+      if(!confirm(`Remove PDF "${doc.name}" and its saved signature positions from this draft? This cannot be undone.`))return;
+      return work(async()=>{
+        const result=await api(`/requests/${detail.id}/docs/${id}`,{method:'DELETE'});
+        await open(detail.id);
+        feedback(`PDF removed. ${result.removedPlacements} signature position(s) removed.`);
+      });
+    }
+
     if(!detail)return;
     if(action==='add-box'){
       if(!detail.docs.length)return feedback('Upload a PDF first.',true);
@@ -223,6 +253,27 @@ export function createNativeSigning({update,getCompanies}) {
       work(async()=>{
         const data=await api('/dms/session',{method:'POST',json:{password:pwd}});
         token=data.token;await list();feedback('Signed in to the existing Sequential Signing workspace.');
+      });return true;
+    }
+    if(form.id==='zs-edit-form'){
+      if(detail?.status!=='draft')return false;
+      const draftId=detail.id;
+      const rows=[...form.querySelectorAll('.zs-edit-signer')];
+      const signers=rows.map(row=>({
+        id:row.dataset.signerId||undefined,
+        name:row.querySelector('[name="zs-edit-name"]').value.trim(),
+        email:row.querySelector('[name="zs-edit-email"]').value.trim()
+      }));
+      const data=new FormData(form);
+      const payload={expectedUpdatedAt:detail.updatedAt||detail.createdAt,
+        company:data.get('company'),subject:data.get('subject'),note:data.get('note'),signers};
+      if(data.get('days'))payload.days=Number(data.get('days'));
+      work(async()=>{
+        const result=await api(`/requests/${draftId}`,{method:'PATCH',json:payload});
+        await open(draftId);
+        feedback(result.removedPlacements
+          ?`Draft updated. ${result.removedPlacements} orphaned signature box(es) removed. Review positions before activation.`
+          :'Draft changes saved. Review signature positions before activation.');
       });return true;
     }
     if(form.id==='zs-create-form'){
