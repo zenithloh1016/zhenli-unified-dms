@@ -42,13 +42,6 @@ jobs:
           npm run build
           mkdir -p ../dist/annual-return
           cp -R dist/. ../dist/annual-return/
-      - name: Build Annual Return PDF website
-        run: |
-          cd annual-return-app
-          npm install --no-audit --no-fund
-          npm run build -- --base=/zhenli-unified-dms/annual-return/
-          mkdir -p ../dist/annual-return
-          cp -R dist/. ../dist/annual-return/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -111,24 +104,24 @@ jobs:
           java-version: '21'
       - uses: android-actions/setup-android@v4
       - name: Install Annual Return dependencies
-        working-directory: annual-return-app
+        working-directory: annual-return
         run: npm install --no-audit --no-fund
       - name: Build Annual Return website for Android
-        working-directory: annual-return-app
+        working-directory: annual-return
         run: npm run build
       - name: Set up Android project
-        working-directory: annual-return-app
+        working-directory: annual-return
         run: |
           npx cap add android
           npx cap sync android
       - name: Assemble Annual Return APK
-        working-directory: annual-return-app/android
+        working-directory: annual-return/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: ZHENLI-Annual-Return-PDF-Android-APK
-          path: annual-return-app/android/app/build/outputs/apk/debug/app-debug.apk
+          path: annual-return/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 90
