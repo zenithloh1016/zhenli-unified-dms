@@ -84,10 +84,24 @@ export function createNativeSigning({update,getCompanies}) {
       <h3>Sequential signers</h3><div id="zs-signers">${Array.from({length:signerCount},(_,i)=>signerField(i+1)).join('')}</div>
       ${b('+ Add signer','add-signer')} <button class="btn primary" type="submit" ${busy?'disabled':''}>Create draft signing request</button></form></section>`;
     }
+    if(view==='edit'&&detail?.status==='draft'){
+      const r=detail,companies=(getCompanies()||[]).map(x=>`<option value="${e(x.name)}"></option>`).join('');
+      return `<div class="zs-toolbar">${b('← Cancel editing','cancel-edit')}</div>
+      <section class="zs-panel"><h2>Edit signing request</h2><p class="muted">Draft only. Edits synchronize with the original EdgeOne website.</p>
+      <form id="zs-edit-form"><div class="zs-formgrid">
+      <label>Company name<input list="zs-edit-companies" name="company" maxlength="180" value="${e(r.company)}" required></label>
+      <datalist id="zs-edit-companies">${companies}</datalist>
+      <label>Subject<input name="subject" maxlength="180" value="${e(r.subject)}" required></label>
+      <label>Link validity<select name="days"><option value="">Keep existing expiry</option><option value="7">Renew 7 days</option><option value="14">Renew 14 days</option><option value="30">Renew 30 days</option><option value="60">Renew 60 days</option></select></label>
+      <label class="zs-span">Signing message<textarea name="note" rows="3" maxlength="1000">${e(r.note||'')}</textarea></label>
+      </div><h3>Sequential signers</h3><p class="muted">Use Up / Down to reorder. Removing signers also removes their saved signature boxes.</p>
+      <div id="zs-edit-signers">${r.signers.map((sg,i)=>editSignerField(sg,i+1)).join('')}</div>
+      ${b('+ Add signer','add-edit-signer')} <button class="btn primary" type="submit" ${busy?'disabled':''}>Save draft changes</button></form></section>`;
+    }
     if(view==='detail'&&detail){const r=detail;const pending=r.status==='draft';
-      const docs= r.docs.map(d=>`<div class="zs-doc"><span>📄 <b>${e(d.name)}</b> <small>${d.pages} page(s)</small></span>${b('Download PDF','pdf',d.id)}</div>`).join('');
+      const docs= r.docs.map(d=>`<div class="zs-doc"><span>📄 <b>${e(d.name)}</b> <small>${d.pages} page(s)</small></span>${b('Download PDF','pdf',d.id)}${pending?b('Remove PDF','delete-draft-pdf',d.id):''}</div>`).join('');
       const signers=r.signers.map(s=>`<div class="zs-signer"><div><b>${s.position}. ${e(s.name)}</b> <small>${e(s.email)} · ${s.signedAt?'Signed '+fmtDate(s.signedAt):'Not signed'} · ${e(s.invitation||'Not sent')}</small></div>${b('Copy signing link','copy-link',s.id)}</div>`).join('');
-      return `<div class="zs-toolbar">${b('← All requests','refresh')}${b('Reload details','detail',r.id)}${b('Sign out','logout')}</div>
+      return `<div class="zs-toolbar">${b('← All requests','refresh')}${b('Reload details','detail',r.id)}${pending?b('✎ Edit draft','edit-draft',r.id,'primary'):''}${b('Sign out','logout')}</div>
       <section class="zs-panel"><div class="zs-details-heading"><div><h2>${e(r.company)}</h2><p class="muted">${e(r.subject)} · ${e(r.status)} · Expires ${fmtDate(r.expiry)}</p></div>${b('Download signed archive / evidence','archive')}</div>
       <p class="muted">${e(r.note||'No signing message')}</p><h3>Documents (${r.docs.length})</h3>${docs||'<p class="muted">No PDFs uploaded.</p>'}
       ${pending?`<label class="zs-upload">Upload PDFs (up to eight, 3 MB each)<input id="zs-doc-upload" type="file" accept="application/pdf,.pdf" multiple ${busy?'disabled':''}></label>`:''}
@@ -103,6 +117,9 @@ export function createNativeSigning({update,getCompanies}) {
     return '<section class="zs-panel">Loading signing workspace…</section>';
   }
   function signerField(n){return `<div class="zs-signer-input"><b>${n}.</b><label>Full name<input name="zs-name" maxlength="180" required placeholder="Signer name"></label><label>Email<input type="email" name="zs-email" required placeholder="Email address"></label>${b('Remove','remove-signer')}</div>`;}
+
+  function editSignerField(s,n){return `<div class="zs-signer-input zs-edit-signer" data-signer-id="${e(s.id||'')}"><b>${n}.</b><label>Full name<input name="zs-edit-name" maxlength="180" required value="${e(s.name||'')}"></label><label>Email<input type="email" name="zs-edit-email" required value="${e(s.email||'')}"></label><div class="zs-edit-signer-actions">${b('↑ Up','edit-up')}${b('↓ Down','edit-down')}${b('Remove','remove-edit-signer')}</div></div>`;}
+  function renumberEditedSigners(){[...document.querySelectorAll('#zs-edit-signers .zs-edit-signer')].forEach((row,i)=>row.querySelector('b').textContent=`${i+1}.`);}
   async function list(){requests=(await api('/requests')).requests||[];view='list';detail=null;update();}
   async function open(rid){const oldId=detail?.id;detail=await api('/requests/'+encodeURIComponent(rid));if(oldId!==detail.id)preview.reset();view='detail';placementRows=(detail.placements||[]).map(x=>({...x,x:+(100*x.x).toFixed(1),y:+(100*x.y).toFixed(1),width:+(100*x.width).toFixed(1),height:+(100*x.height).toFixed(1)}));update();}
   function captureRows(){
@@ -223,7 +240,7 @@ export function createNativeSigning({update,getCompanies}) {
   }
   return {mount:()=>{if(view==='detail'&&detail?.status==='draft')preview.mount(document.getElementById('zs-pdf-preview'));},
     input:target=>{if(target?.closest?.('.zs-placement-row'))preview.drawBoxes(document.getElementById('zs-pdf-preview'));return false;},
-    render:()=>`<div class="integration-heading"><div><p class="eyebrow">DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Administrator login and signing requests directly inside ZHENLI DMS</p></div><span class="zs-version">Native Signing V1.6.1</span></div>
+    render:()=>`<div class="integration-heading"><div><p class="eyebrow">DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Administrator login and signing requests directly inside ZHENLI DMS</p></div><span class="zs-version">Native Signing V1.7 Preview</span></div>
     ${message?`<div class="zs-message ${error?'zs-error':''}" role="status">${e(message)}</div>`:''}
     ${busy?'<div class="zs-message">Connecting to the private signing service…</div>':''}${main()}`,
     onClick,submit,changed};
