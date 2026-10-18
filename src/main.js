@@ -39,6 +39,7 @@ const state = {
   user: null, companies: [], folders: [], documents: [],
   companyId: null, folderId: null, search: '', busy: false, notice: '',
   tab: 'documents', totalDocs: 0, taskFullscreen: false, signingFullscreen: false,
+  arSearch: '', arSelectedCompanyId: null,
   modal: null, authMode: 'login', importData: null, importWorkbook: null, importReader: '',
   importSheet: 0, importNameCol: 0, importRegCol: -1, importStartRow: 2,
   importProgress: null, importFileName: '', importError: ''
@@ -115,7 +116,7 @@ function renderAuth() {
 
 function renderCompanyCard(company) {
   const count = state.companyId === company.id ? state.folders.filter(f=>f.parent_id===null).length : 11;
-  return `<div class="company-card"><button class="company-open" data-action="open-company" data-id="${company.id}"><div class="company-symbol">${icon('folder')}</div><div class="company-name">${esc(company.name)}</div><div class="company-number">${esc(company.registration_no || 'No registration number entered')}</div><div class="company-foot">Standard folders ready <span>View folders →</span></div></button><div class="card-options">${action('Rename','rename-company', company.id)}${action('Delete','delete-company',company.id)}</div></div>`;
+  return `<div class="company-card"><button class="company-open" data-action="open-company" data-id="${company.id}"><div class="company-symbol">${icon('folder')}</div><div class="company-name">${esc(company.name)}</div><div class="company-number">${esc(company.registration_no || 'No registration number entered')}</div><div class="company-foot">Standard folders ready <span>View folders →</span></div></button><div class="card-options">${action('Annual Return','prepare-annual-return',company.id,'secondary')}${action('Rename','rename-company', company.id)}${action('Delete','delete-company',company.id)}</div></div>`;
 }
 function renderCompanies() {
   const q=state.search.trim().toLowerCase();
@@ -138,7 +139,7 @@ function renderFolder() {
   const childFolders=state.folders.filter(f => f.parent_id === (current?.id || null));
   const docs=current ? state.documents.filter(d=>d.folder_id===current.id) : [];
   const crumbs = `<button type="button" data-action="home">Companies</button><span>›</span><button type="button" data-action="open-company" data-id="${company.id}">${esc(company.name)}</button>${trail.map(f=>`<span>›</span><button type="button" data-action="open-folder" data-id="${f.id}">${esc(f.name)}</button>`).join('')}`;
-  return `<div class="breadcrumbs">${crumbs}</div><div class="content-header"><div><p class="eyebrow">${current?'FOLDER CONTENTS':'COMPANY DOCUMENTS'}</p><h1>${esc(current?.name||company.name)}</h1><p class="muted">${current ? `${childFolders.length} subfolders • ${docs.length} documents` : esc(company.registration_no||'Select a statutory category below')}</p></div><div class="header-buttons">${action('+ New '+(current?'subfolder':'folder'),'new-folder','','secondary')}${current?action('↑ Upload documents','upload-trigger','','primary'):''}</div></div>
+  return `<div class="breadcrumbs">${crumbs}</div><div class="content-header"><div><p class="eyebrow">${current?'FOLDER CONTENTS':'COMPANY DOCUMENTS'}</p><h1>${esc(current?.name||company.name)}</h1><p class="muted">${current ? `${childFolders.length} subfolders • ${docs.length} documents` : esc(company.registration_no||'Select a statutory category below')}</p></div><div class="header-buttons">${action('Generate Annual Return','prepare-annual-return',company.id,'secondary')}${action('+ New '+(current?'subfolder':'folder'),'new-folder','','secondary')}${current?action('↑ Upload documents','upload-trigger','','primary'):''}</div></div>
   ${current?`<div class="upload-zone" id="dropzone" role="button" tabindex="0"><strong>↑ Upload documents here</strong><span>Choose PDFs, Word, Excel, images, JSON or ZIP. Max 50 MB per file; upload progress and errors shown.</span></div>`:`<div class="info-strip">Your 11 standard categories are shown below. Open a category to upload files or create nested folders.</div>`}
   <section class="items"><div class="section-caption">FOLDERS <span>${childFolders.length}</span></div>${childFolders.map(folderCard).join('') || '<div class="empty-line">No subfolders yet.</div>'}
   ${current ? `<div class="section-caption">DOCUMENTS <span>${docs.length}</span></div>${docs.map(documentCard).join('') || '<div class="empty-line">No documents in this folder. Upload PDFs, Word documents, Excel files or images.</div>'}` : ''}</section>`;
@@ -274,14 +275,41 @@ function renderOverview() {
   </section>
   <section class="info-panel"><h2>Welcome to your private workspace</h2><p>Import your latest Master Listing under <b>Documents</b>, manage deadlines and tasks under <b>Tasks</b>, and access signing requests under <b>Signing</b>, and prepare review PDFs under <b>Annual Return</b>.</p><div class="quick-actions">${action('View company folders','tab-documents','','primary')}${action('Open Task Hub','tab-tasks','','secondary')}${action('Annual Return PDFs','tab-annual-return','','secondary')}${action('Open Signing','tab-signing','','secondary')}</div></section>`;
 }
+function annualReturnCompanyResults(){
+ const q=state.arSearch.trim().toLowerCase();
+ const matches=state.companies.filter(c=>(String(c.name||'')+' '+String(c.registration_no||'')).toLowerCase().includes(q));
+ const listed=matches.slice(0,q?50:12);
+ return '<p class="muted ar-search-summary">'+(q?matches.length+' matching companies':state.companies.length+' available · first '+listed.length+' shown')+'</p>'+
+ (listed.length?listed.map(c=>'<button type="button" class="ar-company-option '+(state.arSelectedCompanyId===c.id?'ar-selected':'')+'" data-action="select-ar-company" data-id="'+esc(c.id)+'"><strong>'+esc(c.name)+'</strong><small>'+esc(c.registration_no||'Registration number not recorded')+'</small></button>').join('')
+ :'<p class="muted">No matching company. Search by name or registration number under Documents.</p>');
+}
+function refreshAnnualReturnCompanyResults(){
+ const results=ROOT.querySelector('#ar-companies-results');
+ if(results)results.innerHTML=annualReturnCompanyResults();
+ const selected=ROOT.querySelector('#ar-current-company');
+ const company=state.companies.find(x=>x.id===state.arSelectedCompanyId);
+ if(selected)selected.textContent=company?'Selected: '+company.name+(company.registration_no?' · '+company.registration_no:' · Registration number missing'):'Search and select a Documents company to begin.';
+}
+function sendAnnualReturnCompany(){
+ const frame=ROOT.querySelector('#zh-annual-return-frame');
+ const company=state.companies.find(c=>c.id===state.arSelectedCompanyId);
+ if(!frame||!company||!state.user)return;
+ frame.contentWindow?.postMessage({type:'ZHENLI_DMS_AR_SELECT_COMPANY',company:{
+  id:String(company.id),name:String(company.name||''),registrationNo:String(company.registration_no||'')
+ }},window.location.origin);
+}
 function renderAnnualReturn(){
-  return '<section class="annual-return-module" aria-label="Annual Return PDF generator">'+
-    '<div class="integration-heading"><div><p class="eyebrow">STATUTORY PARTICULARS REVIEW · V1.6</p>'+
-    '<h1>Annual Return PDF Generator</h1>'+
-    '<p class="muted">The bilingual PDF generator is bundled into DMS Web and Android. Import an existing Annual Return .gs or JSON file or prepare a new review locally.</p></div></div>'+
-    '<div class="integration-info">Drafts are not automatically stored in DMS. Use <b>Export editable JSON</b> in Annual Return before changing DMS tabs, refreshing, or signing out. Finished PDFs may be downloaded and uploaded to the correct company folder under Documents.</div>'+
-    '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.6" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share"></iframe></div>'+
-    '</section>';
+ return '<section class="annual-return-module" aria-label="Annual Return PDF generator">'+
+ '<div class="integration-heading"><div><p class="eyebrow">STATUTORY PARTICULARS REVIEW · V1.6</p>'+
+ '<h1>Annual Return PDF Generator</h1>'+
+ '<p class="muted">Search and select a company already stored in Documents. Its name and registration number automatically fill Company Details.</p></div></div>'+
+ '<div class="ar-company-picker"><label for="ar-company-search"><strong>Documents → Search company</strong></label>'+
+ '<input type="search" id="ar-company-search" autocomplete="off" placeholder="Search company name or registration number" value="'+esc(state.arSearch)+'">'+
+ '<div id="ar-current-company" class="ar-current-company" role="status">Search and select a Documents company to begin.</div>'+
+ '<div id="ar-companies-results" class="ar-companies-results">'+annualReturnCompanyResults()+'</div></div>'+
+ '<div class="integration-info">Only the selected company name and registration number are passed to the Annual Return form. Directors, members, charges and BO information must still be verified and entered. Drafts are not automatically saved to DMS: export JSON before switching tabs. Completed PDFs can be uploaded into the appropriate Documents folder.</div>'+
+ '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.6" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share"></iframe></div>'+
+ '</section>';
 }
 
 function renderTasks(){
@@ -339,6 +367,10 @@ function render() {
   ${state.modal?.kind==='taskLink'?renderLinkModal():modalHTML()}
   <input id="document-upload" type="file" multiple hidden />`;
   if(state.tab==='signing') signingUI.mount();
+   if(state.tab==='annual-return'){
+     refreshAnnualReturnCompanyResults();
+     ROOT.querySelector('#zh-annual-return-frame')?.addEventListener('load',sendAnnualReturnCompany,{once:true});
+   }
 }
 
 function openCompany(id){state.companyId=id;state.folderId=null;state.search='';busyDo(reloadContent);}
@@ -470,7 +502,15 @@ ROOT.addEventListener('click', event=>{
     if(state.tab==='annual-return'&&nextTab!=='annual-return'&&!confirm('Save any unfinished Annual Return by exporting editable JSON before leaving this page. Continue?'))return;
     state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;render();return;
   }
-  if(a==='open-signing-fullscreen'||a==='exit-signing-fullscreen'){
+  if(a==='prepare-annual-return'||a==='select-ar-company'){
+     const company=state.companies.find(c=>c.id===id);
+     if(!company)return toast('Company no longer exists in the Documents list.');
+     state.arSelectedCompanyId=id;
+     if(a==='prepare-annual-return'){state.arSearch='';state.tab='annual-return';state.signingFullscreen=false;render();}
+     else{sendAnnualReturnCompany();refreshAnnualReturnCompanyResults();}
+     return;
+   }
+   if(a==='open-signing-fullscreen'||a==='exit-signing-fullscreen'){
     if(state.tab==='signing')setSigningFullscreen(a==='open-signing-fullscreen');
     return;
   }
@@ -576,7 +616,9 @@ ROOT.addEventListener('submit',event=>{
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
 });
-ROOT.addEventListener('input',e=>{signingUI.input(e.target);if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
+ROOT.addEventListener('input',e=>{
+ if(e.target.id==='ar-company-search'){state.arSearch=e.target.value;refreshAnnualReturnCompanyResults();return;}
+ signingUI.input(e.target);if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
 ROOT.addEventListener('change',e=>{
   if(signingUI.changed(e.target))return;
   if(e.target.id==='document-upload'){const files=[...e.target.files];e.target.value='';if(files.length)busyDo(()=>uploadFiles(files));}
@@ -618,6 +660,22 @@ ROOT.addEventListener('drop',e=>{if(!e.target.closest('#dropzone'))return;e.prev
 ROOT.addEventListener('keydown',e=>{if(e.target.id==='dropzone' && (e.key==='Enter'||e.key===' ')){e.preventDefault();document.getElementById('document-upload').click();}});
 ROOT.addEventListener('click',e=>{if(e.target.closest('#dropzone')){if(!state.busy)document.getElementById('document-upload').click();}});
 
+// Only accept readiness/selection messages from the signed-in DMS iframe.
+window.addEventListener('message',event=>{
+ if(event.origin!==window.location.origin||!state.user||state.tab!=='annual-return')return;
+ const frame=ROOT.querySelector('#zh-annual-return-frame');
+ if(!frame||event.source!==frame.contentWindow||!event.data||typeof event.data!=='object')return;
+ if(event.data.type==='ZHENLI_AR_READY'){sendAnnualReturnCompany();return;}
+ if(event.data.type==='ZHENLI_AR_SELECTION_RESULT'){
+   const selected=ROOT.querySelector('#ar-current-company');
+   const company=state.companies.find(x=>x.id===state.arSelectedCompanyId);
+   if(event.data.ok&&company){
+     if(selected)selected.textContent='Loaded: '+company.name+' — company identity transferred from Documents.';
+   }else if(selected&&!event.data.ok){
+     selected.textContent='Company was not applied: '+String(event.data.reason||'Please export the current draft and retry').slice(0,150);
+   }
+ }
+});
 async function init() {
   if(!db){render();return;}
   installHubBridge(db,()=>state.user,()=>state.companies,showError);
