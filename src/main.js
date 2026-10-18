@@ -277,6 +277,16 @@ function renderOverview() {
   </section>
   <section class="info-panel"><h2>Welcome to your private workspace</h2><p>Import your latest Master Listing under <b>Documents</b>, manage deadlines and tasks under <b>Tasks</b>, and access signing requests under <b>Signing</b>, and prepare review PDFs under <b>Annual Return</b>.</p><div class="quick-actions">${action('View company folders','tab-documents','','primary')}${action('Open Task Hub','tab-tasks','','secondary')}${action('Annual Return PDFs','tab-annual-return','','secondary')}${action('Open Signing','tab-signing','','secondary')}</div></section>`;
 }
+function sendAnnualReturnWorkspace(){
+ const frame=ROOT.querySelector('#zh-annual-return-frame');
+ if(!frame||!state.user)return;
+ frame.contentWindow?.postMessage({type:'ZHENLI_DMS_AR_WORKSPACE',userId:String(state.user.id)},window.location.origin);
+}
+function flushAnnualReturnDraft(){
+ const child=ROOT.querySelector('#zh-annual-return-frame')?.contentWindow;
+ if(!child)return true;
+ try{return child.__zhenliFlushDraft?.()!==false;}catch{return false;}
+}
 function sendAnnualReturnCompanyList(){
  const frame=ROOT.querySelector('#zh-annual-return-frame');
  if(!frame||!state.user)return;
@@ -298,7 +308,7 @@ function renderAnnualReturn(){
  '<div class="integration-heading"><div><p class="eyebrow">STATUTORY PARTICULARS REVIEW · V1.7.2</p>'+
  '<h1>Annual Return PDF Generator</h1>'+
  '<p class="muted">Choose any existing company from the <b>complete Documents company dropdown</b> in Company Details; the registration number fills automatically. The Members section supports Individual and Body Corporate particulars, with custom field additions.</p></div></div>'+
- '<div class="integration-info">There is no separate company search above the form. The DMS shares company names and registration numbers from your signed-in Documents list only with the embedded form. Other Annual Return particulars are entered and verified manually. Export your editable JSON before leaving; drafts are not saved automatically.</div>'+
+ '<div class="integration-info">There is no separate company search above the form. The DMS shares company names and registration numbers from your signed-in Documents list only with the embedded form. Other Annual Return particulars are entered and verified manually. Save Draft and Saved Drafts keep unfinished work on this device; changes also save automatically. Drafts do not sync between devices.</div>'+
  '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.7.2" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share"></iframe></div>'+
  '</section>';
 }
@@ -358,7 +368,7 @@ function render() {
   <input id="document-upload" type="file" multiple hidden />`;
   if(state.tab==='signing') signingUI.mount();
    if(state.tab==='annual-return'){
-     ROOT.querySelector('#zh-annual-return-frame')?.addEventListener('load',()=>{sendAnnualReturnCompanyList();sendAnnualReturnCompany();},{once:true});
+     ROOT.querySelector('#zh-annual-return-frame')?.addEventListener('load',()=>{sendAnnualReturnWorkspace();sendAnnualReturnCompanyList();sendAnnualReturnCompany();},{once:true});
    }
 }
 
@@ -488,7 +498,7 @@ ROOT.addEventListener('click', event=>{
   if(state.busy) return;
   if(a.startsWith('tab-')){
     const nextTab=a.slice(4);
-    if(state.tab==='annual-return'&&nextTab!=='annual-return'&&!confirm('Save any unfinished Annual Return by exporting editable JSON before leaving this page. Continue?'))return;
+    if(state.tab==='annual-return'&&nextTab!=='annual-return'&&!flushAnnualReturnDraft()&&!confirm('This draft could not be saved on your device. Leave anyway?'))return;
     state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;render();return;
   }
   if(a==='prepare-annual-return'||a==='select-ar-company'){
@@ -523,7 +533,7 @@ ROOT.addEventListener('click', event=>{
     return;
   }
   if(a==='auth-login'||a==='auth-signup'){state.authMode=a==='auth-login'?'login':'signup';state.notice='';render();return;}
-  if(a==='sign-out'){busyDo(async()=>{check((await db.auth.signOut()).error);state.user=null;state.companies=[];state.companyId=null;state.notice='';state.signingFullscreen=false;});return;}
+  if(a==='sign-out'){if(state.tab==='annual-return'&&!flushAnnualReturnDraft()&&!confirm('Draft was not saved. Sign out anyway?'))return;busyDo(async()=>{check((await db.auth.signOut()).error);state.user=null;state.companies=[];state.companyId=null;state.notice='';state.signingFullscreen=false;});return;}
   if(a==='home'){state.tab='documents';state.companyId=null;state.folderId=null;state.search='';render();return;}
   if(a==='open-company'){openCompany(id);return;}
   if(a==='open-folder'){openFolder(id);return;}
@@ -674,7 +684,13 @@ window.addEventListener('message',event=>{
    })();
    return;
  }
- if(event.data.type==='ZHENLI_AR_READY'){sendAnnualReturnCompanyList();sendAnnualReturnCompany();return;}
+ if(event.data.type==='ZHENLI_AR_READY'){sendAnnualReturnWorkspace();sendAnnualReturnCompanyList();sendAnnualReturnCompany();return;}
+ if(event.data.type==='ZHENLI_AR_RESUME_COMPANY'){
+  const id=event.data.id;
+  if(typeof id==='string'&&state.companies.some(x=>x.id===id))state.arSelectedCompanyId=id;
+  return;
+ }
+ if(event.data.type==='ZHENLI_AR_CLEAR_COMPANY'){state.arSelectedCompanyId=null;return;}
  if(event.data.type==='ZHENLI_AR_SELECT_COMPANY_REQUEST'){
   const id=event.data.id;
   if(typeof id!=='string'||id.length>130||!state.companies.some(x=>x.id===id))return;
