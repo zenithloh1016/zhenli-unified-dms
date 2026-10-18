@@ -48,3 +48,10 @@
 .ar-name-option:last-child{border-bottom:0}
 .ar-name-option small{color:#5c7b8c}
 @media(max-width:680px){.ar-name-options{max-height:225px}.ar-delete-field{min-height:36px}}
+
+/* Individual/corporate members, searchable complete private company list */
+.ar-name-selector .ar-company-full-list{width:100%;max-width:100%;min-height:48px;font-size:13px}
+.heading-entry:has(.ar-add-member-field){display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.ar-add-member-field{display:inline-flex;margin-left:auto;align-items:center}
+.ar-section .addon-bar{display:flex;flex-wrap:wrap;gap:8px}
+@media(max-width:680px){.ar-add-member-field{margin-left:0}.ar-name-selector .ar-company-full-list{font-size:14px}}
