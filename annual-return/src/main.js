@@ -397,6 +397,6 @@ $('print').addEventListener('click',()=>{
 });
 window.addEventListener('afterprint',()=>{$('pdf-stage').textContent='';});
 resetView();
-status('V1.6.1 loaded — Android PDF Save As fixed. Select Downloads or Documents when saving.');
+status('V1.7 loaded — Company Name dropdown in DMS, Delete field buttons, and cleaner Charges section. Save PDFs to Downloads or Documents.');
 void loadMSIC();
 if(window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_READY'},window.location.origin);
