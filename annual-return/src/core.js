@@ -64,7 +64,7 @@ export function removeNumberedRecord(doc,index,kind){
  if(sectionEnd<0)sectionEnd=items.length;
  const records=[];
  for(let i=section+1;i<sectionEnd;i++)if(items[i].type==='heading'&&REPEATABLE_RECORDS[kind].test(items[i].en||''))records.push(i);
- if(records.length<=1)throw Error('Keep at least one '+RECORD_LABELS[kind]+' record as a placeholder.');
+ if(records.length<=1&&kind!=='bo')throw Error('Keep at least one '+RECORD_LABELS[kind]+' record as a placeholder.');
  let end=index+1;
  while(end<sectionEnd&&items[end].type==='field')end++;
  const removed=items.splice(index,end-index);
