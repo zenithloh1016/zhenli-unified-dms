@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {cloneBlank,importAnnualReturnText,normalizeDocument,outputFilename,emptyCount,populatedCount} from '../src/core.js';
 test('blank bilingual template has all current structural fields without real client values',()=>{
   const blank=cloneBlank();
-  assert.equal(blank.particulars.length,116);
-  assert.equal(blank.particulars.filter(x=>x.type==='field').length,99);
+  assert.equal(blank.particulars.length,130);
+  assert.equal(blank.particulars.filter(x=>x.type==='field').length,113);
   assert.equal(populatedCount(blank),0);
-  assert.equal(emptyCount(blank),99);
+  assert.equal(emptyCount(blank),113);
   assert.ok(blank.particulars.some(x=>x.cn.includes('股权')));
   assert.equal(blank.company.name,'');
   assert.equal(blank.signatureDirector.nric,'');
@@ -30,7 +30,7 @@ test('rejects malformed or unsafe scripts and maintains editable draft JSON',()=
   const recovered=importAnnualReturnText(JSON.stringify(draft),'save.json');
   assert.equal(recovered.company.name,'SAMPLE SDN. BHD.');
   assert.equal(recovered.particulars[2].value,'Test');
-  assert.equal(normalizeDocument(draft).particulars.length,116);
+  assert.equal(normalizeDocument(draft).particulars.length,130);
 });
 
 test('preserves multiple BO criteria and director capacity without signing date',()=>{
@@ -101,8 +101,8 @@ test('excluded internal due dates and register update fields never survive .gs o
  draft.company.masterListingDueDate='2026-10-18';
  draft.particulars.push(...forbidden.map(en=>({type:'field',en,cn:'',value:'2026-10-18'})));
  const out=normalizeDocument(draft);
- assert.equal(out.schemaVersion,4);
- assert.equal(out.particulars.length,116);
+ assert.equal(out.schemaVersion,5);
+ assert.equal(out.particulars.length,130);
  assert.equal(out.particulars.some(x=>forbidden.includes(x.en)),false);
  assert.equal(Object.hasOwn(out.company,'lodgementDueDate'),false);
  assert.equal(Object.hasOwn(out.company,'masterListingDueDate'),false);
@@ -121,7 +121,7 @@ test('V1.6 removes TIN and the entire Company Review and Verification section fr
  raw.signatureDirector.date='2026-10-18';
  raw.signatureDirector.acknowledgement='Signed';
  const restored=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(raw)+';', 'legacy.gs');
- assert.equal(restored.particulars.length,116);
+ assert.equal(restored.particulars.length,130);
  assert.equal(restored.particulars.some(x=>/^(?:Tax Identification Number(?: \(TIN\))?|TIN|COMPANY REVIEW AND VERIFICATION NOTES)$/i.test(x.en)),false);
  assert.equal(restored.particulars.some(x=>x.en==='Preference Allotment'&&x.value==='Private client details'),false);
  assert.equal(Object.hasOwn(restored.signatureDirector,'date'),false);
@@ -144,7 +144,7 @@ test('V1.6 removes all requested dates in both blank template and legacy importe
  const legacy=cloneBlank();
  legacy.particulars.push(...fieldNames.map(en=>({type:'field',en,cn:'测试',value:'2026-10-18'})));
  const parsed=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(legacy)+';','legacy.gs');
- assert.equal(parsed.particulars.length,116);
+ assert.equal(parsed.particulars.length,130);
  assert.equal(parsed.particulars.some(x=>fieldNames.includes(x.en)),false);
  assert.equal(parsed.particulars.some(x=>x.en==='Date of Incorporation'),true);
  assert.equal(parsed.particulars.some(x=>x.en==='Date of Birth'),true);
@@ -177,7 +177,7 @@ test('legacy Beneficial Owner notice date aliases never appear in saved drafts o
  for(const extension of ['.json','.gs']){
    const input=extension==='.gs'?'const AR_SINGLE_COMPANY = '+JSON.stringify(legacy)+';':JSON.stringify(legacy);
    const result=importAnnualReturnText(input,'older'+extension);
-   assert.equal(result.particulars.length,116);
+   assert.equal(result.particulars.length,130);
    assert.equal(result.particulars.some(x=>extra.includes(x.en)),false);
  }
 });
@@ -187,7 +187,7 @@ test('DMS company picker safeguards identity and does not copy statutory particu
  const parent=readFileSync(new URL('../../src/main.js',import.meta.url),'utf8');
  const child=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  assert.ok(parent.includes('state.companies.slice(0,5000)'));
- assert.ok(parent.includes('Company Details → Company Name'));
+ assert.ok(parent.includes('complete Documents company dropdown'));
  assert.ok(!parent.includes('id="ar-company-search"'));
  assert.ok(parent.includes('ZHENLI_DMS_AR_COMPANY_LIST'));
  assert.ok(parent.includes('ZHENLI_AR_SELECT_COMPANY_REQUEST'));
@@ -226,4 +226,52 @@ test('obsolete charge amount and discharge date excluded from old GS drafts and 
  assert.ok(excluded.every(x=>!json.particulars.some(y=>y.en===x)));
  const oldGs=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(doc)+';','old.gs');
  assert.ok(excluded.every(x=>!oldGs.particulars.some(y=>y.en===x)));
+});
+
+test('individual and corporate members retain separate statutory particulars and old records are upgraded',async()=>{
+ const {showMemberField,MEMBER_PERSONAL_FIELDS}=await import('../src/core.js');
+ const doc=cloneBlank(),list=doc.particulars;
+ const first=list.findIndex(x=>x.type==='heading'&&x.en==='MEMBER 1');
+ const next=list.findIndex((x,i)=>i>first&&x.type==='heading'&&x.en==='MEMBER 2');
+ const rec=list.slice(first+1,next);
+ assert.ok(MEMBER_PERSONAL_FIELDS.every(([en])=>rec.some(x=>x.en===en)));
+ const type=list.findIndex((x,i)=>i>first&&i<next&&x.en==='Member Type');
+ const person=list.findIndex((x,i)=>i>first&&i<next&&x.en==='Individual NRIC / Passport No.');
+ const corp=list.findIndex((x,i)=>i>first&&i<next&&x.en==='Corporate Name');
+ list[type].value='Individual';
+ assert.equal(showMemberField(list,person),true);
+ assert.equal(showMemberField(list,corp),false);
+ list[corp].value='PREVIOUS CORPORATE NAME';
+ assert.equal(showMemberField(list,corp),true,'Do not silently hide populated fields');
+ list[corp].value='';
+ list[type].value='Body Corporate';
+ assert.equal(showMemberField(list,person),false);
+ assert.equal(showMemberField(list,corp),true);
+ const legacy=cloneBlank();
+ legacy.particulars=legacy.particulars.filter(x=>!MEMBER_PERSONAL_FIELDS.some(([en])=>x.en===en));
+ legacy.particulars.find(x=>x.en==='Corporate Name').value='LEGACY MEMBER SDN. BHD.';
+ const converted=normalizeDocument(legacy);
+ assert.equal(converted.particulars.filter(x=>x.en==='Member Type').length,2);
+ assert.equal(converted.particulars.filter(x=>x.en==='Individual NRIC / Passport No.').length,2);
+ assert.ok(converted.particulars.some(x=>x.en==='Corporate Name'&&x.value==='LEGACY MEMBER SDN. BHD.'));
+});
+test('old preference rights and corporate shareholder control fields stay absent from imported drafts',()=>{
+ const draft=cloneBlank(),excluded=['Corporate Shareholder Control Classification','Preference Share Rights'];
+ draft.particulars.push(...excluded.map(en=>({type:'field',en,cn:'',value:'OUTDATED'})));
+ const normalized=normalizeDocument(draft);
+ assert.ok(excluded.every(en=>!normalized.particulars.some(x=>x.en===en)));
+ assert.ok(excluded.every(en=>!cloneBlank().particulars.some(x=>x.en===en)));
+ const gs=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(draft)+';', 'old.gs');
+ assert.ok(excluded.every(en=>!gs.particulars.some(x=>x.en===en)));
+});
+test('complete private company dropdown and Add Field per section/member appear in Annual Return editor',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const js=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ const pdf=readFileSync(new URL('../src/pdf.js',import.meta.url),'utf8');
+ assert.ok(js.includes('data-company-select'));
+ assert.ok(js.includes('dmsCompanies.map'));
+ assert.ok(js.includes('data-add-to-section'));
+ assert.ok(js.includes('data-add-to-member'));
+ assert.ok(js.includes('data-add-record'));
+ assert.ok(pdf.includes('showMemberField'));
 });

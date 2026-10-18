@@ -2,7 +2,7 @@ import './style.css';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField} from './core.js';
+import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField} from './core.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
 const $=id=>document.getElementById(id);
@@ -135,6 +135,7 @@ function changeMSIC(index,code,remove=false,manualDesc=''){
 }
 
 const OPTIONS=[
+ {test:/^Member Type$/i,values:['Individual','Body Corporate']},
  {test:/^(?:Classes of Shares Issued|Class of Shares)$/i,values:['Ordinary','Preference','Ordinary & Preference']},
  {test:/^(?:Type of Shares(?: Issued)?|Consideration for Shares|Shares Issued for Cash or Otherwise)$/i,values:['Cash','Otherwise than cash','Cash & Otherwise than cash']},
  {test:/^Type of Beneficial Ownership$/i,values:['Direct','Indirect','Direct & Indirect']}
@@ -190,18 +191,46 @@ function addRecord(kind){
 }
 function companyOptions(search){
  const q=String(search||'').trim().toLowerCase();
- const rows=(q?dmsCompanies.filter(c=>(c.name+' '+c.registrationNo).toLowerCase().includes(q)):dmsCompanies).slice(0,15);
+ const rows=(q?dmsCompanies.filter(c=>(c.name+' '+c.registrationNo).toLowerCase().includes(q)):dmsCompanies).slice(0,q?35:12);
  return rows.length?rows.map(c=>'<button type="button" class="ar-name-option" data-dms-company-id="'+esc(c.id)+'">'+
   '<strong>'+esc(c.name)+'</strong><small>'+esc(c.registrationNo||'Registration number not recorded')+'</small></button>').join(''):
   '<span class="msic-help">No matching Documents company. Adjust your search or type the company name manually.</span>';
 }
 function companyNameControl(item,index){
  const value=String(item.value||'');
- if(!dmsCompanies.length||window.parent===window)return '<textarea data-item="'+index+'" rows="2" spellcheck="false" placeholder="Enter company name…">'+esc(value)+'</textarea>';
- return '<div class="ar-name-selector"><label class="field-label">Search existing DMS Documents companies'+
+ if(!dmsCompanies.length||window.parent===window)
+  return '<textarea data-item="'+index+'" rows="2" spellcheck="false" placeholder="Enter company name…">'+esc(value)+'</textarea>';
+ // The native select contains the COMPLETE DMS company list, not only the 15 search suggestions.
+ // This is populated only from private data sent by the authenticated DMS parent.
+ const options=dmsCompanies.map(c=>'<option value="'+esc(c.id)+'" '+(selectedDmsCompanyId===c.id?'selected':'')+'>'+
+  esc(c.name)+(c.registrationNo?' · '+esc(c.registrationNo):'')+'</option>').join('');
+ return '<div class="ar-name-selector">'+
+  '<label class="field-label">All Documents companies ('+dmsCompanies.length+')'+
+  '<select class="choice-select ar-company-full-list" data-company-select="'+index+'">'+
+  '<option value="">— Select a company from the complete list —</option>'+options+'</select></label>'+
+  '<label class="field-label">Or search by company name / registration number'+
   '<input type="search" data-item="'+index+'" data-company-lookup="'+index+'" value="'+esc(value)+'" autocomplete="off" placeholder="Search company name or registration number"></label>'+
   '<div class="ar-name-options" data-company-results="'+index+'">'+companyOptions(value)+'</div>'+
-  '<p class="msic-help">Choose an existing company to fill its registered name and number. Switching companies starts a fresh review, so export JSON first.</p></div>';
+  '<p class="msic-help">All '+dmsCompanies.length+' DMS companies are available in the dropdown. Selecting a new company fills its registration number and starts a blank review for that company; export unfinished JSON first.</p></div>';
+}
+function addCustomField({sectionIndex=null,headingIndex=null}={}){
+ if(doc.particulars.length>=1200)return status('The Annual Return field limit is reached.',true);
+ const en=(prompt('New field label in English:')||'').trim();if(!en)return;
+ const cn=(prompt('New field label in Chinese (optional):')||'').trim();
+ const field={type:'field',en:en.slice(0,350),cn:cn.slice(0,350),value:''};
+ let pos=doc.particulars.length;
+ if(headingIndex!==null){
+  if(doc.particulars[headingIndex]?.type!=='heading')return status('The selected member record no longer exists.',true);
+  pos=headingIndex+1;
+  while(pos<doc.particulars.length&&doc.particulars[pos].type==='field')pos++;
+ }else if(sectionIndex!==null){
+  if(doc.particulars[sectionIndex]?.type!=='section')return status('Section no longer exists.',true);
+  pos=sectionIndex+1;
+  while(pos<doc.particulars.length&&doc.particulars[pos].type!=='section')pos++;
+ }
+ doc.particulars.splice(pos,0,field);
+ renderSections();
+ status('Added "'+field.en+'" to '+(headingIndex!==null?'the selected member record':'the selected section')+'. It will appear in the PDF.');
 }
 function removeReviewField(index){
  const item=doc.particulars[index];if(!item||item.type!=='field')return;
@@ -241,20 +270,21 @@ function groups(){
 function renderSections(){
  const q=$('search').value.trim().toLowerCase(),onlyBlank=$('incomplete').checked;
  $('particulars').innerHTML=groups().map((group,i)=>{
-  const rows=group.items.filter(({item})=>{
+  const rows=group.items.filter(({item,index})=>{
+   if(!showMemberField(doc.particulars,index))return false;
    const matches=!q||[item.en,item.cn,item.value,group.title].some(x=>String(x||'').toLowerCase().includes(q));
    return matches&&(!onlyBlank||item.type==='field'&&!String(item.value||'').trim());
   });
   if(!rows.length&&(q||onlyBlank))return '';
   const body=rows.map(({index,item})=>{
-   if(item.type==='heading')return '<div class="heading-entry">'+esc(item.en)+' <small>'+esc(item.cn)+'</small></div>';
+   if(item.type==='heading')return '<div class="heading-entry">'+esc(item.en)+' <small>'+esc(item.cn)+'</small>'+(/^MEMBER \d+$/i.test(item.en)?'<button type="button" class="button mini ar-add-member-field" data-add-to-member="'+index+'">+ Add member field</button>':'')+'</div>';
    return '<div class="field-entry '+(item.value?'':'blank')+'"><div class="title">'+esc(item.en||'Untitled')+
     '<small>'+esc(item.cn||'')+'</small>'+(!['Company Name','Company Registration No.'].includes(item.en)?'<button type="button" class="ar-delete-field" data-delete-field="'+index+'">Delete field</button>':'')+'</div>'+controlsFor(item,index)+'</div>';
   }).join('');
   return '<details class="ar-section" '+(i===0||q||onlyBlank?'open':'')+'><summary class="section-header"><span>'+
    esc(group.title)+'<small>'+esc(group.cn)+'</small></span><span class="pill">'+
    rows.filter(x=>x.item.type==='field').length+' fields</span></summary><div class="section-fields">'+body+
-   (ADDONS.some(x=>x.section.test(group.title))?'<div class="addon-bar">'+ADDONS.filter(x=>x.section.test(group.title)).map(x=>'<button class="button mini" type="button" data-add-record="'+x.id+'">+ Add '+x.label+'</button>').join('')+'</div>':'')+'</div></details>';
+   (group.index>=0?'<div class="addon-bar">'+ADDONS.filter(x=>x.section.test(group.title)).map(x=>'<button class="button mini" type="button" data-add-record="'+x.id+'">+ Add '+x.label+'</button>').join('')+'<button class="button mini" type="button" data-add-to-section="'+group.index+'">+ Add field to this section</button></div>':'')+'</div></details>';
  }).join('')||'<p class="status">No matching fields. Clear search or disable blank-only filter.</p>';
  fieldStatus();
 }
@@ -334,6 +364,12 @@ $('particulars').addEventListener('input',e=>{
 });
 $('particulars').addEventListener('change',e=>{
  const el=e.target;
+ if(el.dataset.companySelect!==undefined){
+  const id=el.value;
+  if(id&&window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_SELECT_COMPANY_REQUEST',id},window.location.origin);
+  return;
+ }
+ if(el.dataset.item!==undefined&&doc.particulars[Number(el.dataset.item)]?.en==='Member Type'){renderSections();return;}
  if(el.dataset.criteria!==undefined){
   const i=Number(el.dataset.criteria);
   const values=[...$('particulars').querySelectorAll('input[data-criteria="'+i+'"]:checked')].map(x=>x.value);
@@ -364,14 +400,11 @@ $('particulars').addEventListener('click',e=>{
   if(!desc)return;
   changeMSIC(Number(manual.dataset.msicManual),code,false,desc.slice(0,250));return;
  }
+ const memberField=e.target.closest('[data-add-to-member]');if(memberField){addCustomField({headingIndex:Number(memberField.dataset.addToMember)});return;}
+ const sectionField=e.target.closest('[data-add-to-section]');if(sectionField){addCustomField({sectionIndex:Number(sectionField.dataset.addToSection)});return;}
  const add=e.target.closest('[data-add-record]');if(add)addRecord(add.dataset.addRecord);
 });
-$('add-field').addEventListener('click',()=>{
- const en=prompt('English field label:');if(!en?.trim())return;
- const cn=prompt('Chinese field label (optional):')||'';
- doc.particulars.push({type:'field',en:en.trim().slice(0,350),cn:cn.trim().slice(0,350),value:''});
- renderSections();status('New field added to the last section.');
-});
+$('add-field').addEventListener('click',()=>addCustomField());
 $('add-section').addEventListener('click',()=>{
  const en=prompt('Section heading in English:');if(!en?.trim())return;
  const cn=prompt('Chinese section heading (optional):')||'';
