@@ -191,8 +191,11 @@ test('DMS company picker safeguards identity and does not copy statutory particu
  assert.ok(!parent.includes('id="ar-company-search"'));
  assert.ok(parent.includes('ZHENLI_DMS_AR_COMPANY_LIST'));
  assert.ok(parent.includes('ZHENLI_AR_SELECT_COMPANY_REQUEST'));
- assert.ok(child.includes('data-company-lookup'));
- assert.ok(child.includes('data-dms-company-id'));
+ assert.ok(!child.includes('data-company-lookup'));
+ assert.ok(!child.includes('data-dms-company-id'));
+ assert.ok(!child.includes('companyOptions('));
+ assert.ok(!child.includes('Or search by company name / registration number'));
+ assert.ok(child.includes('data-company-select'));
  assert.ok(child.includes('data-delete-field'));
  assert.ok(parent.includes('Company no longer exists'));
  assert.ok(parent.includes("event.origin!==window.location.origin"));
@@ -274,4 +277,18 @@ test('complete private company dropdown and Add Field per section/member appear 
  assert.ok(js.includes('data-add-to-member'));
  assert.ok(js.includes('data-add-record'));
  assert.ok(pdf.includes('showMemberField'));
+});
+
+test('Annual Return DMS selector shows full company dropdown without name or registration search',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const child=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ assert.ok(child.includes('dmsCompanies.map'));
+ assert.ok(child.includes('data-company-select'));
+ assert.ok(child.includes('— Select a company from the complete list —'));
+ assert.ok(!child.includes('companyOptions('));
+ assert.ok(!child.includes('data-company-lookup'));
+ assert.ok(!child.includes('data-company-results'));
+ assert.ok(!child.includes('Or search by company name / registration number'));
+ assert.ok(!child.includes('data-dms-company-id'));
+ assert.ok(child.includes('ZHENLI_AR_SELECT_COMPANY_REQUEST'));
 });
