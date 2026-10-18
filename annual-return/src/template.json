@@ -309,12 +309,6 @@
     },
     {
       "type": "field",
-      "en": "Date of Appointment",
-      "cn": "委任日期",
-      "value": ""
-    },
-    {
-      "type": "field",
       "en": "Residential Address",
       "cn": "住址",
       "value": ""
@@ -359,12 +353,6 @@
       "type": "field",
       "en": "Nationality / Race",
       "cn": "国籍 / 种族",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Date of Appointment",
-      "cn": "委任日期",
       "value": ""
     },
     {
@@ -417,12 +405,6 @@
     },
     {
       "type": "field",
-      "en": "Date of Appointment",
-      "cn": "委任日期",
-      "value": ""
-    },
-    {
-      "type": "field",
       "en": "Residential Address",
       "cn": "住址",
       "value": ""
@@ -471,12 +453,6 @@
     },
     {
       "type": "field",
-      "en": "Date of Appointment",
-      "cn": "委任日期",
-      "value": ""
-    },
-    {
-      "type": "field",
       "en": "Residential Address",
       "cn": "住址",
       "value": ""
@@ -515,12 +491,6 @@
       "type": "field",
       "en": "Practising Certificate Number",
       "cn": "执业证书编号",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Date of Secretary Appointment",
-      "cn": "公司秘书委任日期",
       "value": ""
     },
     {
@@ -603,12 +573,6 @@
     },
     {
       "type": "field",
-      "en": "Date Entered as Member",
-      "cn": "登记为股东日期",
-      "value": ""
-    },
-    {
-      "type": "field",
       "en": "Class of Shares",
       "cn": "股份类别",
       "value": ""
@@ -665,12 +629,6 @@
       "type": "field",
       "en": "Registered / Correspondence Address",
       "cn": "公司注册 / 通讯地址",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Date Entered as Member",
-      "cn": "登记为股东日期",
       "value": ""
     },
     {
@@ -761,18 +719,6 @@
       "type": "field",
       "en": "Criteria of Beneficial Ownership",
       "cn": "实益拥有标准",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Date Became / Ceased as BO",
-      "cn": "成为或停止实益拥有人的日期",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Notice / BO Confirmation Dates",
-      "cn": "通知及实益拥有确认日期",
       "value": ""
     }
   ]
