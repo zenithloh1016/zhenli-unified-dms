@@ -48,3 +48,11 @@
 .ar-name-option:last-child{border-bottom:0}
 .ar-name-option small{color:#5c7b8c}
 @media(max-width:680px){.ar-name-options{max-height:225px}.ar-delete-field{min-height:36px}}
+
+
+/* V1.7: full DMS company native dropdown and custom per-member statutory fields */
+.ar-name-selector .ar-company-full-list{max-width:100%;min-height:48px;width:100%;font-size:13px;white-space:normal}
+.ar-add-member-field{display:inline-flex;margin-left:auto;align-items:center;max-width:100%;flex-shrink:0}
+.heading-entry:has(.ar-add-member-field){display:flex;align-items:center;flex-wrap:wrap;gap:7px}
+.ar-section .addon-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+@media(max-width:680px){.ar-add-member-field{margin-left:0}.ar-name-selector .ar-company-full-list{font-size:14px}}
