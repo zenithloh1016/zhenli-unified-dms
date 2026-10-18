@@ -1,0 +1,42 @@
+name: Archive ZHENLI Unified DMS Source
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Create reproducible source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=zip --prefix="ZHENLI_DMS_Web_Android_Source/" --output="ZHENLI_DMS_Web_Android_Source.zip" HEAD
+          python3 - <<'PY'
+          import json,os,datetime,zipfile
+          output='ZHENLI_DMS_Web_Android_Source.zip'
+          prefix='ZHENLI_DMS_Web_Android_Source/'
+          obj={
+            "project":"ZHENLI Unified DMS",
+            "repository":os.environ["GITHUB_REPOSITORY"],
+            "commit":os.environ["GITHUB_SHA"],
+            "branch":os.environ["GITHUB_REF_NAME"],
+            "created_utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "contents":"Tracked source files without .git, node_modules, build outputs or credentials",
+          }
+          with zipfile.ZipFile(output,'a',compression=zipfile.ZIP_DEFLATED) as z:
+            z.writestr(prefix+'ARCHIVE_VERSION.json',json.dumps(obj,indent=2))
+          print(json.dumps(obj))
+          PY
+          unzip -t "ZHENLI_DMS_Web_Android_Source.zip" | tail -2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZHENLI_DMS_Web_Android_Source
+          path: ZHENLI_DMS_Web_Android_Source.zip
+          if-no-files-found: error
+          retention-days: 90
