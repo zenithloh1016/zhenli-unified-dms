@@ -149,7 +149,7 @@ test('V1.6 removes all requested dates in both blank template and legacy importe
  assert.equal(parsed.particulars.some(x=>x.en==='Date of Incorporation'),true);
  assert.equal(parsed.particulars.some(x=>x.en==='Date of Birth'),true);
  assert.equal(parsed.particulars.some(x=>x.en==='Date of Registration'),true);
- assert.equal(parsed.particulars.some(x=>x.en==='Discharge Date'),true);
+ assert.equal(parsed.particulars.some(x=>x.en==='Discharge Date'),false);
  assert.deepEqual(Object.keys(parsed.signatureDirector).sort(),['designation','name','nric']);
 });
 test('V1.6 Criteria E is in the selectable BO criteria list and survives JSON serialization',async()=>{
