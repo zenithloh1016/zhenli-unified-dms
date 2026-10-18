@@ -87,6 +87,7 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
+          node scripts/install-native-pdf-saver.mjs .
       - name: Build installable debug APK
         run: |
           chmod +x android/gradlew
@@ -122,6 +123,8 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
+      - name: Register Android PDF Save As component
+        run: node scripts/install-native-pdf-saver.mjs annual-return
       - name: Assemble Annual Return APK
         working-directory: annual-return/android
         run: |
