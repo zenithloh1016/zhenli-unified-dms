@@ -1,5 +1,5 @@
 import template from './template.json' with {type:'json'};
-export const SCHEMA_VERSION=2;
+export const SCHEMA_VERSION=3;
 export const cloneBlank=()=>structuredClone(template);
 const safe=(s,n=20000)=>String(s??'').slice(0,n);
 
@@ -58,6 +58,18 @@ function readJsonObjectAfter(script,marker){
   }
   throw Error('Unfinished Apps Script data object: '+marker);
 }
+const EXCLUDED_FIELDS=/^(?:Tax Identification Number(?: \(TIN\))?|TIN|Statutory Lodgement Deadline(?: \(30 calendar days\))?|Master Listing Internal Due Date|Register Last Updated|Master Listing Internal Due vs Statutory 30 Days)$/i;
+function cleanParticulars(items){
+ let excludedSection=false;
+ return items.filter(x=>{
+  if(!x||!['field','section','heading'].includes(x.type))return false;
+  if(x.type==='section'){
+    excludedSection=/^COMPANY REVIEW AND VERIFICATION NOTES$/i.test(String(x.en||'').trim());
+    return !excludedSection;
+  }
+  return !excludedSection&&!EXCLUDED_FIELDS.test(String(x.en||'').trim());
+ });
+}
 export function normalizeDocument(raw){
   if(!raw||typeof raw!=='object'||!Array.isArray(raw.particulars))throw Error('Expected an Annual Return object with a particulars array.');
   if(raw.particulars.length>1200)throw Error('The imported script has too many fields.');
@@ -67,10 +79,9 @@ export function normalizeDocument(raw){
     schemaVersion:SCHEMA_VERSION,
     company:{name:safe(company.name,300),no:safe(company.no,120),
       arYear:safe(company.arYear,12),arDate:safe(company.arDate,40)},
-    signatureDirector:{name:safe(director.name,200),nric:safe(director.nric||director.id||'',100),date:safe(director.date||'',40),
-      acknowledgement:safe(director.acknowledgement||'',500),designation:safe(director.designation||'Director',80)},
-    particulars:raw.particulars.filter(x=>x&&['field','section','heading'].includes(x.type)&&!
-      /^(?:Statutory Lodgement Deadline(?: \(30 calendar days\))?|Master Listing Internal Due Date|Register Last Updated|Master Listing Internal Due vs Statutory 30 Days)$/i.test(String(x.en||'').trim())).map(x=>({
+    signatureDirector:{name:safe(director.name,200),nric:safe(director.nric||director.id||'',100),
+      designation:safe(director.designation||'Director',80)},
+    particulars:cleanParticulars(raw.particulars).map(x=>({
       type:x.type,en:safe(x.en,350),cn:safe(x.cn,350),value:x.type==='field'?safe(x.value,15000):''
     }))
   };
