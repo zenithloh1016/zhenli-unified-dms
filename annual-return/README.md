@@ -65,3 +65,10 @@ Company-specific scripts are **not bundled**, to prevent exposing private inform
 - BO criteria include **A, B, C, D and E**, with multiple selections allowed. **Criterion E:** a member who, under an agreement with another member, alone controls a majority of voting rights in the company. Reference: https://crmsv.ssm4u.com.my/ssmkb/SSM4UExternal?wiki_id=10046. SSM also has **Criterion F**; assess all applicable BO criteria before SSM lodgement.
 - Director Confirmation contains the director name, NRIC/passport, capacity and signature box in the PDF, without signing date or acknowledgement.
 - This review PDF is not an SSM statutory return. Verify source registers, eBOS and all current details separately.
+
+## DMS Documents company lookup (V1.6)
+
+Inside the existing DMS web or Android app, choose **Documents → Companies → Annual Return** on the desired company card (or **Generate Annual Return** within the company folder). The **Annual Return** tab also searches the same authenticated Documents company list by name or registration number.
+
+The selected company name and registration number populate **Company Details** through a guarded, same-origin iframe message, without a public query string or external server call. No other register or beneficial ownership information is transferred. Switching to a different company prompts before starting a clean form so previously entered statutory particulars cannot inadvertently carry across companies. Existing Supabase company/document records and Tencent EdgeOne signing requests are not changed. Export the editable JSON before changing tabs; finished PDFs can be manually uploaded to the correct DMS folder.
+
