@@ -262,15 +262,20 @@ async function generate(){
  if(busy)return;
  if(!String(doc.company.name).trim()||!String(doc.company.no).trim())
   return status('Enter company name and registration number first.',true);
- if(!confirm('Generate a CLIENT REVIEW PDF? Verify missing details, director particulars and statutory dates before sending.'))return;
+ if(!confirm('Generate a CLIENT REVIEW PDF? Verify company details and statutory particulars before sending.'))return;
  setBusy(true);
  try{
   syncCompanyDetails(doc);
   const {blob,filename,pages}=await buildPdf(doc,status);
   generated={blob,filename};exposeDownload(blob,filename);
-  const note=await savePdf(blob,filename);
-  status('Generated '+pages+' pages: '+filename+'. '+note);
- }catch(error){status('PDF generation failed: '+error.message+'. Try Brave or reduce very long field values.',true);}
+  status('PDF generated ('+pages+' pages). Opening Android Save As picker…');
+  try{
+    const note=await savePdf(blob,filename);
+    status('Generated '+pages+' pages: '+filename+'. '+note);
+  }catch(error){
+    status('PDF generated but not saved: '+error.message+'. Tap Save PDF to Files to try again without regenerating.',true);
+  }
+ }catch(error){status('PDF generation failed: '+error.message+'. Try again after closing other apps to free memory.',true);}
  finally{setBusy(false);}
 }
 $('import-file').addEventListener('change',e=>{const file=e.target.files?.[0];e.target.value='';void importFile(file);});
@@ -341,8 +346,8 @@ $('clear-values').addEventListener('click',()=>{
 $('generate-pdf').addEventListener('click',generate);
 $('share-pdf').addEventListener('click',async()=>{
  if(!generated)return status('Generate a PDF first.',true);
- try{status(await savePdf(generated.blob,generated.filename,{share:true}));}
- catch(error){status('Save/share failed: '+error.message,true);}
+ try{status(await savePdf(generated.blob,generated.filename));}
+ catch(error){status('PDF has not been saved: '+error.message+'. Tap Save PDF to Files to retry.',true);}
 });
 $('print').addEventListener('click',()=>{
  if(!doc.company.name.trim())return status('Enter company name first.',true);
@@ -350,6 +355,6 @@ $('print').addEventListener('click',()=>{
 });
 window.addEventListener('afterprint',()=>{$('pdf-stage').textContent='';});
 resetView();
-status('V1.6 loaded — Criteria A–E available, unwanted dates removed, Director Confirmation only; integrated with DMS.');
+status('V1.6.1 loaded — Android PDF Save As fixed. Select Downloads or Documents when saving.');
 void loadMSIC();
 if(window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_READY'},window.location.origin);

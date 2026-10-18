@@ -4,6 +4,7 @@ import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
 import {outputFilename} from './core.js';
+import {savePdfToAndroidFiles} from './native-pdf-save.js';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
 const blank=value=>String(value??'').trim()||'NOT PROVIDED / 未提供资料';
@@ -17,7 +18,10 @@ export function exposeDownload(blob,name){
   const link=document.getElementById('download-link');
   const box=document.getElementById('download-box');
   document.getElementById('download-name').textContent=name;
-  link.href=currentLink;link.download=name;box.hidden=false;
+  link.href=currentLink;link.download=name;
+  // Native Android WebViews cannot reliably download blob: links.
+  link.hidden=Capacitor.isNativePlatform()||window.parent!==window;
+  box.hidden=false;
   return currentLink;
 }
 async function b64(blob){
@@ -28,27 +32,52 @@ async function b64(blob){
     reader.readAsDataURL(blob);
   });
 }
+function requestDmsSave(blob,filename){
+ return new Promise((resolve,reject)=>{
+  const id='ar_pdf_'+Date.now()+'_'+Math.random().toString(36).slice(2,9);
+  const time=setTimeout(()=>{window.removeEventListener('message',onReply);reject(Error('DMS Save As timed out. Tap Save PDF to Files and try again.'));},300000);
+  function onReply(event){
+   if(event.source!==window.parent||event.origin!==window.location.origin||
+      event.data?.type!=='ZHENLI_DMS_AR_PDF_SAVED'||event.data?.id!==id)return;
+   clearTimeout(time);window.removeEventListener('message',onReply);
+   if(event.data.ok)resolve(event.data.note||'Saved PDF.');
+   else reject(Error(event.data.error||'DMS could not save PDF.'));
+  }
+  window.addEventListener('message',onReply);
+  window.parent.postMessage({type:'ZHENLI_DMS_AR_SAVE_PDF',id,filename,blob},window.location.origin);
+ });
+}
 export async function savePdf(blob,name,{share=false}={}){
-  if(Capacitor.isNativePlatform()){
-    const {uri}=await Filesystem.writeFile({path:'annual-return/'+Date.now()+'-'+name,
+ if(window.parent!==window){
+  // Same-origin DMS iframe: only its parent has the native Capacitor bridge.
+  // Never open a blob: URL inside the Android WebView as a "download".
+  return await requestDmsSave(blob,name);
+ }
+ if(Capacitor.isNativePlatform()){
+  if(share){
+   const {uri}=await Filesystem.writeFile({path:'annual-return/'+Date.now()+'-'+name,
       directory:Directory.Cache,recursive:true,data:await b64(blob)});
-    await Share.share({title:name,url:uri,dialogTitle:'Save / Share Annual Return PDF'});
-    return 'Android share panel opened. Choose Files or Drive and save the document.';
+   await Share.share({title:name,url:uri,dialogTitle:'Share Annual Return PDF'});
+   return 'Share panel opened. Sharing is separate from saving the PDF.';
   }
-  if(share&&typeof navigator.share==='function'){
-    const file=new File([blob],name,{type:'application/pdf'});
-    if(!navigator.canShare||navigator.canShare({files:[file]})){
-      try{
-        await navigator.share({title:name,files:[file]});
-        return 'File-sharing panel opened. Choose Files or Drive to save the PDF.';
-      }catch(e){
-        if(e.name==='AbortError')return 'Save cancelled. Use Direct PDF download to try again.';
-      }
-    }
+  const saved=await savePdfToAndroidFiles(blob,name);
+  return 'PDF saved successfully to your selected Android folder as '+saved.filename+'. Open Files → Downloads or your chosen location.';
+ }
+ if(share&&typeof navigator.share==='function'){
+  const file=new File([blob],name,{type:'application/pdf'});
+  if(!navigator.canShare||navigator.canShare({files:[file]})){
+   try{
+    await navigator.share({title:name,files:[file]});
+    return 'File-sharing panel opened. Choose Files or Drive to keep the PDF.';
+   }catch(e){
+    if(e.name==='AbortError')return 'Share cancelled. Use Direct PDF download.';
+   }
   }
-  const link=document.getElementById('download-link');
-  link.click();
-  return 'Download requested. Open Brave Downloads or Files → Downloads. The direct PDF link remains available below.';
+ }
+ const link=document.getElementById('download-link');
+ if(!link||!link.href)throw Error('Generate the PDF first to enable its download.');
+ link.click();
+ return 'Download requested. Open Brave Downloads or Files → Downloads. The direct PDF link remains available below.';
 }
 function divideValue(value,max=360){
   const str=blank(value);
