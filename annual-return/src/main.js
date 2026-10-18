@@ -29,16 +29,16 @@ function saveDraftNow({quiet=false}={}){
  if(window.parent!==window&&draftScope==='dms:pending'){draftStatus('Waiting for DMS session before saving.',true);return false;}
  try{
   const result=saveAnnualReturnDraft(localStorage,draftScope,currentDraftId(),doc);
-  if(!quiet)draftOptions(result.key);
+  draftOptions(result.key);
   draftStatus((quiet?'Autosaved':'Saved draft')+' on this device · '+new Date(result.updatedAt).toLocaleTimeString());
   return true;
  }catch(err){draftStatus('Draft NOT saved: '+err.message+'. Keep this page open.',true);return false;}
 }
 function queueDraftSave(){
- clearTimeout(draftTimer);
+ // Write immediately so switching DMS tabs cannot lose the last typed character.
+ // Browser/Android localStorage is synchronous; a pagehide flush is a backup.
  if(!hasDraftData())return;
- draftStatus('Saving changes locally…');
- draftTimer=setTimeout(()=>{draftTimer=null;saveDraftNow({quiet:true});},650);
+ saveDraftNow({quiet:true});
 }
 function flushDraft(){if(draftTimer){clearTimeout(draftTimer);draftTimer=null;}return saveDraftNow({quiet:true});}
 function resumeLocalDraft(key){
@@ -49,6 +49,8 @@ function resumeLocalDraft(key){
   doc=draft.data;
   const match=dmsCompanies.find(c=>c.id===id);selectedDmsCompanyId=match?.id||null;
   if(!match)newDraftId=id;
+  if(match&&window.parent!==window)
+    window.parent.postMessage({type:'ZHENLI_AR_SELECT_COMPANY_REQUEST',id},window.location.origin);
   generated=null;$('download-box').hidden=true;
   resetView();draftOptions(key);
   draftStatus('Resumed '+draft.name+' · '+new Date(draft.updatedAt).toLocaleString());
