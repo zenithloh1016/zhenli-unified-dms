@@ -2,7 +2,7 @@ import './style.css';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails} from './core.js';
+import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField} from './core.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
 const $=id=>document.getElementById(id);
@@ -211,7 +211,8 @@ function removeReviewField(index){
   status(item.en+' is required for PDF generation and cannot be deleted.',true);return;
  }
  if(!confirm('Delete "'+item.en+'" and its value from this Annual Return form and generated PDF?'))return;
- doc.particulars.splice(index,1);renderSections();status('Removed field: '+item.en+'. Export JSON to preserve this customisation.');
+ try {deleteParticularField(doc,index);}catch(err){status(err.message,true);return;}
+ renderSections();status('Removed field: '+item.en+'. Export JSON to preserve this customisation.');
 }
 
 function controlsFor(item,index){
