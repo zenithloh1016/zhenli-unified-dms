@@ -81,7 +81,7 @@ export function createNativeSigning({update,getCompanies}) {
   });
   function main(){
     if(!token){return `<section class="zs-panel zs-login"><h2>Signing administrator login</h2><p class="muted">Sign in here, inside DMS, using the administrator password already configured on Tencent EdgeOne. No external site will open.</p>
-    <form id="zs-login-form"><label class="input-label">Sequential Signing administrator password<input type="password" name="password" minlength="12" autocomplete="current-password" required></label><button class="btn primary" type="submit" ${busy?'disabled':''}>Sign in to Signing</button></form>
+    <form id="zs-login-form"><label class="input-label">Sequential Signing administrator password<input type="password" name="password" autocomplete="current-password" required></label><button class="btn primary" type="submit" ${busy?'disabled':''}>Sign in to Signing</button></form>
     <p class="fineprint">Your DMS account and signing administrator password are separate. This login stays inside the DMS and uses a temporary 8-hour API session. No password or token is stored on your device.</p></section>`;}
     if(view==='list')return `<div class="zs-toolbar">${b('+ New signing request','new','','primary')}${b('Refresh requests','refresh')}${b('Reset all signing requests','reset-preview')}${b('Sign out of Signing','logout')}</div>
     <section class="zs-panel"><h2>Signing requests <span class="zs-count">${requests.length}</span></h2>
