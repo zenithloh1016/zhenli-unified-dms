@@ -85,7 +85,7 @@ function addRecord(kind){
 function controlsFor(item,index){
  const value=String(item.value||''),common=' data-item="'+index+'"';
  if(/^Criteria of Beneficial Ownership$/i.test(item.en)){
-  const selected=[...value.matchAll(/(?:criteria\s*)?([ABCD])(?=\b|[,;/\\s])/gi)].map(m=>m[1].toUpperCase()); 
+  const selected=[...value.matchAll(/(?:criteria\s*)?([ABCD])(?=\b|[,;/\s])/gi)].map(m=>m[1].toUpperCase()); 
   return '<div class="criteria-options">'+Object.entries(CRITERIA).map(([key,desc])=>'<label class="criteria-option"><input type="checkbox" data-criteria="'+index+'" value="'+key+'" '+(selected.includes(key)?'checked':'')+'><span><b>Criteria '+key+'</b> — '+esc(desc)+'</span></label>').join('')+'</div>';
  }
  const option=OPTIONS.find(o=>o.test.test(item.en));
