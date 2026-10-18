@@ -270,3 +270,26 @@ test('Annual Return company selector has a dropdown but no search by name or reg
  assert.ok(!js.includes('data-dms-company-id'));
  assert.ok(js.includes("window.parent.postMessage({type:'ZHENLI_AR_SELECT_COMPANY_REQUEST'"));
 });
+
+
+test('Annual Return has fullscreen controls and no field search or Add Section button',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const child=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ const parent=readFileSync(new URL('../../src/main.js',import.meta.url),'utf8');
+ const styles=readFileSync(new URL('../../src/style.css',import.meta.url),'utf8');
+ assert.ok(html.includes('id="toggle-fullscreen"'));
+ assert.ok(!html.includes('id="search"'), 'field/section search bar must be removed');
+ assert.ok(!html.includes('id="add-section"'), 'new-section creation option must be removed');
+ assert.ok(!child.includes("$('search')"));
+ assert.ok(!child.includes("$('add-section')"));
+ assert.ok(child.includes('data-add-to-section'), 'Add field within existing sections must remain');
+ assert.ok(parent.includes('data-action="open-ar-fullscreen"'));
+ assert.ok(parent.includes('data-action="exit-ar-fullscreen"'));
+ assert.ok(parent.includes('ZHENLI_AR_FULLSCREEN_TOGGLE'));
+ assert.ok(parent.includes('setAnnualReturnFullscreen(!state.arFullscreen)'));
+ assert.ok(styles.includes('.annual-return-module.ar-fullscreen-open'));
+ assert.ok(child.includes('ZHENLI_DMS_AR_FULLSCREEN_STATE'));
+ assert.ok(child.includes('ar-immersive'));
+ assert.ok(parent.includes('Do not call render()'), 'full screen toggles must not reload iframe/drafts');
+});
