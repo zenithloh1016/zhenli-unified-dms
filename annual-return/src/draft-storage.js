@@ -38,8 +38,9 @@ export function createDraftStore(storage,key=DRAFT_STORAGE_KEY){
     updatedAt:new Date().toISOString(),snapshot};
    const entries=read().filter(x=>!(x.scope===scope&&x.id===id));
    entries.unshift(item);
+   if(entries.length>MAX_DRAFTS)throw Error('This device already has 200 Annual Return drafts. Delete an unwanted saved draft before adding another.');
    entries.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-   try{storage.setItem(key,JSON.stringify(entries.slice(0,MAX_DRAFTS)));}
+   try{storage.setItem(key,JSON.stringify(entries));}
    catch(err){throw Error('Could not save the draft on this device (storage full or blocked). Check browser storage permissions.');}
    return {id:item.id,updatedAt:item.updatedAt,companyName:item.companyName};
   },
