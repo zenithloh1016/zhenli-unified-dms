@@ -249,17 +249,50 @@ function mergeCompanyRecords(payload,overwriteDates=false){
     }
     return {added,matched,updated};
   }
+  function createImportedStatutoryReviewTasks(companies){
+    let created=0,existing=0;
+    const dateKinds=[['arDueDate','Annual Return (AR)','Review Annual Return lodgement status'],
+      ['afsDueDate','Financial Statements (AFS)','Review financial statements lodgement status']];
+    const now=timestamp();
+    for(const imported of companies){
+      const reg=String(imported.reg||'').toUpperCase();
+      const name=String(imported.name||'').trim().replace(/\s+/g,' ').toUpperCase();
+      const company=data.companies.find(c=>(reg&&String(c.reg||'').toUpperCase()===reg)||c.name.toUpperCase()===name);
+      if(!company)continue;
+      for(const [field,category,title] of dateKinds){
+        const dueDate=safeDate(imported[field]);if(!dueDate)continue;
+        if(data.tasks.some(t=>t.company===company.name&&t.category===category&&t.dueDate===dueDate)){
+          existing++;continue;
+        }
+        data.tasks.push({id:uniqueId(),title,company:company.name,category,priority:'normal',
+          status:'todo',dueDate,assignee:'',reference:'MASTER LISTING',
+          notes:'Imported lodgement due date is not proof that filing is outstanding. Verify status against SSM and statutory records before acting.',
+          recurrence:'none',recurrenceParent:null,checklist:[],createdAt:now,updatedAt:now,completedAt:null});
+        created++;
+      }
+    }
+    return {created,existing};
+  }
   async function importCompanies(file) {
     if(!file)return;
     try{
-      if(file.size>2*1024*1024)throw Error('Company list file exceeds 2 MB.');
-      const payload=JSON.parse(await file.text());
+      if(file.size>5*1024*1024)throw Error('Master Listing file exceeds 5 MB.');
+      const payload=/\.xlsx$/i.test(file.name)
+        ? await window.ZHENLI_XLSX.parse(file)
+        : JSON.parse(await file.text());
+      const imported=Array.isArray(payload)?payload:payload?.companies;
+      if(!Array.isArray(imported)||!imported.length)throw Error('No company records in import file.');
       const updateDates=!!$('#overwriteStatutoryDates')?.checked;
+      const generateTasks=!!$('#createStatutoryReviewTasks')?.checked;
+      const nAR=imported.filter(c=>safeDate(c.arDueDate)).length;
+      const nAFS=imported.filter(c=>safeDate(c.afsDueDate)).length;
+      if(generateTasks&&!confirm(`Create AR/AFS REVIEW tasks for up to ${nAR+nAFS} dated filings? Dates may relate to completed filings. Existing tasks will not be replaced; verify all imported due dates.`))return;
       const result=mergeCompanyRecords(payload,updateDates);
-      record('Imported company dates',`${result.added} added, ${result.matched} matched, ${result.updated} fields filled/updated`);
+      const tasks=generateTasks?createImportedStatutoryReviewTasks(imported):{created:0,existing:0};
+      record('Imported company dates',`${result.added} added, ${result.matched} matched, ${result.updated} dates filled/updated; ${tasks.created} review tasks created`);
       if(!saveData())throw Error('Could not save the imported list in browser storage.');
-      render();toast(`Updated company portfolio: ${result.added} new, ${result.matched} matched, ${result.updated} fields updated.`);
-    }catch(err){toast('Company list import failed: '+err.message,true)}
+      render();toast(`Imported ${result.added} new companies, ${result.matched} matched; ${nAR} AR and ${nAFS} AFS dates. ${tasks.created} review tasks created (${tasks.existing} already existed).`);
+    }catch(err){toast('Master Listing import failed: '+err.message,true)}
     finally{$('#importCompaniesFile').value=''}
   }
 
