@@ -5,6 +5,8 @@ import {openMasterListingWorkbook} from './master-listing-reader.js';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import {saveOrShareFile} from './file-transfer.js';
+import {browserDownload} from './file-transfer.js';
+import {savePdfToAndroidFiles,validatedPdf} from './native-pdf-save.js';
 import './style.css';
 import {installHubBridge} from './integrated-modules.js';
 
@@ -665,6 +667,26 @@ window.addEventListener('message',event=>{
  if(event.origin!==window.location.origin||!state.user||state.tab!=='annual-return')return;
  const frame=ROOT.querySelector('#zh-annual-return-frame');
  if(!frame||event.source!==frame.contentWindow||!event.data||typeof event.data!=='object')return;
+ if(event.data.type==='ZHENLI_DMS_AR_SAVE_PDF'){
+   const source=frame.contentWindow,id=event.data.id,blob=event.data.blob;
+   if(typeof id!=='string'||id.length>100||!/^ar_pdf_[\w-]+$/.test(id))return;
+   const reply=(ok,note,error)=>source.postMessage({type:'ZHENLI_DMS_AR_PDF_SAVED',id,ok,note,error},window.location.origin);
+   void (async()=>{
+     try{
+       const name=validatedPdf(blob,event.data.filename);
+       let note;
+       if(Capacitor.isNativePlatform()){
+         const saved=await savePdfToAndroidFiles(blob,name);
+         note='PDF saved to your selected Android folder: '+saved.filename+'.';
+       }else{
+         const saved=browserDownload(blob,name);
+         note='Download requested: '+saved.filename+'. Check browser Downloads or Files.';
+       }
+       reply(true,note,'');
+     }catch(error){reply(false,'',String(error.message||error).slice(0,240));}
+   })();
+   return;
+ }
  if(event.data.type==='ZHENLI_AR_READY'){sendAnnualReturnCompany();return;}
  if(event.data.type==='ZHENLI_AR_SELECTION_RESULT'){
    const selected=ROOT.querySelector('#ar-current-company');
