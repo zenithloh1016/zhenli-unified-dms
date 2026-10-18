@@ -8,6 +8,53 @@ import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCo
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
+
+let selectedDmsCompanyId=null;
+function isValidCompanyRecord(value){
+ return value&&typeof value==='object'&&
+ typeof value.id==='string'&&value.id.length>0&&value.id.length<130&&
+ typeof value.name==='string'&&value.name.trim().length>=2&&value.name.length<=300&&
+ typeof value.registrationNo==='string'&&value.registrationNo.length<=120;
+}
+function hasUnsavedAnnualReturnData(){
+ return doc.particulars.some(x=>x.type==='field'&&String(x.value||'').trim()!=='')||
+   Boolean(doc.signatureDirector?.name||doc.signatureDirector?.nric);
+}
+function applyDmsCompany(company){
+ if(!isValidCompanyRecord(company))return {ok:false,reason:'Invalid company record from DMS.'};
+ const name=company.name.trim(),registrationNo=company.registrationNo.trim();
+ if(selectedDmsCompanyId===company.id&&doc.company.name===name&&doc.company.no===registrationNo)
+   return {ok:true};
+ const changedCompany=Boolean(doc.company.name&&doc.company.name!==name)||
+   Boolean(selectedDmsCompanyId&&selectedDmsCompanyId!==company.id);
+ if((changedCompany||hasUnsavedAnnualReturnData())&&!confirm(
+   'Switch to '+name+' from DMS Documents? This starts a new Annual Return form and discards unsaved particulars. Export editable JSON first if you need the current draft.'
+ ))return {ok:false,reason:'Selection cancelled to preserve the current draft.'};
+ // A new company must never inherit another company's directors, shareholdings,
+ // charges or beneficial owner particulars. Start with a fresh clean template.
+ doc=cloneBlank();
+ doc.company.name=name;doc.company.no=registrationNo;
+ for(let i=0;i<doc.particulars.length;i++){
+   if(doc.particulars[i].type!=='field')continue;
+   if(doc.particulars[i].en==='Company Name'){doc.particulars[i].value=name;setCompanyDetail(doc,i,name);}
+   else if(doc.particulars[i].en==='Company Registration No.'){doc.particulars[i].value=registrationNo;setCompanyDetail(doc,i,registrationNo);}
+ }
+ selectedDmsCompanyId=company.id;
+ generated=null;$('download-box').hidden=true;
+ resetView();
+ status('Company loaded from DMS Documents: '+name+(registrationNo?' ('+registrationNo+')':' — registration number missing; please enter it before PDF generation')+'. Complete and verify all remaining statutory particulars.');
+ return {ok:true};
+}
+if(window.parent!==window){
+ window.addEventListener('message',event=>{
+  if(event.source!==window.parent||event.origin!==window.location.origin)return;
+  if(event.data?.type!=='ZHENLI_DMS_AR_SELECT_COMPANY')return;
+  let result={ok:false,reason:'Company selection could not be processed.'};
+  try{result=applyDmsCompany(event.data.company);}catch(err){result={ok:false,reason:String(err.message||err).slice(0,180)};}
+  window.parent.postMessage({type:'ZHENLI_AR_SELECTION_RESULT',id:event.data.company?.id,...result},window.location.origin);
+ });
+}
+
 $('footer-year').textContent=new Date().getFullYear();
 function status(message,error=false){
  const el=$('message');el.textContent=message;el.style.color=error?'#b23b44':'#28768c';
@@ -306,3 +353,4 @@ window.addEventListener('afterprint',()=>{$('pdf-stage').textContent='';});
 resetView();
 status('V1.5 loaded — TIN and Review Notes removed; Director Confirmation only. DMS integrated Annual Return.');
 void loadMSIC();
+if(window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_READY'},window.location.origin);
