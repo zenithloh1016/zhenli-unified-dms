@@ -83,6 +83,13 @@ export function normalizeDocument(raw){
     if(i>=0)doc.particulars.splice(i+1,0,{type:'field',en:'Type of Shares Issued',cn:'股份发行方式（现金／非现金）',value:''});
   }
   if(!doc.particulars.length)throw Error('No valid Annual Return particulars found.');
+  // Old Google Apps Script files called this first group "COMPANY INFORMATION".
+  // Show the new Company Details title without changing any supplied values.
+  const firstSection=doc.particulars.find(x=>x.type==='section');
+  if(firstSection&&/^(?:COMPANY INFORMATION|COMPANY PARTICULARS|COMPANY DETAILS)$/i.test(firstSection.en.trim())){
+    firstSection.en='COMPANY DETAILS';
+    firstSection.cn='公司资料';
+  }
   return syncCompanyDetails(doc);
 }
 export function importAnnualReturnText(content,filename=''){
