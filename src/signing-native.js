@@ -10,7 +10,7 @@ const fmtDate=s=>s?e(String(s).slice(0,16).replace('T',' ')):'—';
 const b=(label,action,id='',style='secondary')=>`<button type="button" class="btn ${style}" data-action="zs-${action}" data-id="${e(id)}">${label}</button>`;
 export function createNativeSigning({update,getCompanies}) {
   let token=''; // deliberately NOT localStorage, sessionStorage, GitHub, Supabase or cookies
-  let view='login',busy=false,message='',error=false,requests=[],detail=null,placementRows=[],resetPreview=null;
+  let view='login',busy=false,message='',error=false,requests=[],detail=null,placementRows=[],resetPreview=null,approvedSenders=[];
   let signerCount=2;
   function feedback(msg,isError=false){message=msg;error=isError;update();}
   function resetAuth(msg='Sign in to manage your existing signing requests.'){
@@ -35,6 +35,12 @@ export function createNativeSigning({update,getCompanies}) {
   }
   async function work(fn){if(busy)return;busy=true;message='';update();try{await fn();}catch(ex){feedback(ex.message||String(ex),true);}finally{busy=false;update();}}
   function select(items,field,selected,placeholder){return `<select name="${field}" required>${placeholder?`<option value="">${placeholder}</option>`:''}${items.map(x=>`<option value="${e(x.id)}" ${x.id===selected?'selected':''}>${e(x.label)}</option>`).join('')}</select>`;}
+  function senderSelect(selected='default'){
+    const items=[...approvedSenders];
+    if(!items.some(x=>x.id===selected))
+      items.unshift({id:selected,label:'Sender no longer configured',email:'',ready:false,removed:true});
+    return `<select name="senderId" required>${items.map(x=>`<option value="${e(x.id)}" ${x.id===selected?'selected':''} ${x.removed?'disabled':''}>${e(x.label)}${x.email?' — '+e(x.email):' (manual sharing only)'}${!x.ready?' · no SMTP':''}</option>`).join('')}</select>`;
+  }
   function renderPlacement(row,idx){
     if(!detail)return '';
     return `<div class="zs-placement-row" data-index="${idx}">
@@ -79,6 +85,7 @@ export function createNativeSigning({update,getCompanies}) {
       <form id="zs-create-form"><div class="zs-formgrid">
       <label>Company name<input list="zs-companies" name="company" maxlength="180" required placeholder="Choose a company"></label><datalist id="zs-companies">${companies}</datalist>
       <label>Subject<input name="subject" maxlength="180" required placeholder="Board resolution signing"></label>
+      <label>Sender email address ${senderSelect()}</label>
       <label>Expiry (days)<input type="number" name="days" min="1" max="60" value="14" required></label>
       <label class="zs-span">Signing message<textarea name="note" rows="3" maxlength="1000" placeholder="Instructions to the signers"></textarea></label></div>
       <h3>Sequential signers</h3><div id="zs-signers">${Array.from({length:signerCount},(_,i)=>signerField(i+1)).join('')}</div>
@@ -105,6 +112,7 @@ export function createNativeSigning({update,getCompanies}) {
       <label>Company name<input list="zs-edit-companies" name="company" maxlength="180" value="${e(r.company)}" required></label>
       <datalist id="zs-edit-companies">${companies}</datalist>
       <label>Subject<input name="subject" maxlength="180" value="${e(r.subject)}" required></label>
+      <label>Sender email address ${senderSelect(r.senderId||'default')}</label>
       <label>Link validity<select name="days"><option value="">Keep existing expiry</option><option value="7">Renew 7 days</option><option value="14">Renew 14 days</option><option value="30">Renew 30 days</option><option value="60">Renew 60 days</option></select></label>
       <label class="zs-span">Signing message<textarea name="note" rows="3" maxlength="1000">${e(r.note||'')}</textarea></label>
       </div><h3>Sequential signers</h3><p class="muted">Use Up / Down to reorder. Removing signers also removes their saved signature boxes.</p>
@@ -116,7 +124,7 @@ export function createNativeSigning({update,getCompanies}) {
       const signers=r.signers.map(s=>`<div class="zs-signer"><div><b>${s.position}. ${e(s.name)}</b> <small>${e(s.email)} · ${s.signedAt?'Signed '+fmtDate(s.signedAt):'Not signed'} · ${e(s.invitation||'Not sent')}</small></div>${b('Copy signing link','copy-link',s.id)}</div>`).join('');
       return `<div class="zs-toolbar">${b('← All requests','refresh')}${b('Reload details','detail',r.id)}${pending?b('✎ Edit draft','edit-draft',r.id,'primary'):''}${r.status!=='revoked'&&r.status!=='deleting'?b('Revoke signing links','revoke',r.id):''}${b('Sign out','logout')}</div>
       <section class="zs-panel"><div class="zs-details-heading"><div><h2>${e(r.company)}</h2><p class="muted">${e(r.subject)} · ${e(r.status)} · Expires ${fmtDate(r.expiry)}</p></div>${b('Download signed archive / evidence','archive')}</div>
-      <p class="muted">${e(r.note||'No signing message')}</p><h3>Documents (${r.docs.length})</h3>${docs||'<p class="muted">No PDFs uploaded.</p>'}
+      <p class="muted">Invitation sender: <b>${e(r.senderEmail||'Manual link sharing only')}</b></p><p class="muted">${e(r.note||'No signing message')}</p><h3>Documents (${r.docs.length})</h3>${docs||'<p class="muted">No PDFs uploaded.</p>'}
       ${pending?`<label class="zs-upload">Upload PDFs (up to eight, 3 MB each)<input id="zs-doc-upload" type="file" accept="application/pdf,.pdf" multiple ${busy?'disabled':''}></label>`:''}
       <h3>Signers (${r.signers.length})</h3>${signers}
       ${pending?`<h3>Signature positions</h3><p class="muted">Choose the PDF, signer and page; enter percentages measured from the PDF page's top-left. Download each PDF to verify its page layout before saving. Every signer needs at least one box.</p>
@@ -133,7 +141,7 @@ export function createNativeSigning({update,getCompanies}) {
 
   function editSignerField(s,n){return `<div class="zs-signer-input zs-edit-signer" data-signer-id="${e(s.id||'')}"><b>${n}.</b><label>Full name<input name="zs-edit-name" maxlength="180" required value="${e(s.name||'')}"></label><label>Email<input type="email" name="zs-edit-email" required value="${e(s.email||'')}"></label><div class="zs-edit-signer-actions">${b('↑ Up','edit-up')}${b('↓ Down','edit-down')}${b('Remove','remove-edit-signer')}</div></div>`;}
   function renumberEditedSigners(){[...document.querySelectorAll('#zs-edit-signers .zs-edit-signer')].forEach((row,i)=>row.querySelector('b').textContent=`${i+1}.`);}
-  async function list(){requests=(await api('/requests')).requests||[];view='list';detail=null;update();}
+  async function list(){approvedSenders=(await api('/requests/senders')).senders||[];requests=(await api('/requests')).requests||[];view='list';detail=null;update();}
   async function open(rid){const oldId=detail?.id;detail=await api('/requests/'+encodeURIComponent(rid));if(oldId!==detail.id)preview.reset();view='detail';placementRows=(detail.placements||[]).map(x=>({...x,x:+(100*x.x).toFixed(1),y:+(100*x.y).toFixed(1),width:+(100*x.width).toFixed(1),height:+(100*x.height).toFixed(1)}));update();}
   function captureRows(){
     const rows=[...document.querySelectorAll('.zs-placement-row')];
@@ -309,7 +317,7 @@ export function createNativeSigning({update,getCompanies}) {
       }));
       const data=new FormData(form);
       const payload={expectedUpdatedAt:detail.updatedAt||detail.createdAt,
-        company:data.get('company'),subject:data.get('subject'),note:data.get('note'),signers};
+        company:data.get('company'),subject:data.get('subject'),note:data.get('note'),senderId:data.get('senderId'),signers};
       if(data.get('days'))payload.days=Number(data.get('days'));
       work(async()=>{
         const result=await api(`/requests/${draftId}`,{method:'PATCH',json:payload});
@@ -322,7 +330,7 @@ export function createNativeSigning({update,getCompanies}) {
     if(form.id==='zs-create-form'){
       const data=new FormData(form),names=data.getAll('zs-name'),emails=data.getAll('zs-email');
       const signers=names.map((name,i)=>({name:String(name).trim(),email:String(emails[i]||'').trim()}));
-      work(async()=>{const created=await api('/requests',{method:'POST',json:{company:data.get('company'),subject:data.get('subject'),days:Number(data.get('days')||14),note:data.get('note'),signers}});await open(created.id);feedback('Draft request created. Upload documents and assign signature boxes before activating.');});return true;
+      work(async()=>{const created=await api('/requests',{method:'POST',json:{company:data.get('company'),subject:data.get('subject'),days:Number(data.get('days')||14),note:data.get('note'),senderId:data.get('senderId'),signers}});await open(created.id);feedback('Draft request created. Upload documents and assign signature boxes before activating.');});return true;
     }
     return false;
   }
@@ -334,7 +342,7 @@ export function createNativeSigning({update,getCompanies}) {
   }
   return {mount:()=>{if(view==='detail'&&detail?.status==='draft')preview.mount(document.getElementById('zs-pdf-preview'));},
     input:target=>{if(target?.closest?.('.zs-placement-row'))preview.drawBoxes(document.getElementById('zs-pdf-preview'));return false;},
-    render:()=>`<div class="integration-heading"><div><p class="eyebrow">DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Administrator login and signing requests directly inside ZHENLI DMS</p></div><span class="zs-version">Native Signing V1.8 Preview · Edit, Revoke & Reset</span></div>
+    render:()=>`<div class="integration-heading"><div><p class="eyebrow">DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Administrator login and signing requests directly inside ZHENLI DMS</p></div><span class="zs-version">Native Signing V1.9 Preview · Sender Selection</span></div>
     ${message?`<div class="zs-message ${error?'zs-error':''}" role="status">${e(message)}</div>`:''}
     ${busy?'<div class="zs-message">Connecting to the private signing service…</div>':''}${main()}`,
     onClick,submit,changed};
