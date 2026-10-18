@@ -33,3 +33,6 @@
 .msic-links{font-size:12px;line-height:1.6}
 .msic-links a{color:#176c85;text-decoration:underline;text-underline-offset:2px}
 .msic-selector .button{align-self:flex-start;white-space:normal;text-align:left}
+
+/* Use the Android Storage Access Framework, never a blob download link in WebView. */
+#download-link[hidden]{display:none!important}
