@@ -7,7 +7,7 @@ Standalone local-only bilingual Annual Return **particulars review** PDF generat
 1. Open **https://zenithloh1016.github.io/zhenli-unified-dms/annual-return/** or install the separate **ZHENLI Annual Return** APK from the GitHub Action artifact.
 2. Enter company details or **Import .gs / JSON**. The import parser recognises `const AR_SINGLE_COMPANY = {...};` and optional `const AR_SIGNATURE_DIRECTOR = {...};`; it never executes Apps Script code.
 3. Review the bilingual particulars section by section. Blank source values remain blank in the editor and appear as *NOT PROVIDED / 未提供资料* in the PDF. Use Add field or Add section where necessary.
-4. Enter the **one director** who will confirm the particulars; leave the date blank until signature. There is no director's resolution or members' resolution component.
+4. Enter the **one director** who will confirm the particulars (name, NRIC/passport, capacity). No signing date or separate signing acknowledgement is requested. There is no director's resolution or members' resolution component.
 5. Click **Generate PDF**. Web browsers download the file and reveal a retryable direct download link; Android uses the native Share chooser to save to Files or Drive.
 6. Export the source JSON if you need to edit it later. By design no client data is automatically stored on GitHub, Google Drive, Supabase, EdgeOne or in a server database.
 
@@ -38,6 +38,14 @@ Sources in private ChatGPT Library:
 - `/Annual Return Scripts (Sdn Bhd Companies)/AURUMROCK_LABORATORY_SDN_BHD_Annual_Return_2027.gs` (latest structured example)
 
 Company-specific scripts are **not bundled**, to prevent exposing private information on public GitHub Pages. Import them locally when required.
+
+## V1.5 DMS integration (18 October 2026)
+
+- The **Tax Identification Number (TIN)** row and **entire Company Review and Verification Notes** section are removed from the blank Annual Return review template and from older imported `.gs`/JSON drafts. This does not change original Google Apps Script files or any database records.
+- The **Director Confirmation** form retains name, NRIC/passport and director capacity. The separate signing acknowledgement text and signing-date fields were removed from the editor, JSON export and generated PDF; a director signature line remains in the PDF.
+- **Inside ZHENLI DMS:** sign in, choose the new **Annual Return** tab, and use the embedded generator. It works from the same bundled page files on the published DMS website and in the main DMS Android APK. It also continues as a standalone website / standalone Annual Return APK.
+- **Data privacy:** No real company data is bundled; the iframe is same-origin and operates with local file input. Neither the DMS nor the Annual Return site auto-saves review drafts to Supabase. Export JSON before switching tabs, refreshing the DMS or signing out, and upload the finished PDF to the intended company folder under Documents yourself.
+- **Build reproducibly:** `npm run build:integrated` in the DMS repository root builds the main DMS, generates the official MSIC catalogue and Annual Return V1.5 site, then bundles the latter under `dist/annual-return/`. `npm run android:sync` also synchronizes these assets into the main Android project. Both are performed in GitHub Actions.
 
 ## V1.4 clean fields and SSM MSIC 2008 (18 October 2026)
 
