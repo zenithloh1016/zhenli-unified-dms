@@ -283,7 +283,7 @@ function sendAnnualReturnCompanyList(){
  const companies=state.companies.slice(0,5000).map(c=>({
   id:String(c.id),name:String(c.name||''),registrationNo:String(c.registration_no||'')
  }));
- frame.contentWindow?.postMessage({type:'ZHENLI_DMS_AR_COMPANY_LIST',companies},window.location.origin);
+ frame.contentWindow?.postMessage({type:'ZHENLI_DMS_AR_COMPANY_LIST',companies,userId:String(state.user.id)},window.location.origin);
 }
 function sendAnnualReturnCompany(){
  const frame=ROOT.querySelector('#zh-annual-return-frame');
@@ -295,11 +295,11 @@ function sendAnnualReturnCompany(){
 }
 function renderAnnualReturn(){
  return '<section class="annual-return-module" aria-label="Annual Return PDF generator">'+
- '<div class="integration-heading"><div><p class="eyebrow">STATUTORY PARTICULARS REVIEW · V1.7</p>'+
+ '<div class="integration-heading"><div><p class="eyebrow">STATUTORY PARTICULARS REVIEW · V1.8</p>'+
  '<h1>Annual Return PDF Generator</h1>'+
  '<p class="muted">Choose a company from the <b>complete Documents company dropdown</b> under Company Details. The registration number fills automatically. Members can be Individual or Body Corporate, and every section supports adding custom fields.</p></div></div>'+
- '<div class="integration-info">There is no separate company search above the form. The DMS shares company names and registration numbers from your signed-in Documents list only with the embedded form. Other Annual Return particulars are entered and verified manually. Export your editable JSON before leaving; drafts are not saved automatically.</div>'+
- '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.7" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share"></iframe></div>'+
+ '<div class="integration-info">Select a company below and fill out its particulars. Unfinished Annual Returns are saved automatically on this device, separated by your DMS account and company. Choose Resume Draft to reopen earlier work. Drafts are not cloud-synchronised or shared between devices.</div>'+
+ '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.8" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share"></iframe></div>'+
  '</section>';
 }
 function renderTasks(){
@@ -488,7 +488,7 @@ ROOT.addEventListener('click', event=>{
   if(state.busy) return;
   if(a.startsWith('tab-')){
     const nextTab=a.slice(4);
-    if(state.tab==='annual-return'&&nextTab!=='annual-return'&&!confirm('Save any unfinished Annual Return by exporting editable JSON before leaving this page. Continue?'))return;
+    // The embedded Annual Return persists unfinished drafts locally as values change; never request a JSON export.
     state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;render();return;
   }
   if(a==='prepare-annual-return'||a==='select-ar-company'){
