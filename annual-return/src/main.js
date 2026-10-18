@@ -2,7 +2,7 @@ import './style.css';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField} from './core.js';
+import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField} from './core.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
 const $=id=>document.getElementById(id);
@@ -137,6 +137,7 @@ function changeMSIC(index,code,remove=false,manualDesc=''){
 }
 
 const OPTIONS=[
+ {test:/^Member Type$/i,values:['Individual','Body Corporate']},
  {test:/^(?:Classes of Shares Issued|Class of Shares)$/i,values:['Ordinary','Preference','Ordinary & Preference']},
  {test:/^(?:Type of Shares(?: Issued)?|Consideration for Shares|Shares Issued for Cash or Otherwise)$/i,values:['Cash','Otherwise than cash','Cash & Otherwise than cash']},
  {test:/^Type of Beneficial Ownership$/i,values:['Direct','Indirect','Direct & Indirect']}
@@ -192,18 +193,27 @@ function addRecord(kind){
 
 function companyOptions(search){
  const q=String(search||'').trim().toLowerCase();
- const rows=(q?dmsCompanies.filter(c=>(c.name+' '+c.registrationNo).toLowerCase().includes(q)):dmsCompanies).slice(0,15);
+ const rows=(q?dmsCompanies.filter(c=>(c.name+' '+c.registrationNo).toLowerCase().includes(q)):dmsCompanies);
  return rows.length?rows.map(c=>'<button type="button" class="ar-name-option" data-dms-company-id="'+esc(c.id)+'">'+
   '<strong>'+esc(c.name)+'</strong><small>'+esc(c.registrationNo||'Registration number not recorded')+'</small></button>').join(''):
   '<span class="msic-help">No matching Documents company. Adjust your search or type the company name manually.</span>';
 }
 function companyNameControl(item,index){
  const value=String(item.value||'');
- if(!dmsCompanies.length||window.parent===window)return '<textarea data-item="'+index+'" rows="2" spellcheck="false" placeholder="Enter company name…">'+esc(value)+'</textarea>';
- return '<div class="ar-name-selector"><label class="field-label">Search existing DMS Documents companies'+
+ if(!dmsCompanies.length||window.parent===window)
+  return '<textarea data-item="'+index+'" rows="2" spellcheck="false" placeholder="Enter company name…">'+esc(value)+'</textarea>';
+ // The native select contains the COMPLETE DMS company list, not only the 15 search suggestions.
+ // This is populated only from private data sent by the authenticated DMS parent.
+ const options=dmsCompanies.map(c=>'<option value="'+esc(c.id)+'" '+(selectedDmsCompanyId===c.id?'selected':'')+'>'+
+  esc(c.name)+(c.registrationNo?' · '+esc(c.registrationNo):'')+'</option>').join('');
+ return '<div class="ar-name-selector">'+
+  '<label class="field-label">All Documents companies ('+dmsCompanies.length+')'+
+  '<select class="choice-select ar-company-full-list" data-company-select="'+index+'">'+
+  '<option value="">— Select a company from the complete list —</option>'+options+'</select></label>'+
+  '<label class="field-label">Or search by company name / registration number'+
   '<input type="search" data-item="'+index+'" data-company-lookup="'+index+'" value="'+esc(value)+'" autocomplete="off" placeholder="Search company name or registration number"></label>'+
   '<div class="ar-name-options" data-company-results="'+index+'">'+companyOptions(value)+'</div>'+
-  '<p class="msic-help">Choose an existing company to fill its registered name and number. Switching companies starts a fresh review, so export JSON first.</p></div>';
+  '<p class="msic-help">All '+dmsCompanies.length+' DMS companies are available in the dropdown. Selecting a new company fills its registration number and starts a blank review for that company; export unfinished JSON first.</p></div>';
 }
 function removeReviewField(index){
  const item=doc.particulars[index];if(!item||item.type!=='field')return;
@@ -243,7 +253,8 @@ function groups(){
 function renderSections(){
  const q=$('search').value.trim().toLowerCase(),onlyBlank=$('incomplete').checked;
  $('particulars').innerHTML=groups().map((group,i)=>{
-  const rows=group.items.filter(({item})=>{
+  const rows=group.items.filter(({item,index})=>{
+   if(!showMemberField(doc.particulars,index))return false;
    const matches=!q||[item.en,item.cn,item.value,group.title].some(x=>String(x||'').toLowerCase().includes(q));
    return matches&&(!onlyBlank||item.type==='field'&&!String(item.value||'').trim());
   });
@@ -336,6 +347,14 @@ $('particulars').addEventListener('input',e=>{
 });
 $('particulars').addEventListener('change',e=>{
  const el=e.target;
+ if(el.dataset.companySelect!==undefined){
+  const id=el.value;
+  if(id&&window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_SELECT_COMPANY_REQUEST',id},window.location.origin);
+  return;
+ }
+ if(el.dataset.item!==undefined&&doc.particulars[Number(el.dataset.item)]?.en==='Member Type'){
+  renderSections();return;
+ }
  if(el.dataset.criteria!==undefined){
   const i=Number(el.dataset.criteria);
   const values=[...$('particulars').querySelectorAll('input[data-criteria="'+i+'"]:checked')].map(x=>x.value);
