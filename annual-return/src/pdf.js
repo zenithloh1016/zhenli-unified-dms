@@ -18,7 +18,10 @@ export function exposeDownload(blob,name){
   const link=document.getElementById('download-link');
   const box=document.getElementById('download-box');
   document.getElementById('download-name').textContent=name;
-  link.href=currentLink;link.download=name;box.hidden=false;
+  link.href=currentLink;link.download=name;
+  // Native Android WebViews cannot reliably download blob: links.
+  link.hidden=Capacitor.isNativePlatform()||window.parent!==window;
+  box.hidden=false;
   return currentLink;
 }
 async function b64(blob){
