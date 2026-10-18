@@ -8,3 +8,26 @@
   .pdf-sheet{width:210mm!important;height:297mm!important;min-height:297mm!important;page-break-after:always;break-after:page;margin:0!important;box-shadow:none!important}
   .pdf-sheet:last-child{page-break-after:auto;break-after:auto}
 }
+
+/* Annual Return selectors, BO multi-criteria and repeatable particulars (2026-10-18) */
+.field-entry select{width:100%;min-height:46px;border:1px solid #c9dce7;border-radius:8px;background:#fff;padding:9px 12px;color:#29495f;font-size:13px}
+.criteria-picker{border:1px solid #c9dce7;background:#fff;border-radius:8px;padding:0;max-width:100%;overflow:hidden}
+.criteria-picker summary{padding:12px;cursor:pointer;color:#204963;font-size:12px;font-weight:700;list-style-position:inside}
+.criteria-picker[open] summary{border-bottom:1px solid #e0eaf1}
+.criteria-selected{display:block;color:#2e8593;font-weight:700;margin:3px 0 0 18px}
+.criteria-option{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;font-size:12px;line-height:1.5;border-bottom:1px solid #eef3f7;color:#2b485d;cursor:pointer}
+.criteria-option input{width:19px;height:19px;flex:none;margin:1px 0 0;accent-color:#116e82}
+.criteria-option b{font-weight:800;color:#184c69}
+.criteria-legacy{display:block;padding:12px;font-size:12px}.criteria-legacy textarea{display:block;width:100%;margin-top:6px}
+.muted-criteria{padding:0 12px 10px;margin:8px 0;font-size:11px;line-height:1.5;color:#7d5b39}
+.repeater-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border:1px dashed #bfd5e2;border-radius:12px;padding:12px;margin:0 0 12px;background:#f5fafb}
+.repeater-title{font-size:12px;font-weight:800;color:#27647b;width:100%}
+.repeater-tools button{white-space:normal!important}
+.heading-entry{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.heading-entry small{margin-right:auto}
+.remove-entry{background:#fff3f1;border:1px solid #e6c6bc;border-radius:6px;font-size:11px;color:#943b35;padding:6px 10px;cursor:pointer}
+.signing-ack{display:flex;gap:9px;align-items:flex-start;padding:13px;border:1px solid #c3dbe3;border-radius:9px;background:#f3f9fb;color:#22485b;font-size:12px;line-height:1.5}
+.signing-ack input{margin-top:2px;width:18px;height:18px;accent-color:#137c89}
+.signing-ack small{display:block;margin-top:5px;font-size:11px;color:#6e8796}
+.pdf-sheet .pdf-acknowledgement{margin-top:12px;border:1px solid #c1d4de;padding:15px}
+.pdf-sheet .pdf-acknowledgement .pdf-signature{margin-top:36px}
