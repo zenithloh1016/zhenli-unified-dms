@@ -58,7 +58,7 @@ test('device draft save and resume is segregated by DMS account and company',()=
  assert.equal(readAnnualReturnDraft(storage,'dms:user-A','company-A').data.company.name,'DEMO ONE SDN. BHD.');
  assert.equal(readAnnualReturnDraft(storage,'dms:user-A','company-B'),null);
  assert.equal(draftIdOfKey(saved.key,'dms:user-A'),'company-A');
- assert.throws(()=>removeAnnualReturnDraft(storage,saved.key,'dms:user-B'),/different workspace/);
+ assert.throws(()=>removeAnnualReturnDraft(storage,saved.key,'dms:user-B'),/outside this user workspace/);
  removeAnnualReturnDraft(storage,saved.key,'dms:user-A');
  assert.equal(listAnnualReturnDrafts(storage,'dms:user-A').length,0);
 });
@@ -74,7 +74,7 @@ test('saved draft preserves reduced company records without TIN, review notes or
  assert.equal(headers(recovered,/^DIRECTOR \d+$/).length,3);
  assert.equal(headers(recovered,/^MEMBER \d+$/).length,1);
  assert.equal(headers(recovered,/^BENEFICIAL OWNER \d+$/).length,0);
- assert.equal(recovered.particulars.some(x=>/TIN|COMPANY REVIEW AND VERIFICATION/i.test(x.en||'')),false);
+ assert.equal(recovered.particulars.some(x=>/^(?:TIN|Tax Identification Number|COMPANY REVIEW AND VERIFICATION)/i.test(x.en||'')),false);
  assert.equal('date' in recovered.signatureDirector,false);
  assert.equal('acknowledgement' in recovered.signatureDirector,false);
 });
