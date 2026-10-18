@@ -75,7 +75,7 @@ jobs:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
-      - name: Bundle Annual Return V1.5 into the DMS Android app
+      - name: Bundle Annual Return V1.8 into the DMS Android app
         run: |
           cd annual-return
           npm install --no-audit --no-fund
