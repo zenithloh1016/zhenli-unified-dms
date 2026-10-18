@@ -71,13 +71,21 @@ function addRecord(kind){
  const nextNumber=headings.reduce((n,i)=>Math.max(n,Number((doc.particulars[i].en||'').match(/\d+$/)?.[0]||0)),0)+1;
  next[0].en=rule.label.toUpperCase()+' '+nextNumber;
  next[0].cn=(next[0].cn||'').replace(/\d+$/,String(nextNumber));
- doc.particulars.splice(until,0,...next);
+ // Insert directly after the last entry in its own list, before charge totals
+ // or secretary/auditor particulars. Do not displace unrelated records.
+ let insertAt=end;
+ if(kind==='charge'){
+  const totalIndex=doc.particulars.findIndex((x,i)=>i>last&&i<until&&x.type==='field'&&x.en==='Number of Registered Charges');
+  if(totalIndex>=0)insertAt=totalIndex;
+ }
+ if(doc.particulars.length+next.length>1200)return status('Too many review items; remove unnecessary entries first.',true);
+ doc.particulars.splice(insertAt,0,...next);
  renderSections();status('Added '+rule.label+' '+nextNumber+'. All its fields are blank.');
 }
 function controlsFor(item,index){
  const value=String(item.value||''),common=' data-item="'+index+'"';
  if(/^Criteria of Beneficial Ownership$/i.test(item.en)){
-  const selected=value.split(/[,;|]/).map(v=>v.trim().toUpperCase().replace(/^CRITERIA\s*/,'')); 
+  const selected=[...value.matchAll(/(?:criteria\s*)?([ABCD])(?=\b|[,;/\s])/gi)].map(m=>m[1].toUpperCase()); 
   return '<div class="criteria-options">'+Object.entries(CRITERIA).map(([key,desc])=>'<label class="criteria-option"><input type="checkbox" data-criteria="'+index+'" value="'+key+'" '+(selected.includes(key)?'checked':'')+'><span><b>Criteria '+key+'</b> — '+esc(desc)+'</span></label>').join('')+'</div>';
  }
  const option=OPTIONS.find(o=>o.test.test(item.en));
