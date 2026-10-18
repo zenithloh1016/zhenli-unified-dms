@@ -15,8 +15,13 @@ jobs:
       - name: Test Master Listing Excel parser
         run: npm run test:import
       - run: npm run build
-      - name: Validate Annual Return PDF app
+      - name: Validate integrated Annual Return V1.5 and DMS bundled assets
         run: |
-          cd annual-return-app
+          cd annual-return
           npm install --no-audit --no-fund
+          npm run test
           npm run build
+          cd ..
+          node scripts/bundle-annual-return.mjs
+          test -f dist/annual-return/index.html
+          test -f dist/annual-return/msic-2008.json
