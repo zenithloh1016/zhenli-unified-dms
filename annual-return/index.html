@@ -3,12 +3,17 @@
 <meta name="theme-color" content="#123b5f"/><title>ZHENLI Annual Return PDF</title>
 <meta name="description" content="Private bilingual Malaysian Annual Return particulars review PDF generator"/>
 </head><body><div id="app">
-<header class="top"><div class="logo">Z</div><div class="wordmark"><strong>ZHENLI</strong><small>ANNUAL RETURN PDF STUDIO</small></div><span class="version">V1.7 · MEMBER TYPES + FULL COMPANY LIST</span></header>
+<header class="top"><div class="logo">Z</div><div class="wordmark"><strong>ZHENLI</strong><small>ANNUAL RETURN PDF STUDIO</small></div><span class="version">V1.8 · SAVE & RESUME DRAFTS</span></header>
 <main class="shell">
-<section class="hero"><p class="eyebrow">COMPANY SECRETARIAL WORKSPACE</p><h1>Annual Return Review</h1><p>Prepare, review and download bilingual English–Chinese particulars PDFs, based on your revised Annual Return Google Apps Script. Start with Company Details below; the old Company Profile panel has been removed. This app does not submit to SSM.</p>
-<div class="actions"><label class="button primary file-button">Import Apps Script / JSON<input id="import-file" type="file" accept=".gs,.json,application/json,text/plain" hidden/></label><button id="blank" class="button outline">Start new blank form</button><button id="export-json" class="button outline">Export editable JSON</button></div></section>
+<section class="hero"><p class="eyebrow">COMPANY SECRETARIAL WORKSPACE</p><h1>Annual Return Review</h1><p>Prepare, review and download bilingual English–Chinese particulars PDFs, using your bilingual Annual Return review fields. Start with Company Details below; the old Company Profile panel has been removed. This app does not submit to SSM.</p>
+<div class="actions"><button id="blank" class="button outline" type="button">Start New Annual Return</button><button id="save-draft" class="button primary" type="button">Save Draft</button></div>
+<div class="ar-draft-actions"><label class="field-label" for="draft-picker">Saved drafts on this device
+<select id="draft-picker" class="choice-select"><option value="">No drafts yet</option></select></label>
+<button id="resume-draft" class="button outline" type="button">Resume Draft</button>
+<button id="delete-draft" class="button quiet" type="button">Delete Selected Draft</button></div>
+<p class="ar-draft-status" id="draft-status" role="status">Changes are automatically saved on this device. Drafts are not synced across phones or browsers.</p></section>
 <section class="workspace">
-<div class="panel review-panel" id="company-details"><div class="panel-header"><div><p class="eyebrow">01 / COMPANY DETAILS · V1.7</p><h2>Company Details / 公司资料</h2></div><span id="count" class="pill">0 fields</span></div>
+<div class="panel review-panel" id="company-details"><div class="panel-header"><div><p class="eyebrow">01 / COMPANY DETAILS · V1.8</p><h2>Company Details / 公司资料</h2></div><span id="count" class="pill">0 fields</span></div>
 <p class="status">Begin with Company Details below. Enter the company name, registration number, Annual Return year and anniversary date here. The old Company Profile, TIN, review notes, recorded indebtedness amount, charge discharge date and internal due dates are removed. Select a company directly from the Company Name dropdown when opened inside DMS.</p>
 <div class="actions compact"><button id="add-section" class="button mini" type="button">+ Section</button></div>
 <div class="section-tools"><input id="search" type="search" placeholder="Search fields or sections..." aria-label="Search fields"/><label class="toggle"><input id="incomplete" type="checkbox"/> Blank fields only</label></div>
@@ -17,11 +22,11 @@
 <div class="panel confirmation-panel"><div class="panel-header"><div><p class="eyebrow">02 / DIRECTOR SIGNING</p><h2>Director Confirmation / 董事确认</h2></div></div>
 <p class="status">Enter the confirming director's name, NRIC / passport number and capacity. A signature box is included in the PDF.</p>
 <div class="field-grid" id="signature-fields"></div></div>
-<div class="panel export-panel"><p class="eyebrow">03 / PDF OUTPUT · V1.7</p><h2>Generate client review PDF</h2><p>The PDF includes up to three MSIC codes, individual or corporate member particulars, and Director Confirmation. Select Company Name from the full private DMS company list, and use + Add field inside each section or member record. Use Delete field to remove other unnecessary particulars. TIN, Company Review and Verification, directors’ appointment dates, members’ entry dates, BO status/notice dates, and signing date/acknowledgement have been removed. Empty details are shown as <strong>NOT PROVIDED / 未提供资料</strong>.</p>
+<div class="panel export-panel"><p class="eyebrow">03 / PDF OUTPUT · V1.8</p><h2>Generate client review PDF</h2><p>The PDF includes up to three MSIC codes, individual or corporate member particulars, and Director Confirmation. Select Company Name from the full private DMS company list, and use + Add field inside each section or member record. Use Delete field to remove other unnecessary particulars. TIN, Company Review and Verification, directors’ appointment dates, members’ entry dates, BO status/notice dates, and signing date/acknowledgement have been removed. Empty details are shown as <strong>NOT PROVIDED / 未提供资料</strong>.</p>
 <div class="actions"><button id="generate-pdf" class="button primary wide">Generate &amp; Save PDF to Files</button><button id="print" class="button outline">Print review</button></div>
 <div id="download-box" class="download-box" hidden><strong id="download-name"></strong><a id="download-link" class="button outline" download>Direct PDF download (browser)</a><button id="share-pdf" class="button outline">Save PDF to Files</button></div>
 <p class="status" role="status" id="message"></p><p class="status">Android APK: after generating, choose <b>Downloads</b> or <b>Documents</b> in the Save As picker and confirm Save. If cancelled, tap <b>Save PDF to Files</b> to try again. The PDF remains available until you generate another document or close the app.</p>
-<p class="legal">For client review and confirmation only. Not an SSM statutory filing, an MBRS document or a substitute for verifying registers, eBOS, dates and supporting particulars. All imported information stays on this device unless you explicitly save/share a file. No cloud autosave.</p>
+<p class="legal">For client review and confirmation only. Not an SSM statutory filing, an MBRS document or a substitute for verifying registers, eBOS, dates and supporting particulars. Unfinished reviews are automatically saved locally in this browser or Android app (including identification details). Drafts are not cloud backups and do not transfer between devices. Use a private, secured device.</p>
 </div></section></main><footer class="footer">ZHENLI · Private on-device preparation · <span id="footer-year"></span></footer>
 </div><div id="pdf-stage" aria-hidden="true"></div>
 <script type="module" src="/src/main.js"></script></body></html>
