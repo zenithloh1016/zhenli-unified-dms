@@ -83,8 +83,56 @@
     const match=/^[A-Z]+/i.exec(String(ref||''));if(!match)return -1;
     return match[0].toUpperCase().split('').reduce((sum,letter)=>sum*26+letter.charCodeAt(0)-64,0)-1;
   };
+
+  // In embedded DMS, let the already-bundled read-excel-file library parse XLSX.
+  // This works in Android WebViews lacking DecompressionStream('deflate-raw').
+  function readViaDms(file){
+    if(window.parent===window)return Promise.resolve(null);
+    return new Promise((resolve,reject)=>{
+      const id='xlsx_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+      const timer=setTimeout(()=>{window.removeEventListener('message',handle);reject(Error('DMS Excel reader timed out. Try the JSON import.'));},30000);
+      function handle(e){
+        if(e.origin!==window.location.origin||e.source!==window.parent
+          ||e.data?.type!=='ZHENLI_HUB_XLSX_RESULT'||e.data.requestId!==id)return;
+        clearTimeout(timer);window.removeEventListener('message',handle);
+        if(!e.data.ok)reject(Error(e.data.error||'Excel reader failed.'));
+        else resolve(e.data.rows);
+      }
+      window.addEventListener('message',handle);
+      window.parent.postMessage({type:'ZHENLI_HUB_PARSE_XLSX',requestId:id,file},window.location.origin);
+    });
+  }
+  function fromRows(rows,date1904=false){
+    const headerRow=rows.findIndex(row=>{
+      const headers=row.map(cleanHeader);
+      return headers.includes('companyname')&&headers.includes('registrationno')&&headers.includes('annualreturnlodgementduedate');
+    });
+    if(headerRow<0)throw new Error('Missing Master Listing columns: Company Name, Registration No., AR lodgement due date.');
+    const header=rows[headerRow].map(cleanHeader);
+    const at=key=>header.indexOf(cleanHeader(key));
+    const cell=(row,key)=>{const n=at(key);return n<0?'':String(row[n]??'').trim();};
+    const companyList=[];
+    for(const row of rows.slice(headerRow+1)){
+      const full=cell(row,'Company Name');
+      const name=full.split(/\r?\n/)[0].replace(/\s+/g,' ').trim().toUpperCase().slice(0,160);
+      if(!name)continue;
+      const reg=cell(row,'Registration No.').slice(0,80);
+      const date=key=>dateFromExcel(cell(row,key),date1904);
+      const record={name,reg,arDate:date('Next Annual Return Date'),arDueDate:date('Annual Return Lodgement Due Date'),
+        afsDueDate:date('Audited Financial Statement Lodgement Due Date'),financialYearEnded:date('Financial Year Ended'),fye:date('Subsequent FYE')};
+      record.afsDueStatus=record.afsDueDate?'dated':'TBC';
+      companyList.push(record);
+      if(companyList.length>2000)throw new Error('Excel company list exceeds 2000 entries.');
+    }
+    if(!companyList.length)throw new Error('Master Listing contained no company records.');
+    return {format:'ZHENLI_TASKHUB_COMPANY_IMPORT',companies:companyList};
+  }
   async function parse(file){
     if(!file||!file.name.toLowerCase().endsWith('.xlsx'))throw new Error('Select an Excel .xlsx file.');
+    if(window.parent!==window){
+      const rows=await readViaDms(file);
+      return fromRows(rows);
+    }
     const archive=await readArchive(file);
     const workbook=xml(await archive.get('xl/workbook.xml'));
     const rels=xml(await archive.get('xl/_rels/workbook.xml.rels'));
@@ -114,29 +162,7 @@
       });
       return output;
     });
-    const headerRow=rows.findIndex(row=>{
-      const headers=row.map(cleanHeader);
-      return headers.includes('companyname')&&headers.includes('registrationno')&&headers.includes('annualreturnlodgementduedate');
-    });
-    if(headerRow<0)throw new Error('Missing expected Master Listing columns: Company Name, Registration No., AR lodgement due date.');
-    const header=rows[headerRow].map(cleanHeader);
-    const at=key=>header.indexOf(cleanHeader(key));
-    const cell=(row,key)=>{const n=at(key);return n<0?'':String(row[n]||'').trim();};
-    const companyList=[];
-    for(const row of rows.slice(headerRow+1)){
-      const full=cell(row,'Company Name');
-      const name=full.split(/\r?\n/)[0].replace(/\s+/g,' ').trim().toUpperCase().slice(0,160);
-      if(!name)continue;
-      const reg=cell(row,'Registration No.').slice(0,80);
-      const date=key=>dateFromExcel(cell(row,key),date1904);
-      const record={name,reg,arDate:date('Next Annual Return Date'),arDueDate:date('Annual Return Lodgement Due Date'),
-        afsDueDate:date('Audited Financial Statement Lodgement Due Date'),financialYearEnded:date('Financial Year Ended'),fye:date('Subsequent FYE')};
-      record.afsDueStatus=record.afsDueDate?'dated':'TBC';
-      companyList.push(record);
-      if(companyList.length>2000)throw new Error('Excel company list exceeds 2000 entries.');
-    }
-    if(!companyList.length)throw new Error('Master Listing contained no company records.');
-    return {format:'ZHENLI_TASKHUB_COMPANY_IMPORT',companies:companyList};
+    return fromRows(rows,date1904);
   }
   window.ZHENLI_XLSX={parse};
 })();
