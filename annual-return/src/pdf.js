@@ -4,7 +4,7 @@ import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
 import {outputFilename} from './core.js';
-import {savePdfToAndroidFiles} from '../../src/native-pdf-save.js';
+import {savePdfToAndroidFiles} from './native-pdf-save.js';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
 const blank=value=>String(value??'').trim()||'NOT PROVIDED / 未提供资料';
