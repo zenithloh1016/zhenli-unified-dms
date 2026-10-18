@@ -35,7 +35,7 @@ const db = URL && KEY ? createClient(URL, KEY, {
 const state = {
   user: null, companies: [], folders: [], documents: [],
   companyId: null, folderId: null, search: '', busy: false, notice: '',
-  tab: 'documents', totalDocs: 0, taskFullscreen: false,
+  tab: 'documents', totalDocs: 0, taskFullscreen: false, signingFullscreen: false,
   modal: null, authMode: 'login', importData: null,
   importSheet: 0, importNameCol: 0, importRegCol: -1, importStartRow: 2,
   importProgress: null, importFileName: '', importError: ''
@@ -241,7 +241,28 @@ function renderTasks(){
 // ZHENLI_SIGNING_DIRECT_LAUNCH_V1_3
 // ZHENLI_DMS_NATIVE_SIGNING_V1_5
 const signingUI=createNativeSigning({update:()=>render(),getCompanies:()=>state.companies});
-function renderSigning(){return signingUI.render();}
+// Same contained full-screen layout as Task Hub. Preserve the native signing DOM
+// on toggle so unsaved PDF placements and request fields are never discarded.
+function renderSigning(){
+  return `<section id="zh-signing-shell" class="signing-frame-shell ${state.signingFullscreen?'signing-expanded':''}" aria-label="ZHENLI Sequential Signing workspace">
+    <div class="signing-fullscreen-toolbar">
+      <strong>✍️ Sequential Signing</strong>
+      ${action('Exit full screen ✕','exit-signing-fullscreen','','secondary')}
+    </div>
+    <div class="signing-workspace">
+      <div class="signing-fullscreen-launch">${action('Full-screen view','open-signing-fullscreen','','secondary')}</div>
+      ${signingUI.render()}
+    </div>
+  </section>`;
+}
+function setSigningFullscreen(open){
+  state.signingFullscreen=Boolean(open);
+  const shell=ROOT.querySelector('#zh-signing-shell');
+  shell?.classList.toggle('signing-expanded',state.signingFullscreen);
+  document.body.classList.toggle('zh-signing-fullscreen-open',state.signingFullscreen);
+  const actionName=state.signingFullscreen?'exit-signing-fullscreen':'open-signing-fullscreen';
+  shell?.querySelector('[data-action="'+actionName+'"]')?.focus({preventScroll:true});
+}
 
 function renderLinkModal() {
   return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="Task Hub connection settings"><div class="modal-heading"><h3>Task Hub connection</h3>${action('✕','close-modal')}</div>
@@ -250,6 +271,7 @@ function renderLinkModal() {
     <p class="fineprint">Existing tasks from a different EdgeOne origin do not automatically transfer. Use the Task Hub Export/Import function before switching.</p></section></div>`;
 }
 function render() {
+  document.body.classList.toggle('zh-signing-fullscreen-open',!!(state.user && state.tab==='signing' && state.signingFullscreen));
   if (!db) { ROOT.innerHTML=`<div class="auth-page"><div class="auth-card"><div class="auth-logo">Z</div><h1>Set up private workspace</h1><p>Connect a Supabase project to enable authenticated documents and synced company folders.</p><p class="muted">Follow START_HERE.md in the downloadable source package. The Task Hub and Signing code is already bundled.</p></div></div>`;return; }
   if (!state.user) {ROOT.innerHTML=renderAuth();return;}
   const tabs = ['overview','documents','tasks','signing'];
@@ -368,7 +390,11 @@ ROOT.addEventListener('click', event=>{
   if(a==='dismiss'){state.notice='';render();return;}
   if(a==='close-modal' && !state.busy){state.modal=null;state.importData=null;render();return;}
   if(state.busy) return;
-  if(a.startsWith('tab-')){state.tab=a.slice(4);render();return;}
+  if(a.startsWith('tab-')){state.tab=a.slice(4);if(state.tab!=='signing')state.signingFullscreen=false;render();return;}
+  if(a==='open-signing-fullscreen'||a==='exit-signing-fullscreen'){
+    if(state.tab==='signing')setSigningFullscreen(a==='open-signing-fullscreen');
+    return;
+  }
   if(a==='task-settings'){state.modal={kind:'taskLink'};render();return;}
   if(a==='reset-task-link'){localStorage.removeItem('zhenli:taskhub:external');state.modal=null;render();return;}
   if(a==='clear-signing'){sessionStorage.removeItem('zhenli:signing:session');render();return;}
@@ -389,7 +415,7 @@ ROOT.addEventListener('click', event=>{
     return;
   }
   if(a==='auth-login'||a==='auth-signup'){state.authMode=a==='auth-login'?'login':'signup';state.notice='';render();return;}
-  if(a==='sign-out'){busyDo(async()=>{check((await db.auth.signOut()).error);state.user=null;state.companies=[];state.companyId=null;state.notice='';});return;}
+  if(a==='sign-out'){busyDo(async()=>{check((await db.auth.signOut()).error);state.user=null;state.companies=[];state.companyId=null;state.notice='';state.signingFullscreen=false;});return;}
   if(a==='home'){state.tab='documents';state.companyId=null;state.folderId=null;state.search='';render();return;}
   if(a==='open-company'){openCompany(id);return;}
   if(a==='open-folder'){openFolder(id);return;}
@@ -467,6 +493,9 @@ ROOT.addEventListener('submit',event=>{
     }
     state.modal=null;await refresh();toast('Saved successfully.');
   });
+});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
 });
 ROOT.addEventListener('input',e=>{signingUI.input(e.target);if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
 ROOT.addEventListener('change',e=>{
