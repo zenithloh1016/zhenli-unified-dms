@@ -37,6 +37,50 @@ export function deleteParticularField(doc,index){
  doc.particulars.splice(index,1);
  return item;
 }
+const REPEATABLE_RECORDS={
+ director:/^DIRECTOR (\d+)$/i,
+ member:/^MEMBER (\d+)$/i,
+ bo:/^BENEFICIAL OWNER (\d+)$/i
+};
+const RECORD_LABELS={director:'Director',member:'Member',bo:'Beneficial Owner'};
+const RECORD_SECTION={
+ director:/^SECTION D - DIRECTORS, COMPANY SECRETARY AND AUDITOR$/i,
+ member:/^SECTION E - PARTICULARS OF MEMBERS$/i,
+ bo:/^PARTICULARS OF CURRENT BENEFICIAL OWNERS$/i
+};
+/** Remove one numbered record and only its own fields, retaining other sections.
+ * A minimum of one editable placeholder remains for each record type.
+ */
+export function removeNumberedRecord(doc,index,kind){
+ if(!doc||!Array.isArray(doc.particulars))throw Error('Annual Return particulars are unavailable.');
+ if(!Object.hasOwn(REPEATABLE_RECORDS,kind))throw Error('Unknown numbered record type.');
+ const items=doc.particulars,head=items[index],match=head?.type==='heading'&&REPEATABLE_RECORDS[kind].exec(head.en||'');
+ if(!match)throw Error('Selected entry is not a '+RECORD_LABELS[kind]+' record.');
+ let section=-1;
+ for(let i=index-1;i>=0;i--)if(items[i].type==='section'){section=i;break;}
+ if(section<0||!RECORD_SECTION[kind].test(items[section].en||''))
+  throw Error('Record is not in the expected statutory section.');
+ let sectionEnd=items.findIndex((x,i)=>i>section&&x.type==='section');
+ if(sectionEnd<0)sectionEnd=items.length;
+ const records=[];
+ for(let i=section+1;i<sectionEnd;i++)if(items[i].type==='heading'&&REPEATABLE_RECORDS[kind].test(items[i].en||''))records.push(i);
+ if(records.length<=1)throw Error('Keep at least one '+RECORD_LABELS[kind]+' record as a placeholder.');
+ let end=index+1;
+ while(end<sectionEnd&&items[end].type==='field')end++;
+ const removed=items.splice(index,end-index);
+ // Renumber only the records of this type; never touch secretary or auditor.
+ sectionEnd=items.findIndex((x,i)=>i>section&&x.type==='section');
+ if(sectionEnd<0)sectionEnd=items.length;
+ let number=0;
+ for(let i=section+1;i<sectionEnd;i++){
+  const h=items[i];if(h.type!=='heading'||!REPEATABLE_RECORDS[kind].test(h.en||''))continue;
+  number++;
+  h.en=RECORD_LABELS[kind].toUpperCase()+' '+number;
+  h.cn=String(h.cn||'').replace(/\s*\d+\s*$/,'')+' '+number;
+ }
+ return {type:kind,removedHeading:removed[0].en,removedFields:removed.length-1,remaining:number};
+}
+
 export function setCompanyDetail(doc,index,value){
  const first=doc.particulars.findIndex(x=>x.type==='section');
  const end=doc.particulars.findIndex((x,i)=>i>first&&x.type==='section');
