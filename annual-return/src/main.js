@@ -2,7 +2,7 @@ import './style.css';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount} from './core.js';
+import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,SELECT_OPTIONS,BENEFICIAL_OWNER_CRITERIA,selectKind,selectedCriteria,criteriaString,addRepeatGroup,removeRepeatGroup} from './core.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -27,6 +27,7 @@ function profileInputs(){
  $('signature-fields').innerHTML=signs.map(([key,label])=>'<label class="field-label">'+esc(label)+
   '<input data-sign="'+esc(key)+'" type="text" value="'+esc(doc.signatureDirector[key]||'')+'" placeholder="'+
   (key==='date'?'Leave blank until signed':'Enter signatory details')+'" autocomplete="off"></label>').join('');
+ $('acknowledged').checked=doc.signatureDirector.acknowledged===true;
 }
 function groups(){
  const all=[];let group=null;
@@ -45,11 +46,32 @@ function renderSections(){
   });
   if(!rows.length&&(q||onlyBlank))return '';
   const body=rows.map(({index,item})=>{
-   if(item.type==='heading')return '<div class="heading-entry">'+esc(item.en)+' <small>'+esc(item.cn)+'</small></div>';
+   if(item.type==='heading')return '<div class="heading-entry">'+esc(item.en)+' <small>'+esc(item.cn)+'</small>'+
+    (item.generated?'<button type="button" class="remove-entry" data-remove-group="'+index+'" aria-label="Remove '+esc(item.en)+'">Remove added entry</button>':'')+'</div>';
+   const kind=selectKind(item.en);
+   let control='';
+   if(kind==='criteria'){
+     const selected=selectedCriteria(item.value);
+     const imported=String(item.value||'').trim()&&!selected.length;
+     control='<details class="criteria-picker"><summary>Select criteria A–D (multiple allowed) <span class="criteria-selected">'+
+       esc(selected.length?selected.map(x=>'Criteria '+x).join(', '):(imported?'Imported value':'Choose one or more'))+'</span></summary>'+
+       BENEFICIAL_OWNER_CRITERIA.map(x=>'<label class="criteria-option"><input type="checkbox" data-criteria="'+index+
+          '" data-code="'+x.code+'" '+(selected.includes(x.code)?'checked':'')+'><span><b>Criteria '+x.code+'</b> — '+esc(x.description)+'</span></label>').join('')+
+       '<p class="muted-criteria">SSM criteria E and F may also apply; verify every beneficial owner against current SSM guidelines.</p>'+
+       (imported?'<label class="criteria-legacy">Existing imported value (preserved until you select A–D)<textarea data-item="'+index+'">'+esc(item.value)+'</textarea></label>':'')+
+       '</details>';
+   }else if(kind){
+     const opts=SELECT_OPTIONS[kind];
+     const current=String(item.value||'').trim();
+     control='<select data-item="'+index+'" aria-label="'+esc(item.en)+'"><option value="">Select an option</option>'+
+       (current&&!opts.includes(current)?'<option value="'+esc(current)+'" selected>Imported: '+esc(current)+'</option>':'')+
+       opts.map(x=>'<option value="'+esc(x)+'" '+(current===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select>';
+   }else {
+     control='<textarea data-item="'+index+'" rows="'+(String(item.value||'').length>220?5:2)+
+       '" spellcheck="false" placeholder="Enter confirmed information…">'+esc(item.value)+'</textarea>';
+   }
    return '<div class="field-entry '+(item.value?'':'blank')+'"><div class="title">'+esc(item.en||'Untitled')+
-    '<small>'+esc(item.cn||'')+'</small></div><textarea data-item="'+index+
-    '" rows="'+(String(item.value||'').length>220?5:2)+'" spellcheck="false" placeholder="Enter confirmed information…">'+
-    esc(item.value)+'</textarea></div>';
+      '<small>'+esc(item.cn||'')+'</small></div>'+control+'</div>';
   }).join('');
   return '<details class="ar-section" '+(i===0||q||onlyBlank?'open':'')+'><summary class="section-header"><span>'+
    esc(group.title)+'<small>'+esc(group.cn)+'</small></span><span class="pill">'+
@@ -111,6 +133,18 @@ $('search').addEventListener('input',renderSections);
 $('incomplete').addEventListener('change',renderSections);
 $('company-fields').addEventListener('input',e=>{const k=e.target.dataset.company;if(k)doc.company[k]=e.target.value;});
 $('signature-fields').addEventListener('input',e=>{const k=e.target.dataset.sign;if(k)doc.signatureDirector[k]=e.target.value;});
+$('acknowledged').addEventListener('change',e=>{doc.signatureDirector.acknowledged=e.target.checked;});
+$('particulars').addEventListener('change',e=>{
+ const index=e.target.dataset.criteria;
+ if(index===undefined)return;
+ const all=[...$('particulars').querySelectorAll('input[data-criteria="'+index+'"]:checked')].map(x=>x.dataset.code);
+ doc.particulars[+index].value=criteriaString(all);
+ const group=e.target.closest('.criteria-picker');
+ const summary=group?.querySelector('.criteria-selected');
+ if(summary)summary.textContent=all.length?all.map(x=>'Criteria '+x).join(', '):'Choose one or more';
+ e.target.closest('.field-entry')?.classList.toggle('blank',!all.length);
+ fieldStatus();
+});
 $('particulars').addEventListener('input',e=>{
  const index=e.target.dataset.item;
  if(index!==undefined&&doc.particulars[+index]){
@@ -118,6 +152,23 @@ $('particulars').addEventListener('input',e=>{
   e.target.closest('.field-entry')?.classList.toggle('blank',!e.target.value.trim());
   fieldStatus();
  }
+});
+$('particulars').addEventListener('click',e=>{
+ const b=e.target.closest('[data-remove-group]');
+ if(!b)return;
+ const index=Number(b.dataset.removeGroup),heading=doc.particulars[index]?.en||'entry';
+ if(!confirm('Remove '+heading+' and its entered information?'))return;
+ try{removeRepeatGroup(doc,index);renderSections();status(heading+' removed.');}
+ catch(error){status(error.message,true);}
+});
+document.querySelectorAll('[data-add-group]').forEach(button=>{
+ button.addEventListener('click',()=>{
+  try{const result=addRepeatGroup(doc,button.dataset.addGroup);
+   $('search').value='';$('incomplete').checked=false;renderSections();
+   const name=({charge:'charge',director:'director',member:'member',beneficialOwner:'beneficial owner'})[button.dataset.addGroup];
+   status('Added '+name+' '+result.number+' with '+(result.count-1)+' blank details. Export JSON to retain new entries.');
+  }catch(error){status(error.message,true);}
+ });
 });
 $('add-field').addEventListener('click',()=>{
  const en=prompt('English field label:');if(!en?.trim())return;
@@ -135,7 +186,7 @@ $('clear-values').addEventListener('click',()=>{
  if(!confirm('Clear every field, company and signer value? This cannot be undone without an exported JSON file.'))return;
  doc.particulars.forEach(x=>{if(x.type==='field')x.value='';});
  for(const k of Object.keys(doc.company))doc.company[k]='';
- for(const k of Object.keys(doc.signatureDirector))doc.signatureDirector[k]='';
+ for(const k of Object.keys(doc.signatureDirector))doc.signatureDirector[k]=k==='acknowledged'?false:'';
  resetView();status('All values cleared; bilingual labels preserved.');
 });
 $('generate-pdf').addEventListener('click',generate);
