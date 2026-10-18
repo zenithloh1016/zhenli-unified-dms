@@ -134,7 +134,30 @@ test('Annual Return module is part of the DMS navigation and bundler',async()=>{
  assert.ok(root.includes("'annual-return'"));
  assert.ok(root.includes('zh-annual-return-frame'));
  assert.ok(pack.includes('dist/annual-return'));
+ assert.ok(root.includes('select-ar-company'));
+ assert.ok(root.includes('prepare-annual-return'));
+ assert.ok(root.includes('registration_no'));
+ assert.ok(root.includes('ZHENLI_DMS_AR_SELECT_COMPANY'));
+ assert.ok(root.includes('zh-annual-return-frame'));
 });
+test('DMS company picker safeguards identity and does not copy statutory particulars to another company',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const parent=readFileSync(new URL('../../src/main.js',import.meta.url),'utf8');
+ const child=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ assert.ok(parent.includes('state.companies.filter'));
+ assert.ok(parent.includes('Search company'));
+ assert.ok(parent.includes('Company no longer exists'));
+ assert.ok(parent.includes("event.origin!==window.location.origin"));
+ assert.ok(child.includes("event.source!==window.parent"));
+ assert.ok(child.includes('selectedDmsCompanyId'));
+ assert.ok(child.includes('doc=cloneBlank()'));
+ assert.ok(child.includes('setCompanyDetail(doc,i,name)'));
+ assert.ok(child.includes('setCompanyDetail(doc,i,registrationNo)'));
+ assert.ok(child.includes('This starts a new Annual Return form')||child.includes('starts a new Annual Return form'));
+ assert.ok(child.includes('ZHENLI_AR_SELECTION_RESULT'));
+ assert.ok(!child.includes('fetch("/api/dms/companies")'));
+});
+
 
 test('appointment/member entry/BO status and notice dates are removed on all imports and never reach PDF fields',()=>{
  const forbidden=['Date of Appointment','Date of Secretary Appointment','Date Entered as Member',
