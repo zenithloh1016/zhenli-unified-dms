@@ -58,7 +58,7 @@ function readJsonObjectAfter(script,marker){
   }
   throw Error('Unfinished Apps Script data object: '+marker);
 }
-const EXCLUDED_FIELDS=/^(?:Tax Identification Number(?: \(TIN\))?|TIN|Statutory Lodgement Deadline(?: \(30 calendar days\))?|Master Listing Internal Due Date|Register Last Updated|Master Listing Internal Due vs Statutory 30 Days|Date of Appointment|Date of (?:Secretary|Director) Appointment|Date Entered as Member|Date Became\s*\/\s*Ceased as BO|Date (?:Became|Becoming|Ceased) (?:as )?(?:a )?(?:BO|Beneficial Owner)|Notice\s*\/\s*BO Confirmation Dates|Date of Notice of BO|Date of (?:BO|Beneficial Ownership) Notice)$/i;
+const EXCLUDED_FIELDS=/^(?:Tax Identification Number(?: \(TIN\))?|TIN|Statutory Lodgement Deadline(?: \(30 calendar days\))?|Master Listing Internal Due Date|Register Last Updated|Master Listing Internal Due vs Statutory 30 Days|Recorded Amount of Indebtedness \(not outstanding balance\)|Discharge Date|Date of Appointment|Date of (?:Secretary|Director) Appointment|Date Entered as Member|Date Became\s*\/\s*Ceased as BO|Date (?:Became|Becoming|Ceased) (?:as )?(?:a )?(?:BO|Beneficial Owner)|Notice\s*\/\s*BO Confirmation Dates|Date of Notice of BO|Date of (?:BO|Beneficial Ownership) Notice)$/i;
 function cleanParticulars(items){
  let excludedSection=false;
  return items.filter(x=>{
@@ -86,7 +86,7 @@ export function normalizeDocument(raw){
     }))
   };
   // Historic .gs source may omit this controlled field; append it without deleting any data.
-  if(!doc.particulars.some(x=>x.type==='field'&&x.en==='Type of Shares Issued')){
+  if((!Number(raw.schemaVersion)||Number(raw.schemaVersion)<3)&&!doc.particulars.some(x=>x.type==='field'&&x.en==='Type of Shares Issued')){
     const i=doc.particulars.findIndex(x=>x.type==='section'&&/SHARE CAPITAL/i.test(x.en));
     if(i>=0)doc.particulars.splice(i+1,0,{type:'field',en:'Type of Shares Issued',cn:'股份发行方式（现金／非现金）',value:''});
   }
