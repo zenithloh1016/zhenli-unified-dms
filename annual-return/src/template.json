@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "templateSource": "Annual Return Review Form (revised)(1).gs; latest structured example 2026-10-13",
   "company": {
     "name": "",
@@ -189,20 +189,8 @@
     },
     {
       "type": "field",
-      "en": "Corporate Shareholder Control Classification",
-      "cn": "法人股东控制类别",
-      "value": ""
-    },
-    {
-      "type": "field",
       "en": "Total Calls Called Up / Received",
       "cn": "已催缴 / 收取股份款项",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Preference Share Rights",
-      "cn": "优先股权益",
       "value": ""
     },
     {
@@ -537,6 +525,54 @@
     },
     {
       "type": "field",
+      "en": "Member Type",
+      "cn": "股东类别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Individual Full Name",
+      "cn": "个人股东姓名",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Individual NRIC / Passport No.",
+      "cn": "个人股东身份证或护照号码",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Individual Identification Type",
+      "cn": "个人身份证明类别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Individual Date of Birth",
+      "cn": "个人出生日期",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Individual Nationality / Citizenship",
+      "cn": "个人国籍／公民身份",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Individual Gender",
+      "cn": "个人性别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Individual Residential / Correspondence Address",
+      "cn": "个人住址／通讯地址",
+      "value": ""
+    },
+    {
+      "type": "field",
       "en": "Corporate Name",
       "cn": "公司股东名称",
       "value": ""
@@ -593,6 +629,54 @@
       "type": "field",
       "en": "Member Folio",
       "cn": "股东名册编号",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Member Type",
+      "cn": "股东类别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Individual Full Name",
+      "cn": "个人股东姓名",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Individual NRIC / Passport No.",
+      "cn": "个人股东身份证或护照号码",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Individual Identification Type",
+      "cn": "个人身份证明类别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Individual Date of Birth",
+      "cn": "个人出生日期",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Individual Nationality / Citizenship",
+      "cn": "个人国籍／公民身份",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Individual Gender",
+      "cn": "个人性别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Individual Residential / Correspondence Address",
+      "cn": "个人住址／通讯地址",
       "value": ""
     },
     {
