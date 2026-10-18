@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createDraftStore} from '../src/draft-storage.js';
-import {cloneBlank,normalizeDocument} from '../src/core.js';
+import {cloneBlank,normalizeDocument,removeNumberedRecord} from '../src/core.js';
 
 function memoryStorage(){
  const data=new Map();
@@ -73,4 +73,41 @@ test('Annual Return website and DMS omit the JSON import/export controls and pro
  assert.ok(parent.includes("flushAnnualReturnDraft()"));
  assert.ok(parent.includes('Saved Drafts'));
  assert.ok(!parent.includes('by exporting editable JSON'));
+});
+
+test('remove extra Directors and Members without deleting secretary, auditor or other people',()=>{
+ const doc=cloneBlank();
+ const names=()=>doc.particulars.map(x=>x.en);
+ const dir4=doc.particulars.findIndex(x=>x.type==='heading'&&x.en==='DIRECTOR 4');
+ const member2=doc.particulars.findIndex(x=>x.type==='heading'&&x.en==='MEMBER 2');
+ assert.ok(dir4>0&&member2>0);
+ const remaining=removeNumberedRecord(doc,dir4,'director');
+ assert.equal(remaining.remaining,3);
+ assert.equal(names().includes('DIRECTOR 4'),false);
+ assert.ok(names().includes('COMPANY SECRETARY'));
+ assert.ok(names().includes('AUDITOR'));
+ const idx=doc.particulars.findIndex(x=>x.type==='heading'&&x.en==='MEMBER 2');
+ const members=removeNumberedRecord(doc,idx,'member');
+ assert.equal(members.remaining,1);
+ assert.equal(names().includes('MEMBER 2'),false);
+ assert.ok(names().includes('BENEFICIAL OWNER 1'));
+ assert.throws(()=>removeNumberedRecord(doc,doc.particulars.findIndex(x=>x.en==='MEMBER 1'),'member'),/Keep at least one Member/);
+});
+test('director removal re-numbers surviving directors with their own particulars intact',()=>{
+ const doc=cloneBlank(),idx=doc.particulars.findIndex(x=>x.en==='DIRECTOR 2');
+ doc.particulars[idx+1].value='UNIQUE DIRECTOR 2 VALUE';
+ doc.particulars[doc.particulars.findIndex(x=>x.en==='DIRECTOR 3')+1].value='UNIQUE DIRECTOR 3 VALUE';
+ removeNumberedRecord(doc,idx,'director');
+ assert.deepEqual(doc.particulars.filter(x=>x.type==='heading'&&/^DIRECTOR [0-9]+$/.test(x.en)).map(x=>x.en),['DIRECTOR 1','DIRECTOR 2','DIRECTOR 3']);
+ assert.ok(doc.particulars.some(x=>x.value==='UNIQUE DIRECTOR 3 VALUE'));
+ assert.ok(!doc.particulars.some(x=>x.value==='UNIQUE DIRECTOR 2 VALUE'));
+});
+test('removing the sole BO record leaves the editable section intact; no unrelated fields are deleted',()=>{
+ const doc=cloneBlank(),i=doc.particulars.findIndex(x=>x.en==='BENEFICIAL OWNER 1');
+ const before=doc.particulars.slice(0,i).map(x=>x.en);
+ const result=removeNumberedRecord(doc,i,'bo');
+ assert.equal(result.remaining,0);
+ assert.deepEqual(doc.particulars.map(x=>x.en),before);
+ assert.ok(doc.particulars.some(x=>x.en==='PARTICULARS OF CURRENT BENEFICIAL OWNERS'));
+ assert.equal(normalizeDocument(doc).particulars.some(x=>x.en==='BENEFICIAL OWNER 1'),false);
 });
