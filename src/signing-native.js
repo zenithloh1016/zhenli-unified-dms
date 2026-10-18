@@ -10,7 +10,7 @@ const fmtDate=s=>s?e(String(s).slice(0,16).replace('T',' ')):'—';
 const b=(label,action,id='',style='secondary')=>`<button type="button" class="btn ${style}" data-action="zs-${action}" data-id="${e(id)}">${label}</button>`;
 export function createNativeSigning({update,getCompanies}) {
   let token=''; // deliberately NOT localStorage, sessionStorage, GitHub, Supabase or cookies
-  let view='login',busy=false,message='',error=false,requests=[],detail=null,placementRows=[],resetPreview=null,approvedSenders=[];
+  let view='login',busy=false,message='',error=false,requests=[],detail=null,placementRows=[],resetPreview=null,approvedSenders=[],preferredSender='default';
   let signerCount=2;
   function feedback(msg,isError=false){message=msg;error=isError;update();}
   function resetAuth(msg='Sign in to manage your existing signing requests.'){
@@ -35,7 +35,7 @@ export function createNativeSigning({update,getCompanies}) {
   }
   async function work(fn){if(busy)return;busy=true;message='';update();try{await fn();}catch(ex){feedback(ex.message||String(ex),true);}finally{busy=false;update();}}
   function select(items,field,selected,placeholder){return `<select name="${field}" required>${placeholder?`<option value="">${placeholder}</option>`:''}${items.map(x=>`<option value="${e(x.id)}" ${x.id===selected?'selected':''}>${e(x.label)}</option>`).join('')}</select>`;}
-  function senderSelect(selected='default'){
+  function senderSelect(selected=preferredSender){
     const items=[...approvedSenders];
     if(!items.some(x=>x.id===selected))
       items.unshift({id:selected,label:'Sender no longer configured',email:'',ready:false,removed:true});
@@ -141,7 +141,7 @@ export function createNativeSigning({update,getCompanies}) {
 
   function editSignerField(s,n){return `<div class="zs-signer-input zs-edit-signer" data-signer-id="${e(s.id||'')}"><b>${n}.</b><label>Full name<input name="zs-edit-name" maxlength="180" required value="${e(s.name||'')}"></label><label>Email<input type="email" name="zs-edit-email" required value="${e(s.email||'')}"></label><div class="zs-edit-signer-actions">${b('↑ Up','edit-up')}${b('↓ Down','edit-down')}${b('Remove','remove-edit-signer')}</div></div>`;}
   function renumberEditedSigners(){[...document.querySelectorAll('#zs-edit-signers .zs-edit-signer')].forEach((row,i)=>row.querySelector('b').textContent=`${i+1}.`);}
-  async function list(){approvedSenders=(await api('/requests/senders')).senders||[];requests=(await api('/requests')).requests||[];view='list';detail=null;update();}
+  async function list(){const profiles=await api('/requests/senders');approvedSenders=profiles.senders||[];preferredSender=profiles.preferredSenderId||'default';requests=(await api('/requests')).requests||[];view='list';detail=null;update();}
   async function open(rid){const oldId=detail?.id;detail=await api('/requests/'+encodeURIComponent(rid));if(oldId!==detail.id)preview.reset();view='detail';placementRows=(detail.placements||[]).map(x=>({...x,x:+(100*x.x).toFixed(1),y:+(100*x.y).toFixed(1),width:+(100*x.width).toFixed(1),height:+(100*x.height).toFixed(1)}));update();}
   function captureRows(){
     const rows=[...document.querySelectorAll('.zs-placement-row')];
