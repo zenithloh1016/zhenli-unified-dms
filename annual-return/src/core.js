@@ -37,6 +37,46 @@ export function deleteParticularField(doc,index){
  doc.particulars.splice(index,1);
  return item;
 }
+/** Remove one full Directors, Members or BO record, retaining all unrelated headings.
+ * Directors and members must retain at least one; BO list may be empty.
+ * Renumber remaining entries so + Add creates sequential labels.
+ */
+export const REMOVABLE_RECORDS={
+ director:{pattern:/^DIRECTOR (\d+)$/i,min:1},
+ member:{pattern:/^MEMBER (\d+)$/i,min:1},
+ bo:{pattern:/^BENEFICIAL OWNER (\d+)$/i,min:0}
+};
+export function removeAnnualReturnRecord(doc,headingIndex){
+ const items=doc?.particulars;
+ if(!Array.isArray(items)||!Number.isInteger(headingIndex))throw Error('Invalid record.');
+ const header=items[headingIndex];
+ if(header?.type!=='heading')throw Error('Select a Director, Member or Beneficial Owner heading.');
+ const config=Object.entries(REMOVABLE_RECORDS).find(([,def])=>def.pattern.test(header.en||''));
+ if(!config)throw Error('This record cannot be removed here.');
+ const [kind,def]=config;
+ let sectionStart=-1,sectionEnd=items.length;
+ for(let i=headingIndex;i>=0;i--)if(items[i].type==='section'){sectionStart=i;break;}
+ if(sectionStart<0)throw Error('Record section is missing.');
+ for(let i=headingIndex+1;i<items.length;i++)if(items[i].type==='section'){sectionEnd=i;break;}
+ const headings=[];
+ for(let i=sectionStart+1;i<sectionEnd;i++)if(items[i].type==='heading'&&def.pattern.test(items[i].en||''))headings.push(i);
+ if(headings.length<=def.min)throw Error(kind==='bo'?'No beneficial owners remain.':'At least one '+(kind==='member'?'member':'director')+' record must remain.');
+ const nextHeading=items.findIndex((item,i)=>i>headingIndex&&i<sectionEnd&&item.type==='heading');
+ const end=nextHeading<0?sectionEnd:nextHeading;
+ if(end<=headingIndex)throw Error('Record boundaries are invalid.');
+ const removed=items.splice(headingIndex,end-headingIndex);
+ let number=0;
+ for(let i=sectionStart+1;i<items.length;i++){
+  if(items[i].type==='section')break;
+  if(items[i].type==='heading'&&def.pattern.test(items[i].en||'')){
+   number++;
+   items[i].en=kind==='bo'?'BENEFICIAL OWNER '+number:(kind==='member'?'MEMBER ':'DIRECTOR ')+number;
+   items[i].cn=String(items[i].cn||'').replace(/\d+\s*$/,String(number));
+  }
+ }
+ return {kind,removedHeading:removed[0].en,removedFields:removed.length-1,remaining:number};
+}
+
 export function setCompanyDetail(doc,index,value){
  const first=doc.particulars.findIndex(x=>x.type==='section');
  const end=doc.particulars.findIndex((x,i)=>i>first&&x.type==='section');
