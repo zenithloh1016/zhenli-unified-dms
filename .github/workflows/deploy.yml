@@ -34,6 +34,14 @@ jobs:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
+      - name: Build standalone Annual Return PDF website
+        run: |
+          cd annual-return
+          npm install --no-audit --no-fund
+          npm run test
+          npm run build
+          mkdir -p ../dist/annual-return
+          cp -R dist/. ../dist/annual-return/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
