@@ -187,7 +187,7 @@ test('DMS company picker safeguards identity and does not copy statutory particu
  const parent=readFileSync(new URL('../../src/main.js',import.meta.url),'utf8');
  const child=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  assert.ok(parent.includes('state.companies.slice(0,5000)'));
- assert.ok(parent.includes('Company Details → Company Name'));
+ assert.ok(parent.includes('complete Documents company dropdown'));
  assert.ok(!parent.includes('id="ar-company-search"'));
  assert.ok(parent.includes('ZHENLI_DMS_AR_COMPANY_LIST'));
  assert.ok(parent.includes('ZHENLI_AR_SELECT_COMPANY_REQUEST'));
