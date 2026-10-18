@@ -70,3 +70,23 @@
  .ar-draft-actions .button{flex:1}
  .ar-remove-record{margin-left:0!important}
 }
+
+
+/* Standalone Annual Return immersive full-screen mode (browser and Android APK). */
+.ar-fullscreen-toggle{flex:none;border:1px solid #a3c7d7;background:#1d526d;color:#f2fbff;border-radius:9px;padding:9px 11px;min-height:39px;font-weight:700;font-size:12px;cursor:pointer}
+.ar-fullscreen-toggle:focus-visible{outline:3px solid #a2e7fa;outline-offset:2px}
+html.ar-immersive{overflow:auto}
+html.ar-immersive .shell{max-width:none;padding:12px clamp(10px,2vw,22px) 28px}
+html.ar-immersive .top{height:56px;padding:6px clamp(10px,2vw,20px)}
+html.ar-immersive .hero{padding:16px 20px;margin-bottom:14px;border-radius:12px}
+html.ar-immersive .hero>p:not(.eyebrow),html.ar-immersive .hero .eyebrow{display:none}
+html.ar-immersive .hero h1{font-size:24px;margin:0}
+html.ar-immersive .panel{padding:16px 18px;border-radius:12px;margin-bottom:14px}
+html.ar-immersive .footer{display:none}
+@media(max-width:680px){
+ .ar-fullscreen-toggle{font-size:11px;padding:8px 9px;min-height:35px}
+ .top{gap:8px}
+ html.ar-immersive .hero{padding:12px}
+ html.ar-immersive .shell{padding:8px 7px 18px}
+ html.ar-immersive .panel{padding:12px 10px}
+}
