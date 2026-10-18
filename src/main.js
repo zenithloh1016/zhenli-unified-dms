@@ -295,11 +295,11 @@ function sendAnnualReturnCompany(){
 }
 function renderAnnualReturn(){
  return '<section class="annual-return-module" aria-label="Annual Return PDF generator">'+
- '<div class="integration-heading"><div><p class="eyebrow">STATUTORY PARTICULARS REVIEW · V1.6</p>'+
+ '<div class="integration-heading"><div><p class="eyebrow">STATUTORY PARTICULARS REVIEW · V1.7</p>'+
  '<h1>Annual Return PDF Generator</h1>'+
  '<p class="muted">Choose an existing Documents company in the searchable dropdown beside <b>Company Details → Company Name</b>. Its company number will automatically fill in.</p></div></div>'+
  '<div class="integration-info">There is no separate company search above the form. The DMS shares company names and registration numbers from your signed-in Documents list only with the embedded form. Other Annual Return particulars are entered and verified manually. Export your editable JSON before leaving; drafts are not saved automatically.</div>'+
- '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.6" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share"></iframe></div>'+
+ '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.7" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share"></iframe></div>'+
  '</section>';
 }
 function renderTasks(){
