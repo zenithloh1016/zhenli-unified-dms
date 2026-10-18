@@ -42,7 +42,6 @@ function drawDrafts(){
 function saveCurrentDraft({manual=false}={}){
  if(saveTimer!==null){clearTimeout(saveTimer);saveTimer=null;}
  if(!draftDirty&&!manual)return true;
- if(!hasDraftContent()&&!manual){draftDirty=false;return true;}
  if(!draftStore||!draftScope){
   draftError=draftError||'Draft storage is not ready';
   draftStatus('Draft not saved — '+draftError,true);return false;
@@ -391,6 +390,7 @@ $('blank').addEventListener('click',()=>{
  if(!saveCurrentDraft())return status('Your unfinished draft could not be saved; check device storage first.',true);
  if(!confirm('Start a new blank Annual Return? Your previous draft remains in Saved Drafts.'))return;
  doc=cloneBlank();selectedDmsCompanyId=null;activeDraftId=crypto.randomUUID();draftDirty=false;
+ if(window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_CLEAR_COMPANY'},window.location.origin);
  resetView();generated=null;$('download-box').hidden=true;drawDrafts();
  draftStatus('New blank form. Edits save automatically.');status('Blank bilingual form ready.');
 });
