@@ -308,6 +308,7 @@ function mergeCompanyRecords(payload,overwriteDates=false){
       displayBackupStatus(filename,result.method==='share'
         ? 'Save/share panel opened. Choose Files or Drive and pick a folder to keep this backup.'
         : 'Download requested. Check the browser Downloads list or Files → Downloads.');
+      toast(result.method==='share'?'Select Files or Drive in the share panel to keep '+filename+'.':'Download started for '+filename+'. Check browser Downloads.');
       return;
     }
     const file=new File([contents],filename,{type:mime});
@@ -320,6 +321,7 @@ function mergeCompanyRecords(payload,overwriteDates=false){
     }
     download(filename,mime,contents);
     displayBackupStatus(filename,'Download started. Find the filename in your browser Downloads or Android Files → Downloads.');
+    toast('Backup download requested: '+filename+'. Check Android Files → Downloads.');
   }
   async function importCompanies(file) {
     if(!file)return;
@@ -341,8 +343,9 @@ function mergeCompanyRecords(payload,overwriteDates=false){
       const tasks=generateTasks?createImportedStatutoryReviewTasks(imported):{created:0,existing:0};
       record('Imported company dates',`${result.added} added, ${result.matched} matched, ${result.updated} dates filled/updated; ${tasks.created} review tasks created`);
       await persistImport(data);
-      render();toast(`Imported ${result.added} new companies, ${result.matched} matched; ${nAR} AR and ${nAFS} AFS dates. ${tasks.created} review tasks created (${tasks.existing} already existed).`);
-    }catch(err){data=previous;render();toast('Master Listing import failed: '+err.message,true)}
+      render();$('#importCompaniesStatus').textContent='Imported '+file.name+': '+result.added+' new, '+result.matched+' matched; '+nAR+' AR and '+nAFS+' AFS due dates; '+tasks.created+' review tasks created.';
+      toast(`Imported ${result.added} new companies, ${result.matched} matched; ${nAR} AR and ${nAFS} AFS dates. ${tasks.created} review tasks created (${tasks.existing} already existed).`);
+    }catch(err){data=previous;render();$('#importCompaniesStatus').textContent='Import failed for '+file.name+': '+err.message;toast('Master Listing import failed: '+err.message,true)}
     finally{$('#importCompaniesFile').value=''}
   }
 
@@ -370,9 +373,9 @@ function mergeCompanyRecords(payload,overwriteDates=false){
       candidate.activity=[{id:uniqueId(),at:timestamp(),action:'Restored backup',title:`${candidate.tasks.length} tasks, ${candidate.companies.length} companies`},...candidate.activity].slice(0,400);
       // Persist first; never replace the current in-memory workspace if save fails.
       await persistImport(candidate);
-      data=candidate;$('#settingsDialog').close();render();
+      data=candidate;$('#importBackupStatus').textContent='Restored from '+file.name+': '+candidate.tasks.length+' tasks, '+candidate.companies.length+' companies.';$('#settingsDialog').close();render();
       toast(`Restored ${candidate.tasks.length} tasks and ${candidate.companies.length} companies from ${file.name}.`);
-    }catch(err){toast('Backup restore failed: '+err.message,true);}
+    }catch(err){$('#importBackupStatus').textContent='Backup restore failed: '+err.message;toast('Backup restore failed: '+err.message,true);}
     finally{$('#importJsonFile').value='';}
   }
   function resetData(){if(!confirm('Permanently erase ALL tasks, companies and activity on this browser?'))return;const answer=prompt('To confirm, type DELETE in capital letters:');if(answer!=='DELETE')return toast('Reset cancelled.');data=structuredClone(DEFAULT_DATA);saveData();$('#settingsDialog').close();setView('dashboard');toast('Local workspace reset.')}
