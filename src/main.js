@@ -299,7 +299,7 @@ function renderAnnualReturn(){
  '<div class="ar-module-inner">'+
  '<div class="integration-heading"><div><p class="eyebrow">STATUTORY PARTICULARS REVIEW · V1.8</p>'+
  '<h1>Annual Return PDF Generator</h1>'+
- '<p class="muted">Choose a company from the Documents list inside Company Details; registration number fills automatically. Complete the statutory particulars and save your bilingual PDF.</p></div>'+
+ '<p class="muted">Choose any existing company from the complete Documents company dropdown inside Company Details; registration number fills automatically. Complete the statutory particulars and save your bilingual PDF.</p></div>'+
  '<div class="header-buttons"><button type="button" class="btn secondary" data-action="open-ar-fullscreen">Full-screen view ⛶</button></div></div>'+
  '<div class="integration-info">Drafts save locally on this device under the current DMS user and company. Resume Draft reopens your work. No cloud draft synchronisation. The full-screen button will not reload this form.</div>'+
  '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.8" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share; fullscreen" allowfullscreen></iframe></div>'+
