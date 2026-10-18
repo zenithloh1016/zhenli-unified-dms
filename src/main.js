@@ -12,6 +12,7 @@ const ROOT = document.getElementById('app');
 const BUCKET = 'dms-private';
 const SIGNING_BASE = 'https://zhenli-sequential-signing.edgeone.cool/';
 const TASK_HUB_BUNDLED = new globalThis.URL('./task-hub/index.html', document.baseURI).href;
+const ANNUAL_RETURN_BUNDLED = new globalThis.URL('./annual-return/index.html', document.baseURI).href;
 function allowedHttpsUrl(value, expectedHost = '') {
   const url = new globalThis.URL(String(value || '').trim());
   if (url.protocol !== 'https:' || (expectedHost && url.hostname !== expectedHost)) throw new Error('Use the valid HTTPS URL for the selected app.');
@@ -268,10 +269,21 @@ function renderOverview() {
     <button class="metric" data-action="tab-documents"><span>📁</span><strong>${state.companies.length}</strong><small>Companies</small></button>
     <button class="metric" data-action="tab-documents"><span>📄</span><strong>${state.totalDocs}</strong><small>Uploaded documents</small></button>
     <button class="metric" data-action="tab-tasks"><span>✓</span><strong>Task Hub V3</strong><small>Open existing tasks</small></button>
+    <button class="metric" data-action="tab-annual-return"><span>📑</span><strong>Annual Return</strong><small>Generate bilingual PDF</small></button>
     <button class="metric" data-action="tab-signing"><span>✍️</span><strong>Signing</strong><small>EdgeOne workspace</small></button>
   </section>
-  <section class="info-panel"><h2>Welcome to your private workspace</h2><p>Import your latest Master Listing under <b>Documents</b>, manage deadlines and tasks under <b>Tasks</b>, and access signing requests under <b>Signing</b>.</p><div class="quick-actions">${action('View company folders','tab-documents','','primary')}${action('Open Task Hub','tab-tasks','','secondary')}${action('Open Signing','tab-signing','','secondary')}</div></section>`;
+  <section class="info-panel"><h2>Welcome to your private workspace</h2><p>Import your latest Master Listing under <b>Documents</b>, manage deadlines and tasks under <b>Tasks</b>, and access signing requests under <b>Signing</b>, and prepare review PDFs under <b>Annual Return</b>.</p><div class="quick-actions">${action('View company folders','tab-documents','','primary')}${action('Open Task Hub','tab-tasks','','secondary')}${action('Annual Return PDFs','tab-annual-return','','secondary')}${action('Open Signing','tab-signing','','secondary')}</div></section>`;
 }
+function renderAnnualReturn(){
+  return '<section class="annual-return-module" aria-label="Annual Return PDF generator">'+
+    '<div class="integration-heading"><div><p class="eyebrow">STATUTORY PARTICULARS REVIEW · V1.5</p>'+
+    '<h1>Annual Return PDF Generator</h1>'+
+    '<p class="muted">The bilingual PDF generator is bundled into DMS Web and Android. Import an existing Annual Return .gs or JSON file or prepare a new review locally.</p></div></div>'+
+    '<div class="integration-info">Drafts are not automatically stored in DMS. Use <b>Export editable JSON</b> in Annual Return before changing DMS tabs, refreshing, or signing out. Finished PDFs may be downloaded and uploaded to the correct company folder under Documents.</div>'+
+    '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.5" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share"></iframe></div>'+
+    '</section>';
+}
+
 function renderTasks(){
   const active = getTaskHubUrl(); const external = active !== TASK_HUB_BUNDLED;
   return `<div class="integration-heading"><div><p class="eyebrow">SECRETARIAL TASK MANAGER</p><h1>Task Hub V3</h1><p class="muted">Your original Task Hub source is included directly in this app. ${external ? 'Using your configured hosted site.' : 'Using the bundled local edition.'}</p></div>
@@ -316,11 +328,11 @@ function render() {
   document.body.classList.toggle('zh-signing-fullscreen-open',!!(state.user && state.tab==='signing' && state.signingFullscreen));
   if (!db) { ROOT.innerHTML=`<div class="auth-page"><div class="auth-card"><div class="auth-logo">Z</div><h1>Set up private workspace</h1><p>Connect a Supabase project to enable authenticated documents and synced company folders.</p><p class="muted">Follow START_HERE.md in the downloadable source package. The Task Hub and Signing code is already bundled.</p></div></div>`;return; }
   if (!state.user) {ROOT.innerHTML=renderAuth();return;}
-  const tabs = ['overview','documents','tasks','signing'];
-  const label = {overview:'Overview',documents:'Documents',tasks:'Tasks',signing:'Signing'};
+  const tabs = ['overview','documents','tasks','annual-return','signing'];
+  const label = {overview:'Overview',documents:'Documents',tasks:'Tasks','annual-return':'Annual Return',signing:'Signing'};
   ROOT.innerHTML = `<div class="app-shell"><header class="topbar"><div class="top-title">Document Management System</div><div class="top-right"><span class="online-dot"></span> Private workspace</div></header>
     <nav class="tabbar" aria-label="Main workspace navigation">${tabs.map(t=>`<button type="button" class="tab ${state.tab===t?'current':''}" data-action="tab-${t}" ${state.tab===t?'aria-current="page"':''}>${label[t]}</button>`).join('')}</nav>
-    <main class="main-content">${state.tab==='documents'?(state.companyId?renderFolder():renderCompanies()):state.tab==='overview'?renderOverview():state.tab==='tasks'?renderTasks():renderSigning()}</main>
+    <main class="main-content">${state.tab==='documents'?(state.companyId?renderFolder():renderCompanies()):state.tab==='overview'?renderOverview():state.tab==='tasks'?renderTasks():state.tab==='annual-return'?renderAnnualReturn():renderSigning()}</main>
     <footer class="app-footer"><span>ZHENLI DMS V1.1 · Web + Android</span><span>${esc(state.user.email || '')} · ${action('Sign out','sign-out')}</span></footer></div>
   ${state.notice ? `<div class="toast" role="status">${esc(state.notice)} ${action('✕','dismiss')}</div>` : ''}
   ${state.busy ? '<div class="busy-bar">Working… please keep this page open</div>' : ''}
@@ -453,7 +465,11 @@ ROOT.addEventListener('click', event=>{
   if(a==='dismiss'){state.notice='';render();return;}
   if(a==='close-modal' && !state.busy){state.modal=null;state.importData=null;state.importWorkbook=null;render();return;}
   if(state.busy) return;
-  if(a.startsWith('tab-')){state.tab=a.slice(4);if(state.tab!=='signing')state.signingFullscreen=false;render();return;}
+  if(a.startsWith('tab-')){
+    const nextTab=a.slice(4);
+    if(state.tab==='annual-return'&&nextTab!=='annual-return'&&!confirm('Save any unfinished Annual Return by exporting editable JSON before leaving this page. Continue?'))return;
+    state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;render();return;
+  }
   if(a==='open-signing-fullscreen'||a==='exit-signing-fullscreen'){
     if(state.tab==='signing')setSigningFullscreen(a==='open-signing-fullscreen');
     return;
