@@ -185,7 +185,7 @@ function changeMSIC(index,code,remove=false,manualDesc=''){
   selected.push({code,en:entry?.en||manualDesc});
  }
  item.value=formatMSICCodes(selected);
- renderSections();
+ renderSections();queueDraftSave();
  status((remove?'Removed ':'Selected ')+code+'. '+selected.length+' of 3 MSIC codes.');
 }
 
@@ -268,7 +268,7 @@ function companyNameControl(item,index){
   '<label class="field-label">All Documents companies ('+dmsCompanies.length+')'+
   '<select class="choice-select ar-company-full-list" data-company-select="'+index+'">'+
   '<option value="">— Select a company from the complete list —</option>'+options+'</select></label>'+
-  '<p class="msic-help">All '+dmsCompanies.length+' DMS companies are available in the dropdown. Selecting a new company fills its registration number and starts a blank review for that company; export unfinished JSON first.</p></div>';
+  '<p class="msic-help">All '+dmsCompanies.length+' DMS companies are available in the dropdown. Selecting a new company fills its registration number and starts a blank review for that company; the current review is saved automatically on this device.</p></div>';
 }
 function addCustomField({sectionIndex=null,headingIndex=null}={}){
  if(doc.particulars.length>=1200)return status('The Annual Return field limit is reached.',true);
@@ -286,7 +286,7 @@ function addCustomField({sectionIndex=null,headingIndex=null}={}){
   while(pos<doc.particulars.length&&doc.particulars[pos].type!=='section')pos++;
  }
  doc.particulars.splice(pos,0,field);
- renderSections();
+ renderSections();queueDraftSave();
  status('Added "'+field.en+'" to '+(headingIndex!==null?'the selected member record':'the selected section')+'. It will appear in the PDF.');
 }
 function removeReviewField(index){
@@ -296,7 +296,7 @@ function removeReviewField(index){
  }
  if(!confirm('Delete "'+item.en+'" and its value from this Annual Return form and generated PDF?'))return;
  try {deleteParticularField(doc,index);}catch(err){status(err.message,true);return;}
- renderSections();status('Removed field: '+item.en+'. Export JSON to preserve this customisation.');
+ renderSections();queueDraftSave();status('Removed field: '+item.en+'. Change autosaved.');
 }
 
 function removeWholeRecord(index){
@@ -400,7 +400,7 @@ $('blank').addEventListener('click',()=>{
 });
 $('search').addEventListener('input',renderSections);
 $('incomplete').addEventListener('change',renderSections);
-$('signature-fields').addEventListener('input',e=>{const k=e.target.dataset.sign;if(k)doc.signatureDirector[k]=e.target.value;});
+$('signature-fields').addEventListener('input',e=>{const k=e.target.dataset.sign;if(k){doc.signatureDirector[k]=e.target.value;queueDraftSave();}});
 $('particulars').addEventListener('input',e=>{
  if(e.target.dataset.msicSearch!==undefined){refreshMSICResults(e.target);return;}
  const index=e.target.dataset.item;
@@ -408,7 +408,7 @@ $('particulars').addEventListener('input',e=>{
   doc.particulars[+index].value=e.target.value;
   setCompanyDetail(doc,Number(index),e.target.value);
   e.target.closest('.field-entry')?.classList.toggle('blank',!e.target.value.trim());
-  fieldStatus();
+  fieldStatus();queueDraftSave();
  }
 });
 $('particulars').addEventListener('change',e=>{
@@ -418,16 +418,18 @@ $('particulars').addEventListener('change',e=>{
   if(id&&window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_SELECT_COMPANY_REQUEST',id},window.location.origin);
   return;
  }
- if(el.dataset.item!==undefined&&doc.particulars[Number(el.dataset.item)]?.en==='Member Type'){renderSections();return;}
+ if(el.dataset.item!==undefined&&doc.particulars[Number(el.dataset.item)]?.en==='Member Type'){queueDraftSave();renderSections();return;}
  if(el.dataset.criteria!==undefined){
   const i=Number(el.dataset.criteria);
   const values=[...$('particulars').querySelectorAll('input[data-criteria="'+i+'"]:checked')].map(x=>x.value);
   doc.particulars[i].value=values.map(x=>'Criteria '+x).join(', ');
   el.closest('.field-entry')?.classList.toggle('blank',!values.length);
-  fieldStatus();
+  fieldStatus();queueDraftSave();
  }
 });
 $('particulars').addEventListener('click',e=>{
+ const removeRecord=e.target.closest('[data-remove-record]');
+ if(removeRecord){removeWholeRecord(Number(removeRecord.dataset.removeRecord));return;}
  const del=e.target.closest('[data-delete-field]');
  if(del){removeReviewField(Number(del.dataset.deleteField));return;}
  const select=e.target.closest('[data-msic-add]');
@@ -453,10 +455,11 @@ $('add-section').addEventListener('click',()=>{
  const en=prompt('Section heading in English:');if(!en?.trim())return;
  const cn=prompt('Chinese section heading (optional):')||'';
  doc.particulars.push({type:'section',en:en.trim().slice(0,350),cn:cn.trim().slice(0,350),value:''});
- renderSections();status('New section added. Click + Add field to add data.');
+ renderSections();queueDraftSave();status('New section added. Click + Add field to add data.');
 });
 $('clear-values').addEventListener('click',()=>{
- if(!confirm('Clear every field, company and signer value? This cannot be undone without an exported JSON file.'))return;
+ if(!confirm('Clear every field and signatory value? Your last saved draft remains until new information is entered.'))return;
+ if(!flushDraft())return;
  doc.particulars.forEach(x=>{if(x.type==='field')x.value='';});
  for(const k of Object.keys(doc.company))doc.company[k]='';
  for(const k of Object.keys(doc.signatureDirector))doc.signatureDirector[k]='';
@@ -473,7 +476,9 @@ $('print').addEventListener('click',()=>{
  renderPages(doc);window.print();setTimeout(()=>{$('pdf-stage').textContent='';},5000);
 });
 window.addEventListener('afterprint',()=>{$('pdf-stage').textContent='';});
-resetView();
-status('V1.7.2 loaded — Company Constitution removed and non-cash allotment fields updated. Save PDFs to Downloads or Documents.');
+resetView();draftOptions();
+status('V1.8 loaded — Save Draft, Resume Draft, and Remove Director/Member/BO. Non-cash allotment rules retained.');
 void loadMSIC();
 if(window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_READY'},window.location.origin);
+window.addEventListener('pagehide',()=>{flushDraft();});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushDraft();});
