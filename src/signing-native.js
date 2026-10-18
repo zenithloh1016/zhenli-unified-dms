@@ -10,7 +10,7 @@ const fmtDate=s=>s?e(String(s).slice(0,16).replace('T',' ')):'—';
 const b=(label,action,id='',style='secondary')=>`<button type="button" class="btn ${style}" data-action="zs-${action}" data-id="${e(id)}">${label}</button>`;
 export function createNativeSigning({update,getCompanies}) {
   let token=''; // deliberately NOT localStorage, sessionStorage, GitHub, Supabase or cookies
-  let view='login',busy=false,message='',error=false,requests=[],detail=null,placementRows=[];
+  let view='login',busy=false,message='',error=false,requests=[],detail=null,placementRows=[],resetPreview=null;
   let signerCount=2;
   function feedback(msg,isError=false){message=msg;error=isError;update();}
   function resetAuth(msg='Sign in to manage your existing signing requests.'){
@@ -69,7 +69,7 @@ export function createNativeSigning({update,getCompanies}) {
     if(!token){return `<section class="zs-panel zs-login"><h2>Signing administrator login</h2><p class="muted">Sign in here, inside DMS, using the administrator password already configured on Tencent EdgeOne. No external site will open.</p>
     <form id="zs-login-form"><label class="input-label">Sequential Signing administrator password<input type="password" name="password" minlength="12" autocomplete="current-password" required></label><button class="btn primary" type="submit" ${busy?'disabled':''}>Sign in to Signing</button></form>
     <p class="fineprint">Your DMS account and signing administrator password are separate. This login stays inside the DMS and uses a temporary 8-hour API session. No password or token is stored on your device.</p></section>`;}
-    if(view==='list')return `<div class="zs-toolbar">${b('+ New signing request','new','','primary')}${b('Refresh requests','refresh')}${b('Sign out of Signing','logout')}</div>
+    if(view==='list')return `<div class="zs-toolbar">${b('+ New signing request','new','','primary')}${b('Refresh requests','refresh')}${b('Reset all signing requests','reset-preview')}${b('Sign out of Signing','logout')}</div>
     <section class="zs-panel"><h2>Signing requests <span class="zs-count">${requests.length}</span></h2>
     <div class="zs-table-wrap"><table class="zs-table"><thead><tr><th>Company / subject</th><th>Status</th><th>Signed</th><th>PDFs</th><th>Created</th><th></th></tr></thead><tbody>${requests.length?requests.map(r=>`<tr><td><b>${e(r.company)}</b><small>${e(r.subject)}</small></td><td><span class="zs-tag">${e(r.status)}</span></td><td>${r.done}/${r.signers}</td><td>${r.docs}</td><td>${fmtDate(r.createdAt)}</td><td>${b('Manage','detail',r.id)}</td></tr>`).join(''):'<tr><td colspan="6">No signing requests found.</td></tr>'}</tbody></table></div></section>`;
     if(view==='new'){
@@ -84,10 +84,37 @@ export function createNativeSigning({update,getCompanies}) {
       <h3>Sequential signers</h3><div id="zs-signers">${Array.from({length:signerCount},(_,i)=>signerField(i+1)).join('')}</div>
       ${b('+ Add signer','add-signer')} <button class="btn primary" type="submit" ${busy?'disabled':''}>Create draft signing request</button></form></section>`;
     }
+    if(view==='reset'&&resetPreview){
+      const p=resetPreview;
+      return `<div class="zs-toolbar">${b('← Back to requests','reset-cancel')}</div>
+      <section class="zs-panel"><h2>Permanent reset — ALL signing requests</h2>
+      <p class="muted">This irreversibly erases original PDFs, completed PDFs, signature images, requests and audit evidence stored on EdgeOne. Use Revoke instead if you only want to stop signer links.</p>
+      <p>Inventory: ${p.count} requests, ${p.completed} completed, ${p.partiallySigned} partly signed, ${p.pending} pending, ${p.revoked} revoked.</p>
+      <p class="muted">Objects: ${p.objects.map(x=>e(x.prefix)+' '+x.count).join(' · ')}. Preview expires after 5 minutes.</p>
+      <form id="zs-reset-form">
+      <label>Type DELETE ALL SIGNING REQUESTS<input name="confirm" autocomplete="off" required></label>
+      <label>Re-enter EdgeOne signing administrator password<input name="password" type="password" autocomplete="off" required></label>
+      <label class="zs-reset-check"><input name="backup" type="checkbox" required> I have exported and verified all PDFs and audit evidence I need to keep.</label>
+      <button class="btn primary" type="submit">Permanently erase all signing records</button></form></section>`;
+    }
+    if(view==='edit'&&detail?.status==='draft'){
+      const r=detail,companies=(getCompanies()||[]).map(x=>`<option value="${e(x.name)}"></option>`).join('');
+      return `<div class="zs-toolbar">${b('← Cancel editing','cancel-edit')}</div>
+      <section class="zs-panel"><h2>Edit signing request</h2><p class="muted">Draft only. Edits synchronize with the original EdgeOne website.</p>
+      <form id="zs-edit-form"><div class="zs-formgrid">
+      <label>Company name<input list="zs-edit-companies" name="company" maxlength="180" value="${e(r.company)}" required></label>
+      <datalist id="zs-edit-companies">${companies}</datalist>
+      <label>Subject<input name="subject" maxlength="180" value="${e(r.subject)}" required></label>
+      <label>Link validity<select name="days"><option value="">Keep existing expiry</option><option value="7">Renew 7 days</option><option value="14">Renew 14 days</option><option value="30">Renew 30 days</option><option value="60">Renew 60 days</option></select></label>
+      <label class="zs-span">Signing message<textarea name="note" rows="3" maxlength="1000">${e(r.note||'')}</textarea></label>
+      </div><h3>Sequential signers</h3><p class="muted">Use Up / Down to reorder. Removing signers also removes their saved signature boxes.</p>
+      <div id="zs-edit-signers">${r.signers.map((sg,i)=>editSignerField(sg,i+1)).join('')}</div>
+      ${b('+ Add signer','add-edit-signer')} <button class="btn primary" type="submit" ${busy?'disabled':''}>Save draft changes</button></form></section>`;
+    }
     if(view==='detail'&&detail){const r=detail;const pending=r.status==='draft';
-      const docs= r.docs.map(d=>`<div class="zs-doc"><span>📄 <b>${e(d.name)}</b> <small>${d.pages} page(s)</small></span>${b('Download PDF','pdf',d.id)}</div>`).join('');
+      const docs= r.docs.map(d=>`<div class="zs-doc"><span>📄 <b>${e(d.name)}</b> <small>${d.pages} page(s)</small></span>${b('Download PDF','pdf',d.id)}${pending?b('Remove PDF','delete-draft-pdf',d.id):''}</div>`).join('');
       const signers=r.signers.map(s=>`<div class="zs-signer"><div><b>${s.position}. ${e(s.name)}</b> <small>${e(s.email)} · ${s.signedAt?'Signed '+fmtDate(s.signedAt):'Not signed'} · ${e(s.invitation||'Not sent')}</small></div>${b('Copy signing link','copy-link',s.id)}</div>`).join('');
-      return `<div class="zs-toolbar">${b('← All requests','refresh')}${b('Reload details','detail',r.id)}${b('Sign out','logout')}</div>
+      return `<div class="zs-toolbar">${b('← All requests','refresh')}${b('Reload details','detail',r.id)}${pending?b('✎ Edit draft','edit-draft',r.id,'primary'):''}${r.status!=='revoked'&&r.status!=='deleting'?b('Revoke signing links','revoke',r.id):''}${b('Sign out','logout')}</div>
       <section class="zs-panel"><div class="zs-details-heading"><div><h2>${e(r.company)}</h2><p class="muted">${e(r.subject)} · ${e(r.status)} · Expires ${fmtDate(r.expiry)}</p></div>${b('Download signed archive / evidence','archive')}</div>
       <p class="muted">${e(r.note||'No signing message')}</p><h3>Documents (${r.docs.length})</h3>${docs||'<p class="muted">No PDFs uploaded.</p>'}
       ${pending?`<label class="zs-upload">Upload PDFs (up to eight, 3 MB each)<input id="zs-doc-upload" type="file" accept="application/pdf,.pdf" multiple ${busy?'disabled':''}></label>`:''}
@@ -103,6 +130,9 @@ export function createNativeSigning({update,getCompanies}) {
     return '<section class="zs-panel">Loading signing workspace…</section>';
   }
   function signerField(n){return `<div class="zs-signer-input"><b>${n}.</b><label>Full name<input name="zs-name" maxlength="180" required placeholder="Signer name"></label><label>Email<input type="email" name="zs-email" required placeholder="Email address"></label>${b('Remove','remove-signer')}</div>`;}
+
+  function editSignerField(s,n){return `<div class="zs-signer-input zs-edit-signer" data-signer-id="${e(s.id||'')}"><b>${n}.</b><label>Full name<input name="zs-edit-name" maxlength="180" required value="${e(s.name||'')}"></label><label>Email<input type="email" name="zs-edit-email" required value="${e(s.email||'')}"></label><div class="zs-edit-signer-actions">${b('↑ Up','edit-up')}${b('↓ Down','edit-down')}${b('Remove','remove-edit-signer')}</div></div>`;}
+  function renumberEditedSigners(){[...document.querySelectorAll('#zs-edit-signers .zs-edit-signer')].forEach((row,i)=>row.querySelector('b').textContent=`${i+1}.`);}
   async function list(){requests=(await api('/requests')).requests||[];view='list';detail=null;update();}
   async function open(rid){const oldId=detail?.id;detail=await api('/requests/'+encodeURIComponent(rid));if(oldId!==detail.id)preview.reset();view='detail';placementRows=(detail.placements||[]).map(x=>({...x,x:+(100*x.x).toFixed(1),y:+(100*x.y).toFixed(1),width:+(100*x.width).toFixed(1),height:+(100*x.height).toFixed(1)}));update();}
   function captureRows(){
@@ -122,6 +152,8 @@ export function createNativeSigning({update,getCompanies}) {
   async function click(action,id,target){
     if(action==='logout'){resetAuth();return;}
     if(action==='new'){signerCount=2;view='new';message='';update();return;}
+    if(action==='reset-preview')return work(async()=>{resetPreview=await api('/requests/reset-preview');view='reset';});
+    if(action==='reset-cancel'){resetPreview=null;return work(list);}
     if(action==='refresh'){return work(list);}
     if(action==='add-signer'){
       const root=document.getElementById('zs-signers');if(root.children.length>=15)return feedback('Maximum 15 signers.',true);
@@ -133,6 +165,36 @@ export function createNativeSigning({update,getCompanies}) {
       if(el&&root.children.length>1){el.remove();[...root.children].forEach((row,i)=>row.querySelector('b').textContent=`${i+1}.`);}return;
     }
     if(action==='detail')return work(()=>open(id));
+    if(action==='edit-draft'){
+      if(detail?.status!=='draft')return feedback('Only drafts can be edited.',true);
+      if(JSON.stringify(captureRows())!==JSON.stringify(placementRows)&&!confirm('Unsaved signature positions will be lost. Continue?'))return;
+      view='edit';update();return;
+    }
+    if(action==='cancel-edit'){view='detail';update();return;}
+    if(action==='add-edit-signer'){
+      const root=document.getElementById('zs-edit-signers');if(!root)return;
+      if(root.children.length>=15)return feedback('Maximum 15 signers.',true);
+      root.insertAdjacentHTML('beforeend',editSignerField({},root.children.length+1));return;
+    }
+    if(['edit-up','edit-down','remove-edit-signer'].includes(action)){
+      const row=target?.closest('.zs-edit-signer'),root=document.getElementById('zs-edit-signers');
+      if(!row||!root)return;
+      if(action==='remove-edit-signer'&&root.children.length>1)row.remove();
+      if(action==='edit-up'&&row.previousElementSibling)root.insertBefore(row,row.previousElementSibling);
+      if(action==='edit-down'&&row.nextElementSibling)root.insertBefore(row.nextElementSibling,row);
+      renumberEditedSigners();return;
+    }
+    if(action==='delete-draft-pdf'){
+      if(detail?.status!=='draft')return feedback('PDFs are locked after activation.',true);
+      const doc=detail.docs.find(d=>d.id===id);if(!doc)return;
+      if(!confirm(`Remove PDF "${doc.name}" and its saved signature positions from this draft? This cannot be undone.`))return;
+      return work(async()=>{
+        const result=await api(`/requests/${detail.id}/docs/${id}`,{method:'DELETE'});
+        await open(detail.id);
+        feedback(`PDF removed. ${result.removedPlacements} signature position(s) removed.`);
+      });
+    }
+
     if(!detail)return;
     if(action==='add-box'){
       if(!detail.docs.length)return feedback('Upload a PDF first.',true);
@@ -167,6 +229,17 @@ export function createNativeSigning({update,getCompanies}) {
         feedback(`Saved ${Number.isInteger(result.count)?result.count:boxes.length} signature box(es).`);
       });
     }
+    if(action==='revoke'){
+      if(detail?.status==='revoked')return feedback('Request already revoked.',true);
+      const answer=prompt('Revoke this signing request? All previously delivered signer links will immediately become unusable, including document downloads. Signed PDFs and audit evidence remain accessible to administrators. Type REVOKE to confirm:');
+      if(answer!=='REVOKE')return;
+      const reason=prompt('Optional reason (stored in audit log):')||'Cancelled by administrator';
+      return work(async()=>{
+        await api(`/requests/${detail.id}/revoke`,{method:'POST',json:{confirm:'REVOKE',reason}});
+        await open(detail.id);
+        feedback('Request revoked: signer links disabled. Existing administrator evidence retained.');
+      });
+    }
     if(action==='activate'){
       if(!confirm('Activate this signing request? The first signer may receive an email immediately.'))return;
       return work(async()=>{const r=await api(`/requests/${detail.id}/activate`,{method:'POST'});await open(detail.id);feedback(r.mailResult||'Signing request activated.');});
@@ -182,6 +255,7 @@ export function createNativeSigning({update,getCompanies}) {
       const signer=detail.signers.find(s=>s.id===id);if(!signer)return;
       // Never share an unactivated draft link: signer PDFs are unavailable in draft state.
       if(detail.status==='draft')return feedback('This request is still a draft. Save positions for every signer and activate the request before sharing links.',true);
+      if(detail.status==='revoked')return feedback('This request has been revoked; its signer links are disabled.',true);
       try {
         if(!signer.link)throw new Error('No signing URL was returned by the API.');
         // The API sometimes returns a link with an incorrect frontend origin.
@@ -208,6 +282,43 @@ export function createNativeSigning({update,getCompanies}) {
         token=data.token;await list();feedback('Signed in to the existing Sequential Signing workspace.');
       });return true;
     }
+    if(form.id==='zs-reset-form'){
+      if(!resetPreview)return false;
+      const data=new FormData(form);
+      const confirmText=String(data.get('confirm')||''),adminPwd=String(data.get('password')||'');
+      if(confirmText!=='DELETE ALL SIGNING REQUESTS'||data.get('backup')!=='on'){
+        feedback('The exact reset phrase and verified backup acknowledgement are required.',true);return true;
+      }
+      if(!confirm(`PERMANENT RESET: destroy all ${resetPreview.count} requests, PDFs, signatures and audit evidence? This cannot be undone.`))return true;
+      const permit=resetPreview.permit;
+      work(async()=>{
+        const result=await api('/requests/reset-all',{method:'POST',
+          json:{permit,confirm:confirmText,password:adminPwd,acknowledgeBackup:true}});
+        resetPreview=null;await list();
+        feedback(`Reset complete: ${result.deletedRequests} requests and ${result.deletedObjects} stored objects erased.`);
+      });return true;
+    }
+    if(form.id==='zs-edit-form'){
+      if(detail?.status!=='draft')return false;
+      const draftId=detail.id;
+      const rows=[...form.querySelectorAll('.zs-edit-signer')];
+      const signers=rows.map(row=>({
+        id:row.dataset.signerId||undefined,
+        name:row.querySelector('[name="zs-edit-name"]').value.trim(),
+        email:row.querySelector('[name="zs-edit-email"]').value.trim()
+      }));
+      const data=new FormData(form);
+      const payload={expectedUpdatedAt:detail.updatedAt||detail.createdAt,
+        company:data.get('company'),subject:data.get('subject'),note:data.get('note'),signers};
+      if(data.get('days'))payload.days=Number(data.get('days'));
+      work(async()=>{
+        const result=await api(`/requests/${draftId}`,{method:'PATCH',json:payload});
+        await open(draftId);
+        feedback(result.removedPlacements
+          ?`Draft updated. ${result.removedPlacements} orphaned signature box(es) removed. Review positions before activation.`
+          :'Draft changes saved. Review signature positions before activation.');
+      });return true;
+    }
     if(form.id==='zs-create-form'){
       const data=new FormData(form),names=data.getAll('zs-name'),emails=data.getAll('zs-email');
       const signers=names.map((name,i)=>({name:String(name).trim(),email:String(emails[i]||'').trim()}));
@@ -223,7 +334,7 @@ export function createNativeSigning({update,getCompanies}) {
   }
   return {mount:()=>{if(view==='detail'&&detail?.status==='draft')preview.mount(document.getElementById('zs-pdf-preview'));},
     input:target=>{if(target?.closest?.('.zs-placement-row'))preview.drawBoxes(document.getElementById('zs-pdf-preview'));return false;},
-    render:()=>`<div class="integration-heading"><div><p class="eyebrow">DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Administrator login and signing requests directly inside ZHENLI DMS</p></div><span class="zs-version">Native Signing V1.6.1</span></div>
+    render:()=>`<div class="integration-heading"><div><p class="eyebrow">DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Administrator login and signing requests directly inside ZHENLI DMS</p></div><span class="zs-version">Native Signing V1.8 Preview · Edit, Revoke & Reset</span></div>
     ${message?`<div class="zs-message ${error?'zs-error':''}" role="status">${e(message)}</div>`:''}
     ${busy?'<div class="zs-message">Connecting to the private signing service…</div>':''}${main()}`,
     onClick,submit,changed};

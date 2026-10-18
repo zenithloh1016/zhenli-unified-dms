@@ -69,3 +69,8 @@
 .zs-preview-placing .zs-preview-overlay{cursor:crosshair;touch-action:none}
 .zs-preview .fineprint{margin:12px 0 0}
 @media(max-width:600px){.zs-preview{padding:10px}.zs-preview-scroll{padding:8px 0}.zs-preview-controls>.btn{width:100%}.zs-preview-box-label{font-size:9px}}
+
+/* V1.7: in-DMS draft-edit signer order buttons for Android/website. */
+.zs-edit-signer-actions{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+.zs-edit-signer-actions .btn{font-size:11px;min-width:58px}
+@media(max-width:850px){.zs-edit-signer-actions{grid-column:1 / -1}.zs-edit-signer-actions .btn{flex:1}}

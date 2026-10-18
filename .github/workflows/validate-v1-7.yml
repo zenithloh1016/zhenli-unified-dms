@@ -1,0 +1,15 @@
+name: Validate V1.7 DMS Web and Android Assets
+on:
+  push:
+    branches: [feature/edit-signing-requests-v1-7]
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
