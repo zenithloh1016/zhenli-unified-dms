@@ -9,6 +9,34 @@ import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,remov
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
+
+let arFullscreen=false;
+function setFullscreenUi(open){
+ arFullscreen=!!open;
+ // DMS owns the containing viewport, while the standalone app uses an immersive CSS layout.
+ document.documentElement.classList.toggle('ar-immersive',arFullscreen&&window.parent===window);
+ const btn=$('toggle-fullscreen');
+ if(btn){btn.textContent=arFullscreen?'Exit full screen ✕':'⛶ Full screen';btn.setAttribute('aria-pressed',String(arFullscreen));}
+}
+async function toggleAnnualReturnFullscreen(){
+ if(window.parent!==window){
+  window.parent.postMessage({type:'ZHENLI_AR_FULLSCREEN_TOGGLE'},window.location.origin);
+  return;
+ }
+ const next=!arFullscreen;
+ if(next&&typeof document.documentElement.requestFullscreen==='function'){
+  try{await document.documentElement.requestFullscreen();}catch{/* Android WebView/Brave may require CSS fallback */}
+ }else if(!next&&document.fullscreenElement&&typeof document.exitFullscreen==='function'){
+  try{await document.exitFullscreen();}catch{/* fallback */}
+ }
+ setFullscreenUi(next);
+}
+$('toggle-fullscreen').addEventListener('click',()=>{void toggleAnnualReturnFullscreen();});
+document.addEventListener('fullscreenchange',()=>{if(window.parent===window)setFullscreenUi(Boolean(document.fullscreenElement));});
+document.addEventListener('keydown',event=>{
+ if(event.key==='Escape'&&arFullscreen&&window.parent===window&&!document.fullscreenElement)setFullscreenUi(false);
+});
+
 let draftScope=window.parent===window?'standalone':'dms:pending',newDraftId='new-'+Date.now().toString(36),draftTimer=null;
 let selectedDmsCompanyId=null,dmsCompanies=[];
 function currentDraftId(){return selectedDmsCompanyId||newDraftId;}
@@ -98,6 +126,7 @@ function applyDmsCompany(company){
 if(window.parent!==window){
  window.addEventListener('message',event=>{
   if(event.source!==window.parent||event.origin!==window.location.origin)return;
+  if(event.data?.type==='ZHENLI_DMS_AR_FULLSCREEN_STATE'){setFullscreenUi(Boolean(event.data.open));return;}
   if(event.data?.type==='ZHENLI_DMS_AR_COMPANY_LIST'){
    const records=Array.isArray(event.data.companies)?event.data.companies:[];
    dmsCompanies=records.slice(0,5000).filter(isValidCompanyRecord).sort((a,b)=>a.name.localeCompare(b.name));
