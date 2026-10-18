@@ -3,7 +3,7 @@
 <meta name="theme-color" content="#123b5f"/><title>ZHENLI Annual Return PDF</title>
 <meta name="description" content="Private bilingual Malaysian Annual Return particulars review PDF generator"/>
 </head><body><div id="app">
-<header class="top"><div class="logo">Z</div><div class="wordmark"><strong>ZHENLI</strong><small>ANNUAL RETURN PDF STUDIO</small></div><span class="version">V1.8 · NON-CASH ALLOTMENT UPDATED</span></header>
+<header class="top"><div class="logo">Z</div><div class="wordmark"><strong>ZHENLI</strong><small>ANNUAL RETURN PDF STUDIO</small></div><span class="version">V1.8 · NON-CASH ALLOTMENT UPDATED</span><button id="toggle-fullscreen" class="ar-fullscreen-toggle" type="button" aria-pressed="false">⛶ Full screen</button></header>
 <main class="shell">
 <section class="hero"><p class="eyebrow">COMPANY SECRETARIAL WORKSPACE</p><h1>Annual Return Review</h1><p>Prepare, review and download bilingual English–Chinese particulars PDFs, using your bilingual Annual Return review form. Start with Company Details below; the old Company Profile panel has been removed. This app does not submit to SSM.</p>
 <div class="actions"><button id="blank" class="button outline" type="button">Start New Annual Return</button><button id="save-draft" class="button primary" type="button">Save Draft</button></div>
@@ -15,8 +15,7 @@
 <section class="workspace">
 <div class="panel review-panel" id="company-details"><div class="panel-header"><div><p class="eyebrow">01 / COMPANY DETAILS · V1.8</p><h2>Company Details / 公司资料</h2></div><span id="count" class="pill">0 fields</span></div>
 <p class="status">Begin with Company Details below. Enter the company name, registration number, Annual Return year and anniversary date here. The old Company Profile, TIN, review notes, appointment dates, member-entry dates, BO becoming/ceased dates, notice dates, internal due dates and Register Last Updated fields are removed.</p>
-<div class="actions compact"><button id="add-section" class="button mini" type="button">+ Section</button></div>
-<div class="section-tools"><input id="search" type="search" placeholder="Search fields or sections..." aria-label="Search fields"/><label class="toggle"><input id="incomplete" type="checkbox"/> Blank fields only</label></div>
+<div class="section-tools"><label class="toggle"><input id="incomplete" type="checkbox"/> Blank fields only</label></div>
 <p class="status" id="field-status" role="status"></p><div id="particulars"></div>
 <div class="actions compact"><button id="add-field" class="button outline">+ Add field at end of form</button><button id="clear-values" class="button quiet">Clear all values</button></div></div>
 <div class="panel confirmation-panel"><div class="panel-header"><div><p class="eyebrow">02 / DIRECTOR SIGNING</p><h2>Director Confirmation / 董事确认</h2></div></div>
