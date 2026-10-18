@@ -40,8 +40,8 @@ jobs:
           npm install --no-audit --no-fund
           npm run test
           npm run build
-          mkdir -p ../dist/annual-return
-          cp -R dist/. ../dist/annual-return/
+          cd ..
+          node scripts/bundle-annual-return.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -75,6 +75,14 @@ jobs:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
+      - name: Bundle Annual Return V1.5 into the DMS Android app
+        run: |
+          cd annual-return
+          npm install --no-audit --no-fund
+          npm run test
+          npm run build
+          cd ..
+          node scripts/bundle-annual-return.mjs
       - name: Generate and synchronize Android app
         run: |
           npx cap add android
