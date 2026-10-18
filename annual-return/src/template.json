@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "templateSource": "Annual Return Review Form (revised)(1).gs; latest structured example 2026-10-13",
   "company": {
     "name": "",
@@ -92,12 +92,6 @@
       "value": ""
     },
     {
-      "type": "field",
-      "en": "Company Constitution",
-      "cn": "公司章程",
-      "value": ""
-    },
-    {
       "type": "section",
       "en": "SECTION B - SHARE CAPITAL AND SHAREHOLDING",
       "cn": "B部分 - 股本及股权结构",
@@ -165,14 +159,14 @@
     },
     {
       "type": "field",
-      "en": "Shares Issued Otherwise Than in Cash (marked preference allotment)",
-      "cn": "以非现金方式发行的优先股",
+      "en": "Shares Issued Otherwise Than in Cash",
+      "cn": "以非现金方式发行的股份",
       "value": ""
     },
     {
       "type": "field",
-      "en": "Amount Considered Paid on Non-Cash Preference Allotment",
-      "cn": "非现金优先股视为已缴足金额",
+      "en": "Amount Considered Paid on Non-Cash Allotment",
+      "cn": "非现金配发视为已缴金额",
       "value": ""
     },
     {

@@ -1,5 +1,5 @@
 import template from './template.json' with {type:'json'};
-export const SCHEMA_VERSION=5;
+export const SCHEMA_VERSION=6;
 export const cloneBlank=()=>structuredClone(template);
 const safe=(s,n=20000)=>String(s??'').slice(0,n);
 
@@ -68,7 +68,7 @@ function readJsonObjectAfter(script,marker){
   }
   throw Error('Unfinished Apps Script data object: '+marker);
 }
-const EXCLUDED_FIELDS=/^(?:Tax Identification Number(?: \(TIN\))?|TIN|Statutory Lodgement Deadline(?: \(30 calendar days\))?|Master Listing Internal Due Date|Register Last Updated|Master Listing Internal Due vs Statutory 30 Days|Corporate Shareholder Control Classification|Preference Share Rights|Recorded Amount of Indebtedness \(not outstanding balance\)|Discharge Date|Date of Appointment|Date of Secretary Appointment|Date Entered as Member|Date Became\s*\/\s*Ceased as BO|Date of (?:Becoming|Ceasing) (?:a )?(?:Beneficial Owner|BO)|Notice\s*\/\s*BO Confirmation Dates|Date of Notice(?: Issued| of (?:BO|Beneficial Owner|Beneficial Ownership))?|Notice Date|(?:BO|Beneficial Ownership) Notice Date|Date of (?:BO|Beneficial Ownership) Notice)$/i;
+const EXCLUDED_FIELDS=/^(?:Company Constitution|Tax Identification Number(?: \(TIN\))?|TIN|Statutory Lodgement Deadline(?: \(30 calendar days\))?|Master Listing Internal Due Date|Register Last Updated|Master Listing Internal Due vs Statutory 30 Days|Corporate Shareholder Control Classification|Preference Share Rights|Recorded Amount of Indebtedness \(not outstanding balance\)|Discharge Date|Date of Appointment|Date of Secretary Appointment|Date Entered as Member|Date Became\s*\/\s*Ceased as BO|Date of (?:Becoming|Ceasing) (?:a )?(?:Beneficial Owner|BO)|Notice\s*\/\s*BO Confirmation Dates|Date of Notice(?: Issued| of (?:BO|Beneficial Owner|Beneficial Ownership))?|Notice Date|(?:BO|Beneficial Ownership) Notice Date|Date of (?:BO|Beneficial Ownership) Notice)$/i;
 function cleanParticulars(items){
  let excludedSection=false;
  return items.filter(x=>{
@@ -143,9 +143,17 @@ export function normalizeDocument(raw){
       arYear:safe(company.arYear,12),arDate:safe(company.arDate,40)},
     signatureDirector:{name:safe(director.name,200),nric:safe(director.nric||director.id||'',100),
       designation:safe(director.designation||'Director',80)},
-    particulars:cleanParticulars(raw.particulars).map(x=>({
-      type:x.type,en:safe(x.en,350),cn:safe(x.cn,350),value:x.type==='field'?safe(x.value,15000):''
-    }))
+    particulars:cleanParticulars(raw.particulars).map(x=>{
+      // Keep historical shareholder values, but retire the preference-only wording.
+      const oldNonCash=/^Shares Issued Otherwise Than in Cash\s*\(marked preference allotment\)$/i.test(String(x.en||'').trim());
+      const oldPaid=/^Amount Considered Paid on Non-Cash Preference Allotment$/i.test(String(x.en||'').trim());
+      return {
+        type:x.type,
+        en:oldNonCash?'Shares Issued Otherwise Than in Cash':oldPaid?'Amount Considered Paid on Non-Cash Allotment':safe(x.en,350),
+        cn:oldNonCash?'以非现金方式发行的股份':oldPaid?'非现金配发视为已缴金额':safe(x.cn,350),
+        value:x.type==='field'?safe(x.value,15000):''
+      };
+    })
   };
   // Historic .gs source may omit this controlled field; append it without deleting any data.
   if((!Number(raw.schemaVersion)||Number(raw.schemaVersion)<3)&&!doc.particulars.some(x=>x.type==='field'&&x.en==='Type of Shares Issued')){

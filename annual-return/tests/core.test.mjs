@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {cloneBlank,importAnnualReturnText,normalizeDocument,outputFilename,emptyCount,populatedCount} from '../src/core.js';
 test('blank bilingual template has all current structural fields without real client values',()=>{
   const blank=cloneBlank();
-  assert.equal(blank.particulars.length,130);
-  assert.equal(blank.particulars.filter(x=>x.type==='field').length,113);
+  assert.equal(blank.particulars.length,129);
+  assert.equal(blank.particulars.filter(x=>x.type==='field').length,112);
   assert.equal(populatedCount(blank),0);
-  assert.equal(emptyCount(blank),113);
+  assert.equal(emptyCount(blank),112);
   assert.ok(blank.particulars.some(x=>x.cn.includes('股权')));
   assert.equal(blank.company.name,'');
   assert.equal(blank.signatureDirector.nric,'');
@@ -30,7 +30,7 @@ test('rejects malformed or unsafe scripts and maintains editable draft JSON',()=
   const recovered=importAnnualReturnText(JSON.stringify(draft),'save.json');
   assert.equal(recovered.company.name,'SAMPLE SDN. BHD.');
   assert.equal(recovered.particulars[2].value,'Test');
-  assert.equal(normalizeDocument(draft).particulars.length,130);
+  assert.equal(normalizeDocument(draft).particulars.length,129);
 });
 
 test('preserves multiple BO criteria and director capacity without signing date',()=>{
@@ -101,8 +101,8 @@ test('excluded internal due dates and register update fields never survive .gs o
  draft.company.masterListingDueDate='2026-10-18';
  draft.particulars.push(...forbidden.map(en=>({type:'field',en,cn:'',value:'2026-10-18'})));
  const out=normalizeDocument(draft);
- assert.equal(out.schemaVersion,5);
- assert.equal(out.particulars.length,130);
+ assert.equal(out.schemaVersion,6);
+ assert.equal(out.particulars.length,129);
  assert.equal(out.particulars.some(x=>forbidden.includes(x.en)),false);
  assert.equal(Object.hasOwn(out.company,'lodgementDueDate'),false);
  assert.equal(Object.hasOwn(out.company,'masterListingDueDate'),false);
@@ -121,7 +121,7 @@ test('V1.6 removes TIN and the entire Company Review and Verification section fr
  raw.signatureDirector.date='2026-10-18';
  raw.signatureDirector.acknowledgement='Signed';
  const restored=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(raw)+';', 'legacy.gs');
- assert.equal(restored.particulars.length,130);
+ assert.equal(restored.particulars.length,129);
  assert.equal(restored.particulars.some(x=>/^(?:Tax Identification Number(?: \(TIN\))?|TIN|COMPANY REVIEW AND VERIFICATION NOTES)$/i.test(x.en)),false);
  assert.equal(restored.particulars.some(x=>x.en==='Preference Allotment'&&x.value==='Private client details'),false);
  assert.equal(Object.hasOwn(restored.signatureDirector,'date'),false);
@@ -144,7 +144,7 @@ test('V1.6 removes all requested dates in both blank template and legacy importe
  const legacy=cloneBlank();
  legacy.particulars.push(...fieldNames.map(en=>({type:'field',en,cn:'测试',value:'2026-10-18'})));
  const parsed=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(legacy)+';','legacy.gs');
- assert.equal(parsed.particulars.length,130);
+ assert.equal(parsed.particulars.length,129);
  assert.equal(parsed.particulars.some(x=>fieldNames.includes(x.en)),false);
  assert.equal(parsed.particulars.some(x=>x.en==='Date of Incorporation'),true);
  assert.equal(parsed.particulars.some(x=>x.en==='Date of Birth'),true);
@@ -177,7 +177,7 @@ test('legacy Beneficial Owner notice date aliases never appear in saved drafts o
  for(const extension of ['.json','.gs']){
    const input=extension==='.gs'?'const AR_SINGLE_COMPANY = '+JSON.stringify(legacy)+';':JSON.stringify(legacy);
    const result=importAnnualReturnText(input,'older'+extension);
-   assert.equal(result.particulars.length,130);
+   assert.equal(result.particulars.length,129);
    assert.equal(result.particulars.some(x=>extra.includes(x.en)),false);
  }
 });
@@ -291,4 +291,38 @@ test('Annual Return DMS selector shows full company dropdown without name or reg
  assert.ok(!child.includes('Or search by company name / registration number'));
  assert.ok(!child.includes('data-dms-company-id'));
  assert.ok(child.includes('ZHENLI_AR_SELECT_COMPANY_REQUEST'));
+});
+
+test('Company Constitution is removed; non-cash share allotment labels are general and preference-free',()=>{
+ const doc=cloneBlank();
+ assert.ok(!doc.particulars.some(x=>x.en==='Company Constitution'));
+ assert.ok(!doc.particulars.some(x=>/marked preference allotment|Non-Cash Preference Allotment/i.test(x.en)));
+ assert.ok(doc.particulars.some(x=>x.en==='Shares Issued Otherwise Than in Cash'));
+ assert.ok(doc.particulars.some(x=>x.en==='Amount Considered Paid on Non-Cash Allotment'));
+ assert.equal(doc.particulars.find(x=>x.en==='Shares Issued Otherwise Than in Cash').cn,'以非现金方式发行的股份');
+ assert.equal(doc.particulars.find(x=>x.en==='Amount Considered Paid on Non-Cash Allotment').cn,'非现金配发视为已缴金额');
+});
+test('old .gs and JSON imports drop Constitution while preserving existing non-cash allotment values',()=>{
+ const source=cloneBlank();
+ source.schemaVersion=5;
+ source.particulars.splice(13,0,{type:'field',en:'Company Constitution',cn:'公司章程',value:'Confidential details'});
+ const first=source.particulars.find(x=>x.en==='Shares Issued Otherwise Than in Cash');
+ first.en='Shares Issued Otherwise Than in Cash (marked preference allotment)';
+ first.cn='以非现金方式发行的优先股';
+ first.value='7500 shares';
+ const paid=source.particulars.find(x=>x.en==='Amount Considered Paid on Non-Cash Allotment');
+ paid.en='Amount Considered Paid on Non-Cash Preference Allotment';
+ paid.cn='非现金优先股视为已缴足金额';
+ paid.value='RM 7,500';
+ const verify=restored=>{
+  assert.equal(restored.schemaVersion,6);
+  assert.equal(restored.particulars.length,129);
+  assert.equal(restored.particulars.some(x=>x.en==='Company Constitution'),false);
+  assert.equal(restored.particulars.find(x=>x.en==='Shares Issued Otherwise Than in Cash').value,'7500 shares');
+  assert.equal(restored.particulars.find(x=>x.en==='Amount Considered Paid on Non-Cash Allotment').value,'RM 7,500');
+  assert.ok(!restored.particulars.some(x=>x.en.includes('marked preference allotment')));
+ };
+ verify(normalizeDocument(source));
+ verify(importAnnualReturnText(JSON.stringify(source),'old.json'));
+ verify(importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(source)+';', 'old.gs'));
 });
