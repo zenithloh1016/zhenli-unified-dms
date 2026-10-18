@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "node scripts/build-msic.mjs && vite build",
     "dev": "vite --host 0.0.0.0",
     "test": "node --test tests/*.test.mjs",
-    "android:sync": "npm run build && npx cap sync android"
+    "android:sync": "npm run build && npx cap sync android",
+    "build:no-msic": "vite build"
   },
   "dependencies": {
     "@capacitor/core": "^8.0.0",
