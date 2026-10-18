@@ -96,16 +96,7 @@ export function renderPages(doc){
   }
   push(block('pdf-title','<h1>'+escapeHtml(doc.company.name||'COMPANY NAME TO CONFIRM')+
     ' — ANNUAL RETURN '+escapeHtml(doc.company.arYear||'')+'</h1><div class="pdf-kicker">ANNUAL RETURN PARTICULARS REVIEW / 周年申报资料审核</div>'));
-  const meta=[
-    ['Company Name / 公司名称',doc.company.name],
-    ['Company No. / 公司编号',doc.company.no],
-    ['Annual Return Year / 周年申报年份',doc.company.arYear],
-    ['Annual Return Date / 周年申报日期',doc.company.arDate],
-    ['Lodgement Due Date / 申报截止日期',doc.company.lodgementDueDate],
-  ];
-  if(doc.company.masterListingDueDate)meta.push(['Internal Due Date / 内部截止日期',doc.company.masterListingDueDate]);
-  const details=block('pdf-meta',meta.map(([name,val])=>'<div>'+escapeHtml(name)+'</div><div>'+escapeHtml(blank(val))+'</div>').join(''));
-  push(details);
+  // Company Details is the first particulars section below; avoid a duplicate profile table.
   for(const item of doc.particulars){
     if(item.type==='section'||item.type==='heading'){
       section(item.en,item.cn,item.type);continue;

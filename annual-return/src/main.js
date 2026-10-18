@@ -2,16 +2,12 @@ import './style.css';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount} from './core.js';
+import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails} from './core.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
 $('footer-year').textContent=new Date().getFullYear();
-const profileFields=[['name','Company name / 公司名称'],['no','Registration number / 注册编号'],
- ['arYear','Annual Return year / 申报年份'],['arDate','Anniversary / AR date / 周年申报日期'],
- ['lodgementDueDate','Statutory lodgement deadline / 法定截止日期'],
- ['masterListingDueDate','Internal Master Listing due date / 内部截止日期']];
 function status(message,error=false){
  const el=$('message');el.textContent=message;el.style.color=error?'#b23b44':'#28768c';
 }
@@ -20,9 +16,7 @@ function fieldStatus(){
  $('count').textContent=done+' / '+total+' filled';
  $('field-status').textContent=emptyCount(doc)+' blank items remain. Empty values appear as NOT PROVIDED / 未提供资料 in PDF.';
 }
-function profileInputs(){
- $('company-fields').innerHTML=profileFields.map(([key,label])=>'<label class="field-label">'+esc(label)+
-  '<input data-company="'+esc(key)+'" type="text" value="'+esc(doc.company[key])+'" autocomplete="off" placeholder="Enter or import information"></label>').join('');
+function signingInputs(){
  const signs=[['name','Confirming director / 签署董事姓名'],['nric','NRIC / Passport / 身份证或护照号码'],['designation','Capacity / 职务'],['acknowledgement','Signing acknowledgement / 签署确认说明'],['date','Actual signing date (optional) / 签署日期']];
  $('signature-fields').innerHTML=signs.map(([key,label])=>'<label class="field-label">'+esc(label)+
   '<input data-sign="'+esc(key)+'" type="text" value="'+esc(doc.signatureDirector[key]||'')+'" placeholder="'+
@@ -125,7 +119,7 @@ function renderSections(){
  }).join('')||'<p class="status">No matching fields. Clear search or disable blank-only filter.</p>';
  fieldStatus();
 }
-function resetView(){profileInputs();$('search').value='';$('incomplete').checked=false;renderSections();}
+function resetView(){signingInputs();$('search').value='';$('incomplete').checked=false;renderSections();}
 function setBusy(flag){busy=flag;$('generate-pdf').disabled=flag;$('export-json').disabled=flag;}
 async function importFile(file){
  if(!file)return;
@@ -162,6 +156,7 @@ async function generate(){
  if(!confirm('Generate a CLIENT REVIEW PDF? Verify missing details, director particulars and statutory dates before sending.'))return;
  setBusy(true);
  try{
+  syncCompanyDetails(doc);
   const {blob,filename,pages}=await buildPdf(doc,status);
   generated={blob,filename};exposeDownload(blob,filename);
   const note=await savePdf(blob,filename);
@@ -177,12 +172,12 @@ $('blank').addEventListener('click',()=>{
 $('export-json').addEventListener('click',()=>saveJson().catch(e=>status('JSON export failed: '+e.message,true)));
 $('search').addEventListener('input',renderSections);
 $('incomplete').addEventListener('change',renderSections);
-$('company-fields').addEventListener('input',e=>{const k=e.target.dataset.company;if(k)doc.company[k]=e.target.value;});
 $('signature-fields').addEventListener('input',e=>{const k=e.target.dataset.sign;if(k)doc.signatureDirector[k]=e.target.value;});
 $('particulars').addEventListener('input',e=>{
  const index=e.target.dataset.item;
  if(index!==undefined&&doc.particulars[+index]){
   doc.particulars[+index].value=e.target.value;
+  setCompanyDetail(doc,Number(index),e.target.value);
   e.target.closest('.field-entry')?.classList.toggle('blank',!e.target.value.trim());
   fieldStatus();
  }
@@ -230,4 +225,4 @@ $('print').addEventListener('click',()=>{
  renderPages(doc);window.print();setTimeout(()=>{$('pdf-stage').textContent='';},5000);
 });
 window.addEventListener('afterprint',()=>{$('pdf-stage').textContent='';});
-resetView();status('Ready. Import an existing Annual Return .gs or JSON to prefill details, or start manually.');
+resetView();status('V1.3 loaded — begin with Company Details. Import .gs / JSON or enter information in the first section.');

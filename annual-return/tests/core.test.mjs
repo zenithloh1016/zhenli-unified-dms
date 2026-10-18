@@ -26,10 +26,10 @@ test('imports JSON-compatible Google Apps Script without executing arbitrary JS'
 });
 test('rejects malformed or unsafe scripts and maintains editable draft JSON',()=>{
   assert.throws(()=>importAnnualReturnText('const AR_SINGLE_COMPANY = {}; alert(1);','bad.gs'),/Expected/);
-  const draft=cloneBlank();draft.company.name='SAMPLE SDN. BHD.';draft.particulars[1].value='Test';
+  const draft=cloneBlank();draft.company.name='SAMPLE SDN. BHD.';draft.particulars[2].value='Test';
   const recovered=importAnnualReturnText(JSON.stringify(draft),'save.json');
   assert.equal(recovered.company.name,'SAMPLE SDN. BHD.');
-  assert.equal(recovered.particulars[1].value,'Test');
+  assert.equal(recovered.particulars[2].value,'Test');
   assert.equal(normalizeDocument(draft).particulars.length,139);
 });
 
@@ -45,4 +45,47 @@ test('preserves multiple BO criteria and signing acknowledgement through draft e
  assert.equal(recovered.signatureDirector.acknowledgement,'Reviewed and acknowledged');
  assert.equal(recovered.signatureDirector.designation,'Director');
  assert.ok(recovered.particulars.some(x=>x.en==='Type of Shares Issued'));
+});
+
+test('Company Details replaces profile fields and remains source of PDF identity',async()=>{
+ const {syncCompanyDetails,setCompanyDetail}=await import('../src/core.js');
+ const blank=cloneBlank();
+ assert.equal(blank.particulars[0].en,'COMPANY DETAILS');
+ const nameIndex=blank.particulars.findIndex(x=>x.en==='Company Name');
+ const numberIndex=blank.particulars.findIndex(x=>x.en==='Company Registration No.');
+ const yearIndex=blank.particulars.findIndex(x=>x.en==='Annual Return Year');
+ blank.particulars[nameIndex].value='DEMO REVIEW SDN. BHD.';
+ setCompanyDetail(blank,nameIndex,blank.particulars[nameIndex].value);
+ blank.particulars[numberIndex].value='202601234567';
+ setCompanyDetail(blank,numberIndex,blank.particulars[numberIndex].value);
+ blank.particulars[yearIndex].value='2027';
+ setCompanyDetail(blank,yearIndex,blank.particulars[yearIndex].value);
+ assert.equal(blank.company.name,'DEMO REVIEW SDN. BHD.');
+ assert.equal(blank.company.no,'202601234567');
+ assert.equal(blank.company.arYear,'2027');
+ assert.equal(outputFilename(blank),'DEMO REVIEW SDN. BHD. - Annual Return 2027 Review.pdf');
+ const recovered=normalizeDocument(blank);
+ assert.equal(recovered.particulars[nameIndex].value,'DEMO REVIEW SDN. BHD.');
+ assert.equal(recovered.company.no,'202601234567');
+ const oldDraft=cloneBlank();
+ oldDraft.particulars[0].en='COMPANY INFORMATION';
+ oldDraft.company.name='LEGACY COMPANY SDN. BHD.';
+ oldDraft.company.no='201901111111';
+ const converted=normalizeDocument(oldDraft);
+ assert.equal(converted.particulars[0].en,'COMPANY DETAILS');
+ assert.equal(converted.particulars.find(x=>x.en==='Company Name').value,'LEGACY COMPANY SDN. BHD.');
+ assert.equal(converted.particulars.find(x=>x.en==='Company Registration No.').value,'201901111111');
+ assert.equal(syncCompanyDetails(converted).company.name,'LEGACY COMPANY SDN. BHD.');
+});
+test('Company Profile panel removed and Signing Acknowledgement remains after details',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const pdf=readFileSync(new URL('../src/pdf.js',import.meta.url),'utf8');
+ assert.ok(html.includes('01 / COMPANY DETAILS'));
+ assert.ok(html.includes('V1.3'));
+ assert.ok(!html.includes('company-panel'));
+ assert.ok(!html.includes('id="company-fields"'));
+ assert.ok(html.indexOf('id="company-details"')<html.indexOf('id="signature-fields"'));
+ assert.ok(pdf.includes('SIGNING ACKNOWLEDGEMENT'));
+ assert.ok(!pdf.includes('const meta=['));
 });
