@@ -41,7 +41,7 @@ const state = {
   user: null, companies: [], folders: [], documents: [],
   companyId: null, folderId: null, search: '', busy: false, notice: '',
   tab: 'documents', totalDocs: 0, taskFullscreen: false, signingFullscreen: false,
-  arSearch: '', arSelectedCompanyId: null,
+  arSelectedCompanyId: null,
   modal: null, authMode: 'login', importData: null, importWorkbook: null, importReader: '',
   importSheet: 0, importNameCol: 0, importRegCol: -1, importStartRow: 2,
   importProgress: null, importFileName: '', importError: ''
@@ -495,8 +495,8 @@ ROOT.addEventListener('click', event=>{
      const company=state.companies.find(c=>c.id===id);
      if(!company)return toast('Company no longer exists in the Documents list.');
      state.arSelectedCompanyId=id;
-     if(a==='prepare-annual-return'){state.arSearch='';state.tab='annual-return';state.signingFullscreen=false;render();}
-     else{sendAnnualReturnCompany();refreshAnnualReturnCompanyResults();}
+     if(a==='prepare-annual-return'){state.tab='annual-return';state.signingFullscreen=false;render();}
+     else{sendAnnualReturnCompany();}
      return;
    }
    if(a==='open-signing-fullscreen'||a==='exit-signing-fullscreen'){
@@ -606,7 +606,7 @@ document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
 });
 ROOT.addEventListener('input',e=>{
- if(e.target.id==='ar-company-search'){state.arSearch=e.target.value;refreshAnnualReturnCompanyResults();return;}
+
  signingUI.input(e.target);if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
 ROOT.addEventListener('change',e=>{
   if(signingUI.changed(e.target))return;
