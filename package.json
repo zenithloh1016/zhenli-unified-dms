@@ -17,7 +17,8 @@
     "read-excel-file": "9.3.12",
     "pdfjs-dist": "^5.4.394",
     "@capacitor/filesystem": "^8.0.0",
-    "@capacitor/share": "^8.0.0"
+    "@capacitor/share": "^8.0.0",
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.0.0",
