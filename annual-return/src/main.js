@@ -28,6 +28,62 @@ function profileInputs(){
   '<input data-sign="'+esc(key)+'" type="text" value="'+esc(doc.signatureDirector[key]||'')+'" placeholder="'+
   (key==='date'?'Leave blank until signed':'Enter signatory details')+'" autocomplete="off"></label>').join('');
 }
+
+const OPTIONS=[
+ {test:/^(?:Classes of Shares Issued|Class of Shares)$/i,values:['Ordinary','Preference','Ordinary & Preference']},
+ {test:/^(?:Type of Shares(?: Issued)?|Consideration for Shares|Shares Issued for Cash or Otherwise)$/i,values:['Cash','Otherwise than cash','Cash & Otherwise than cash']},
+ {test:/^Type of Beneficial Ownership$/i,values:['Direct','Indirect','Direct & Indirect']}
+];
+const CRITERIA={
+ A:'Holds directly or indirectly not less than 20% of the company shares',
+ B:'Holds directly or indirectly not less than 20% of the voting shares',
+ C:'Has ultimate effective control (formal or informal) over the company, directors or management',
+ D:'Can directly or indirectly appoint or remove directors who hold a majority of directors’ meeting voting rights'
+};
+const ADDONS=[
+ {id:'charge',section:/REGISTERED CHARGES/i,heading:/^REGISTERED CHARGE \d+$/i,label:'Registered Charge'},
+ {id:'director',section:/DIRECTORS, COMPANY SECRETARY/i,heading:/^DIRECTOR \d+$/i,label:'Director'},
+ {id:'member',section:/PARTICULARS OF MEMBERS/i,heading:/^MEMBER \d+$/i,label:'Member'},
+ {id:'bo',section:/CURRENT BENEFICIAL OWNERS/i,heading:/^BENEFICIAL OWNER \d+$/i,label:'Beneficial Owner'}
+];
+function addRecord(kind){
+ const rule=ADDONS.find(x=>x.id===kind);if(!rule)return;
+ let section=-1,until=doc.particulars.length;
+ for(let i=0;i<doc.particulars.length;i++){
+  const p=doc.particulars[i];
+  if(p.type==='section'&&rule.section.test(p.en||'')){section=i;continue;}
+  if(section>=0&&i>section&&p.type==='section'){until=i;break;}
+ }
+ if(section<0){status('Could not find the '+rule.label+' section in this imported script.',true);return;}
+ const headings=[];
+ for(let i=section+1;i<until;i++)if(doc.particulars[i].type==='heading'&&rule.heading.test(doc.particulars[i].en||''))headings.push(i);
+ if(!headings.length){status('No '+rule.label+' template found. Import a current Annual Return script.',true);return;}
+ const start=headings[0],last=headings[headings.length-1];
+ let end=until;
+ for(let i=last+1;i<until;i++)if(doc.particulars[i].type==='heading'){end=i;break;}
+ const next=doc.particulars.slice(start,headings[1]||end).map(x=>({...x,value:''}));
+ // New entry is cloned from the first record's field structure, not the last (which may differ).
+ const nextNumber=headings.reduce((n,i)=>Math.max(n,Number((doc.particulars[i].en||'').match(/\d+$/)?.[0]||0)),0)+1;
+ next[0].en=rule.label.toUpperCase()+' '+nextNumber;
+ next[0].cn=(next[0].cn||'').replace(/\d+$/,String(nextNumber));
+ doc.particulars.splice(until,0,...next);
+ renderSections();status('Added '+rule.label+' '+nextNumber+'. All its fields are blank.');
+}
+function controlsFor(item,index){
+ const value=String(item.value||''),common=' data-item="'+index+'"';
+ if(/^Criteria of Beneficial Ownership$/i.test(item.en)){
+  const selected=value.split(/[,;|]/).map(v=>v.trim().toUpperCase().replace(/^CRITERIA\s*/,'')); 
+  return '<div class="criteria-options">'+Object.entries(CRITERIA).map(([key,desc])=>'<label class="criteria-option"><input type="checkbox" data-criteria="'+index+'" value="'+key+'" '+(selected.includes(key)?'checked':'')+'><span><b>Criteria '+key+'</b> — '+esc(desc)+'</span></label>').join('')+'</div>';
+ }
+ const option=OPTIONS.find(o=>o.test.test(item.en));
+ if(option){
+  // Keep imported legacy values visible rather than discarding data.
+  const values=option.values.includes(value)||!value?option.values:[value,...option.values];
+  return '<select'+common+' class="choice-select"><option value="">— Select —</option>'+values.map(v=>'<option value="'+esc(v)+'" '+(v===value?'selected':'')+'>'+esc(v)+'</option>').join('')+'</select>';
+ }
+ return '<textarea'+common+' rows="'+(value.length>220?5:2)+'" spellcheck="false" placeholder="Enter confirmed information…">'+esc(value)+'</textarea>';
+}
+
 function groups(){
  const all=[];let group=null;
  doc.particulars.forEach((item,index)=>{
@@ -47,13 +103,12 @@ function renderSections(){
   const body=rows.map(({index,item})=>{
    if(item.type==='heading')return '<div class="heading-entry">'+esc(item.en)+' <small>'+esc(item.cn)+'</small></div>';
    return '<div class="field-entry '+(item.value?'':'blank')+'"><div class="title">'+esc(item.en||'Untitled')+
-    '<small>'+esc(item.cn||'')+'</small></div><textarea data-item="'+index+
-    '" rows="'+(String(item.value||'').length>220?5:2)+'" spellcheck="false" placeholder="Enter confirmed information…">'+
-    esc(item.value)+'</textarea></div>';
+    '<small>'+esc(item.cn||'')+'</small></div>'+controlsFor(item,index)+'</div>';
   }).join('');
   return '<details class="ar-section" '+(i===0||q||onlyBlank?'open':'')+'><summary class="section-header"><span>'+
    esc(group.title)+'<small>'+esc(group.cn)+'</small></span><span class="pill">'+
-   rows.filter(x=>x.item.type==='field').length+' fields</span></summary><div class="section-fields">'+body+'</div></details>';
+   rows.filter(x=>x.item.type==='field').length+' fields</span></summary><div class="section-fields">'+body+
+   (ADDONS.some(x=>x.section.test(group.title))?'<div class="addon-bar">'+ADDONS.filter(x=>x.section.test(group.title)).map(x=>'<button class="button mini" type="button" data-add-record="'+x.id+'">+ Add '+x.label+'</button>').join('')+'</div>':'')+'</div></details>';
  }).join('')||'<p class="status">No matching fields. Clear search or disable blank-only filter.</p>';
  fieldStatus();
 }
@@ -118,6 +173,19 @@ $('particulars').addEventListener('input',e=>{
   e.target.closest('.field-entry')?.classList.toggle('blank',!e.target.value.trim());
   fieldStatus();
  }
+});
+$('particulars').addEventListener('change',e=>{
+ const el=e.target;
+ if(el.dataset.criteria!==undefined){
+  const i=Number(el.dataset.criteria);
+  const values=[...$('particulars').querySelectorAll('input[data-criteria="'+i+'"]:checked')].map(x=>x.value);
+  doc.particulars[i].value=values.map(x=>'Criteria '+x).join(', ');
+  el.closest('.field-entry')?.classList.toggle('blank',!values.length);
+  fieldStatus();
+ }
+});
+$('particulars').addEventListener('click',e=>{
+ const add=e.target.closest('[data-add-record]');if(add)addRecord(add.dataset.addRecord);
 });
 $('add-field').addEventListener('click',()=>{
  const en=prompt('English field label:');if(!en?.trim())return;
