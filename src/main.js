@@ -276,11 +276,11 @@ function renderOverview() {
 }
 function renderAnnualReturn(){
   return '<section class="annual-return-module" aria-label="Annual Return PDF generator">'+
-    '<div class="integration-heading"><div><p class="eyebrow">STATUTORY PARTICULARS REVIEW · V1.5</p>'+
+    '<div class="integration-heading"><div><p class="eyebrow">STATUTORY PARTICULARS REVIEW · V1.6</p>'+
     '<h1>Annual Return PDF Generator</h1>'+
     '<p class="muted">The bilingual PDF generator is bundled into DMS Web and Android. Import an existing Annual Return .gs or JSON file or prepare a new review locally.</p></div></div>'+
     '<div class="integration-info">Drafts are not automatically stored in DMS. Use <b>Export editable JSON</b> in Annual Return before changing DMS tabs, refreshing, or signing out. Finished PDFs may be downloaded and uploaded to the correct company folder under Documents.</div>'+
-    '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.5" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share"></iframe></div>'+
+    '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.6" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share"></iframe></div>'+
     '</section>';
 }
 

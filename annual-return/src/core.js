@@ -1,5 +1,5 @@
 import template from './template.json' with {type:'json'};
-export const SCHEMA_VERSION=3;
+export const SCHEMA_VERSION=4;
 export const cloneBlank=()=>structuredClone(template);
 const safe=(s,n=20000)=>String(s??'').slice(0,n);
 
@@ -58,7 +58,7 @@ function readJsonObjectAfter(script,marker){
   }
   throw Error('Unfinished Apps Script data object: '+marker);
 }
-const EXCLUDED_FIELDS=/^(?:Tax Identification Number(?: \(TIN\))?|TIN|Statutory Lodgement Deadline(?: \(30 calendar days\))?|Master Listing Internal Due Date|Register Last Updated|Master Listing Internal Due vs Statutory 30 Days)$/i;
+const EXCLUDED_FIELDS=/^(?:Tax Identification Number(?: \(TIN\))?|TIN|Statutory Lodgement Deadline(?: \(30 calendar days\))?|Master Listing Internal Due Date|Register Last Updated|Master Listing Internal Due vs Statutory 30 Days|Date of Appointment|Date of Secretary Appointment|Date Entered as Member|Date Became\s*\/\s*Ceased as BO|Date of (?:Becoming|Ceasing) (?:a )?(?:Beneficial Owner|BO)|Notice\s*\/\s*BO Confirmation Dates|Date of Notice(?: Issued)?|Notice Date)$/i;
 function cleanParticulars(items){
  let excludedSection=false;
  return items.filter(x=>{
