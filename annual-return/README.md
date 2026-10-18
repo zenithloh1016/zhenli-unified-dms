@@ -1,6 +1,6 @@
 # ZHENLI Annual Return PDF — Web and Android
 
-Standalone local-only bilingual Annual Return **particulars review** PDF generator, based on the user's revised Google Apps Script template (9 October 2026) and latest structured example (13 October 2026). The **138 sections/headings/field rows** in `src/template.json` have their client values cleared and personal names removed. No client data, directors' NRICs, live database records or Google credentials are committed.
+Standalone local-only bilingual Annual Return **particulars review** PDF generator, based on the user's revised Google Apps Script template (9 October 2026) and latest structured example (13 October 2026). The **118 sections/headings/field rows** in `src/template.json` have their client values cleared and personal names removed. No client data, directors' NRICs, live database records or Google credentials are committed.
 
 ## Use
 
@@ -57,3 +57,11 @@ Company-specific scripts are **not bundled**, to prevent exposing private inform
 - In case the government CSV download or structure fails, the build stops instead of deploying a partial/fabricated code list.
 - Selected codes appear in the bilingual PDF and editable JSON draft; company records and credentials remain local unless explicitly exported.
 
+
+## V1.6 — DMS-integrated statutory review (18 October 2026)
+
+- The Annual Return generator is accessible inside **ZHENLI DMS → Annual Return**. The DMS website and Android distribution both bundle the same Annual Return V1.6 code; the standalone website and APK remain available.
+- The Company Details-first editor excludes Tax Identification Number (TIN), Company Review and Verification Notes, Directors' Date of Appointment, Company Secretary Date of Appointment, Date Entered as Member, Date Became/Ceased as BO, and Notice/BO Confirmation Dates. These fields are stripped from imported historical .gs / JSON drafts in the review generator; the original files, company folders and records remain unchanged.
+- BO criteria include **A, B, C, D and E**, with multiple selections allowed. **Criterion E:** a member who, under an agreement with another member, alone controls a majority of voting rights in the company. Reference: https://crmsv.ssm4u.com.my/ssmkb/SSM4UExternal?wiki_id=10046. SSM also has **Criterion F**; assess all applicable BO criteria before SSM lodgement.
+- Director Confirmation contains the director name, NRIC/passport, capacity and signature box in the PDF, without signing date or acknowledgement.
+- This review PDF is not an SSM statutory return. Verify source registers, eBOS and all current details separately.
