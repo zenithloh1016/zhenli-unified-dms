@@ -58,7 +58,7 @@ function readJsonObjectAfter(script,marker){
   }
   throw Error('Unfinished Apps Script data object: '+marker);
 }
-const EXCLUDED_FIELDS=/^(?:Tax Identification Number(?: \(TIN\))?|TIN|Statutory Lodgement Deadline(?: \(30 calendar days\))?|Master Listing Internal Due Date|Register Last Updated|Master Listing Internal Due vs Statutory 30 Days)$/i;
+const EXCLUDED_FIELDS=/^(?:Tax Identification Number(?: \(TIN\))?|TIN|Statutory Lodgement Deadline(?: \(30 calendar days\))?|Master Listing Internal Due Date|Register Last Updated|Master Listing Internal Due vs Statutory 30 Days|Date of Appointment|Date of (?:Secretary|Director) Appointment|Date Entered as Member|Date Became\s*\/\s*Ceased as BO|Date (?:Became|Becoming|Ceased) (?:as )?(?:a )?(?:BO|Beneficial Owner)|Notice\s*\/\s*BO Confirmation Dates|Date of Notice of BO|Date of (?:BO|Beneficial Ownership) Notice)$/i;
 function cleanParticulars(items){
  let excludedSection=false;
  return items.filter(x=>{
