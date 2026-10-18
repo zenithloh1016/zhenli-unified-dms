@@ -57,3 +57,13 @@ Company-specific scripts are **not bundled**, to prevent exposing private inform
 - In case the government CSV download or structure fails, the build stops instead of deploying a partial/fabricated code list.
 - Selected codes appear in the bilingual PDF and editable JSON draft; company records and credentials remain local unless explicitly exported.
 
+
+## V1.5 — integrated DMS Annual Return editor
+
+- The DMS navigation now has a dedicated **Annual Return** tab, showing the embedded editor inside the signed-in DMS website and Android app. Its files are bundled at `dist/annual-return/` by `scripts/bundle-annual-return.mjs` during both web and DMS APK builds.
+- Company Details is the first section; no separate Company Profile.
+- Removed from the editor, imported legacy GS/JSON drafts, JSON exports and generated PDF: TIN, the whole **Company Review and Verification Notes** section, directors' **Date of Appointment**, secretary's **Date of Secretary Appointment**, members' **Date Entered as Member**, beneficial owners' **Date Became / Ceased as BO** and **Notice / BO Confirmation Dates** (and equivalent historic labels).
+- The Director Confirmation retains the signature box, director name, NRIC/passport and capacity, but removes **signing date** and **Signing Acknowledgement**.
+- Existing share-type, share-class and BO ownership dropdowns, multiple BO Criteria A–D selections, repeatable Charges/Directors/Members/BO entries and 3-code DOSM/SSM MSIC selector remain.
+- **Privacy:** no private drafts or completed PDFs automatically sync to DMS storage or GitHub. Export a JSON draft before changing the DMS tab, then import it to continue. Downloaded review PDFs can be uploaded to the appropriate company folder under **Documents**.
+- Existing Supabase documents, Task Hub and EdgeOne signing requests are unchanged. Only a review PDF is generated; no SSM submission or eBOS update occurs.
