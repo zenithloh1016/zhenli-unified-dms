@@ -117,3 +117,14 @@ body.zh-signing-fullscreen-open{overflow:hidden}
   .signing-expanded .integration-heading h1{font-size:26px}
   .signing-expanded .zs-panel{padding:14px;border-radius:12px}
 }
+
+
+/* Integrated Annual Return V1.5 — same-origin built into DMS Web and Android */
+.annual-return-module{width:100%;min-width:0;overflow:hidden}
+.ar-frame-shell{width:100%;min-width:0;border:1px solid #d8e4ed;background:#f5f8fb;border-radius:15px;overflow:hidden}
+.ar-integration-frame{display:block;width:100%;height:max(78vh,760px);height:max(78dvh,760px);min-height:760px;border:0;background:#f5f8fb}
+.annual-return-module .integration-info{margin:12px 0 16px;line-height:1.65}
+@media(max-width:600px){
+ .ar-frame-shell{border-radius:10px}
+ .ar-integration-frame{min-height:760px;height:calc(100dvh - 215px);max-height:none}
+}
