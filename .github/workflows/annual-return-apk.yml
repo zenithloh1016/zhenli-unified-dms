@@ -47,6 +47,8 @@ jobs:
           npm run build
           npx cap add android
           npx cap sync android
+          cd ..
+          node scripts/install-native-pdf-saver.mjs annual-return
       - name: Build Annual Return APK
         run: |
           cd annual-return/android
