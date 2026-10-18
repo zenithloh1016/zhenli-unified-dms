@@ -2,6 +2,41 @@ import template from './template.json' with {type:'json'};
 export const SCHEMA_VERSION=1;
 export const cloneBlank=()=>structuredClone(template);
 const safe=(s,n=20000)=>String(s??'').slice(0,n);
+
+/** Company identity is entered ONCE, in the first Company Details section.
+ * Retain the historical company object for PDF filenames and .gs/JSON compatibility.
+ */
+export const COMPANY_DETAILS={
+ 'Company Name':'name',
+ 'Company Registration No.':'no',
+ 'Annual Return Year':'arYear',
+ 'Anniversary Date':'arDate',
+ 'Statutory Lodgement Deadline (30 calendar days)':'lodgementDueDate',
+ 'Master Listing Internal Due Date':'masterListingDueDate'
+};
+export function syncCompanyDetails(doc,{preferFields=true}={}){
+ if(!doc?.company||!Array.isArray(doc.particulars))return doc;
+ const first=doc.particulars.findIndex(x=>x.type==='section');
+ const end=doc.particulars.findIndex((x,i)=>i>first&&x.type==='section');
+ const from=first>=0?first+1:0,to=end>=0?end:doc.particulars.length;
+ for(let i=from;i<to;i++){
+  const item=doc.particulars[i];if(item.type!=='field')continue;
+  const key=COMPANY_DETAILS[item.en];
+  if(!key)continue;
+  const fieldVal=String(item.value||'').trim(),profileVal=String(doc.company[key]||'').trim();
+  if(fieldVal&&(preferFields||!profileVal))doc.company[key]=item.value;
+  else if(!fieldVal&&profileVal)item.value=String(doc.company[key]);
+ }
+ return doc;
+}
+export function setCompanyDetail(doc,index,value){
+ const first=doc.particulars.findIndex(x=>x.type==='section');
+ const end=doc.particulars.findIndex((x,i)=>i>first&&x.type==='section');
+ if(first<0||index<=first||(end>=0&&index>=end))return;
+ const key=COMPANY_DETAILS[doc.particulars[index]?.en];
+ if(key)doc.company[key]=String(value||'');
+}
+
 function readJsonObjectAfter(script,marker){
   const start=script.indexOf(marker);
   if(start<0) return null;
@@ -48,7 +83,7 @@ export function normalizeDocument(raw){
     if(i>=0)doc.particulars.splice(i+1,0,{type:'field',en:'Type of Shares Issued',cn:'股份发行方式（现金／非现金）',value:''});
   }
   if(!doc.particulars.length)throw Error('No valid Annual Return particulars found.');
-  return doc;
+  return syncCompanyDetails(doc);
 }
 export function importAnnualReturnText(content,filename=''){
   if(typeof content!=='string'||content.length>3_000_000)throw Error('Select a .gs/.json file smaller than 3 MB.');
