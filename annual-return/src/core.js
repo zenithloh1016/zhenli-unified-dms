@@ -1,4 +1,4 @@
-import template from './template.json';
+import template from './template.json' with {type:'json'};
 export const SCHEMA_VERSION=1;
 export const cloneBlank=()=>structuredClone(template);
 const safe=(s,n=20000)=>String(s??'').slice(0,n);
