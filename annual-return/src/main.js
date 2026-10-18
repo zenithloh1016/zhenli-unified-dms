@@ -94,7 +94,8 @@ const CRITERIA={
  A:'Holds directly or indirectly not less than 20% of the company shares',
  B:'Holds directly or indirectly not less than 20% of the voting shares',
  C:'Has ultimate effective control (formal or informal) over the company, directors or management',
- D:'Can directly or indirectly appoint or remove directors who hold a majority of directors’ meeting voting rights'
+ D:'Can directly or indirectly appoint or remove directors who hold a majority of directors’ meeting voting rights',
+ E:'Is a member of the company and, under an agreement with another member, controls alone a majority of the voting rights in the company'
 };
 const ADDONS=[
  {id:'charge',section:/REGISTERED CHARGES/i,heading:/^REGISTERED CHARGE \d+$/i,label:'Registered Charge'},
@@ -142,7 +143,7 @@ function controlsFor(item,index){
  const value=String(item.value||''),common=' data-item="'+index+'"';
  if(MSIC_FIELD.test(item.en))return msicControl(item,index);
  if(/^Criteria of Beneficial Ownership$/i.test(item.en)){
-  const selected=[...value.matchAll(/(?:criteria\s*)?([ABCD])(?=\b|[,;/\s])/gi)].map(m=>m[1].toUpperCase()); 
+  const selected=[...value.matchAll(/(?:criteria\s*)?([ABCDE])(?=\b|[,;/\s])/gi)].map(m=>m[1].toUpperCase()); 
   return '<div class="criteria-options">'+Object.entries(CRITERIA).map(([key,desc])=>'<label class="criteria-option"><input type="checkbox" data-criteria="'+index+'" value="'+key+'" '+(selected.includes(key)?'checked':'')+'><span><b>Criteria '+key+'</b> — '+esc(desc)+'</span></label>').join('')+'</div>';
  }
  const option=OPTIONS.find(o=>o.test.test(item.en));
@@ -304,5 +305,5 @@ $('print').addEventListener('click',()=>{
 });
 window.addEventListener('afterprint',()=>{$('pdf-stage').textContent='';});
 resetView();
-status('V1.5 loaded — TIN and Review Notes removed; Director Confirmation only. DMS integrated Annual Return.');
+status('V1.6 loaded — Criteria A–E available, unwanted dates removed, Director Confirmation only; integrated with DMS.');
 void loadMSIC();
