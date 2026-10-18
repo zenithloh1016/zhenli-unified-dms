@@ -448,6 +448,18 @@ $('particulars').addEventListener('change',e=>{
  }
 });
 $('particulars').addEventListener('click',e=>{
+ const record=e.target.closest('[data-remove-record]');
+ if(record){
+  const index=Number(record.dataset.removeRecord),kind=record.dataset.recordKind;
+  const label=doc.particulars[index]?.en||'record';
+  if(!confirm('Remove '+label+' and all its fields? Other records will remain.'))return;
+  try{
+   const result=removeNumberedRecord(doc,index,kind);
+   renderSections();changedDraft();
+   status('Removed '+result.removedHeading+'. '+result.remaining+' '+kind+' record(s) remain.');
+  }catch(err){status('Could not remove entry: '+err.message,true);}
+  return;
+ }
  const del=e.target.closest('[data-delete-field]');
  if(del){removeReviewField(Number(del.dataset.deleteField));return;}
  const select=e.target.closest('[data-msic-add]');
