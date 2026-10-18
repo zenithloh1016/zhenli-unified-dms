@@ -15,3 +15,8 @@ jobs:
       - name: Test Master Listing Excel parser
         run: npm run test:import
       - run: npm run build
+      - name: Validate Annual Return PDF app
+        run: |
+          cd annual-return-app
+          npm install --no-audit --no-fund
+          npm run build

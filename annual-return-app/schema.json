@@ -1,0 +1,822 @@
+{
+  "schemaVersion": 1,
+  "reference": "Annual Return Review Form (revised)(1).gs, 2026-10-09",
+  "fields": [
+    {
+      "type": "section",
+      "en": "COMPANY INFORMATION",
+      "cn": "公司资料"
+    },
+    {
+      "type": "field",
+      "en": "Company Name",
+      "cn": "公司名称",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Company Registration No.",
+      "cn": "公司注册编号",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Calendar Year of Annual Return",
+      "cn": "周年申报年份",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Date of Annual Return",
+      "cn": "周年申报日期",
+      "value": ""
+    },
+    {
+      "type": "section",
+      "en": "SECTION A - PARTICULARS OF COMPANY",
+      "cn": "A部分 - 公司资料"
+    },
+    {
+      "type": "field",
+      "en": "Registered Office / Address Where Register of Members Is Kept",
+      "cn": "注册办事处 / 股东名册存放地址",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Address Where Financial Records Are Kept",
+      "cn": "财务记录存放地址",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Principal Place of Business",
+      "cn": "主要营业地址",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Nature of Business",
+      "cn": "业务性质",
+      "value": ""
+    },
+    {
+      "type": "section",
+      "en": "SECTION B - PARTICULARS OF SHAREHOLDING STRUCTURE",
+      "cn": "B部分 - 股权结构资料"
+    },
+    {
+      "type": "field",
+      "en": "Currency",
+      "cn": "货币",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Type of Shares",
+      "cn": "股份类别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Amount of Shares Issued as Fully Paid",
+      "cn": "已发行并缴足股份金额",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Amount of Shares Issued as Partly Unpaid",
+      "cn": "已发行但未缴足股份金额",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Number of Shares Subject to Payment Wholly in Cash",
+      "cn": "以现金全额支付的股份数量",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Number of Shares Subject to Payment Otherwise Than in Cash",
+      "cn": "以非现金方式支付的股份数量",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Shares Held by Citizens Who Are Malays and Natives",
+      "cn": "由马来人及土著公民持有的股份",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Shares Held by Citizens Who Are Non-Malays and Non-Natives",
+      "cn": "由非马来人及非土著公民持有的股份",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Shares Held by Non-Citizens",
+      "cn": "由非公民持有的股份",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Shares Held by Bodies Corporate Controlled by Malays and Natives",
+      "cn": "由马来人及土著公民控制的法人实体持有的股份",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Shares Held by Bodies Corporate Controlled by Non-Malays and Non-Natives",
+      "cn": "由非马来人及非土著公民控制的法人实体持有的股份",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Shares Held by Bodies Corporate Controlled by Non-Citizens",
+      "cn": "由非公民控制的法人实体持有的股份",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Total Amount of Calls Called Up",
+      "cn": "已催缴股份总额",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Total Amount of Calls Received",
+      "cn": "已收取催缴款总额",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Amount Considered Paid on Fully Paid Shares Issued Otherwise Than in Cash",
+      "cn": "以非现金方式发行并视为已缴足股份的金额",
+      "value": ""
+    },
+    {
+      "type": "section",
+      "en": "SECTION C - PARTICULARS OF INDEBTEDNESS",
+      "cn": "C部分 - 债务资料"
+    },
+    {
+      "type": "heading",
+      "en": "REGISTERED CHARGE 1",
+      "cn": "已登记押记 1"
+    },
+    {
+      "type": "field",
+      "en": "Registered No.",
+      "cn": "登记编号",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Date of Registration",
+      "cn": "登记日期",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Nature of Charge",
+      "cn": "押记性质",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Name of Chargee",
+      "cn": "押记权人",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Amount of Indebtedness",
+      "cn": "债务金额",
+      "value": ""
+    },
+    {
+      "type": "heading",
+      "en": "REGISTERED CHARGE 2",
+      "cn": "已登记押记 2"
+    },
+    {
+      "type": "field",
+      "en": "Registered No.",
+      "cn": "登记编号",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Date of Registration",
+      "cn": "登记日期",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Nature of Charge",
+      "cn": "押记性质",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Name of Chargee",
+      "cn": "押记权人",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Amount of Indebtedness",
+      "cn": "债务金额",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Number of Registered Charges",
+      "cn": "已登记押记数量",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Total Amount of Indebtedness",
+      "cn": "债务总额",
+      "value": ""
+    },
+    {
+      "type": "section",
+      "en": "SECTION D - DIRECTORS, SECRETARY AND AUDITOR",
+      "cn": "D部分 - 董事、公司秘书及审计师"
+    },
+    {
+      "type": "heading",
+      "en": "DIRECTOR 1",
+      "cn": "董事 1"
+    },
+    {
+      "type": "field",
+      "en": "Full Name",
+      "cn": "姓名",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "NRIC / Passport No.",
+      "cn": "身份证 / 护照号码",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Nationality",
+      "cn": "国籍",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Race",
+      "cn": "种族",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Gender",
+      "cn": "性别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Date of Birth",
+      "cn": "出生日期",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Residential Address",
+      "cn": "住址",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Business Address",
+      "cn": "营业地址",
+      "value": ""
+    },
+    {
+      "type": "heading",
+      "en": "DIRECTOR 2",
+      "cn": "董事 2"
+    },
+    {
+      "type": "field",
+      "en": "Full Name",
+      "cn": "姓名",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "NRIC / Passport No.",
+      "cn": "身份证 / 护照号码",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Nationality",
+      "cn": "国籍",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Race",
+      "cn": "种族",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Gender",
+      "cn": "性别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Date of Birth",
+      "cn": "出生日期",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Residential Address",
+      "cn": "住址",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Business Address",
+      "cn": "营业地址",
+      "value": ""
+    },
+    {
+      "type": "heading",
+      "en": "COMPANY SECRETARY",
+      "cn": "公司秘书"
+    },
+    {
+      "type": "field",
+      "en": "Secretary Name",
+      "cn": "公司秘书姓名",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Secretary NRIC No.",
+      "cn": "公司秘书身份证号码",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Membership / Licence No.",
+      "cn": "会员 / 执业编号",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Practising Certificate No.",
+      "cn": "执业证书编号",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Nationality",
+      "cn": "国籍",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Race",
+      "cn": "种族",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Gender",
+      "cn": "性别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Date of Birth",
+      "cn": "出生日期",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Residential Address",
+      "cn": "住址",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Business Address",
+      "cn": "营业地址",
+      "value": ""
+    },
+    {
+      "type": "heading",
+      "en": "AUDITOR",
+      "cn": "审计师"
+    },
+    {
+      "type": "field",
+      "en": "Audit Firm No.",
+      "cn": "审计所编号",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Audit Firm",
+      "cn": "审计所名称",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Audit Firm Address",
+      "cn": "审计所地址",
+      "value": ""
+    },
+    {
+      "type": "section",
+      "en": "SECTION E - PARTICULARS OF MEMBERS",
+      "cn": "E部分 - 股东资料"
+    },
+    {
+      "type": "heading",
+      "en": "MEMBER 1",
+      "cn": "股东 1"
+    },
+    {
+      "type": "field",
+      "en": "Folio",
+      "cn": "股东名册编号",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Name",
+      "cn": "姓名",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "NRIC No.",
+      "cn": "身份证号码",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Date of Birth",
+      "cn": "出生日期",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Residential Address",
+      "cn": "住址",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Nationality",
+      "cn": "国籍",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Race",
+      "cn": "种族",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Gender",
+      "cn": "性别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Number of Shares Held",
+      "cn": "持有股份数量",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Shareholding Percentage",
+      "cn": "持股比例",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Class of Shares",
+      "cn": "股份类别",
+      "value": ""
+    },
+    {
+      "type": "heading",
+      "en": "MEMBER 2",
+      "cn": "股东 2"
+    },
+    {
+      "type": "field",
+      "en": "Folio",
+      "cn": "股东名册编号",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Name",
+      "cn": "姓名",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "NRIC No.",
+      "cn": "身份证号码",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Date of Birth",
+      "cn": "出生日期",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Residential Address",
+      "cn": "住址",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Nationality",
+      "cn": "国籍",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Race",
+      "cn": "种族",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Gender",
+      "cn": "性别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Number of Shares Held",
+      "cn": "持有股份数量",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Shareholding Percentage",
+      "cn": "持股比例",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Class of Shares",
+      "cn": "股份类别",
+      "value": ""
+    },
+    {
+      "type": "heading",
+      "en": "MEMBER 3",
+      "cn": "股东 3"
+    },
+    {
+      "type": "field",
+      "en": "Folio",
+      "cn": "股东名册编号",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Name",
+      "cn": "姓名",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "NRIC No.",
+      "cn": "身份证号码",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Date of Birth",
+      "cn": "出生日期",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Residential Address",
+      "cn": "住址",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Nationality",
+      "cn": "国籍",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Race",
+      "cn": "种族",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Gender",
+      "cn": "性别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Number of Shares Held",
+      "cn": "持有股份数量",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Shareholding Percentage",
+      "cn": "持股比例",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Class of Shares",
+      "cn": "股份类别",
+      "value": ""
+    },
+    {
+      "type": "section",
+      "en": "PARTICULARS OF BENEFICIAL OWNERS",
+      "cn": "实益拥有人资料"
+    },
+    {
+      "type": "heading",
+      "en": "BENEFICIAL OWNER 1",
+      "cn": "实益拥有人 1"
+    },
+    {
+      "type": "field",
+      "en": "Full Name",
+      "cn": "姓名",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Residential Address",
+      "cn": "住址",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Nationality",
+      "cn": "国籍",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Race",
+      "cn": "种族",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Gender",
+      "cn": "性别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Date of Birth",
+      "cn": "出生日期",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "NRIC No.",
+      "cn": "身份证号码",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Position in Company",
+      "cn": "公司职务",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Ownership Rights",
+      "cn": "所有权比例",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Voting Rights",
+      "cn": "表决权比例",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Type of Beneficial Ownership",
+      "cn": "实益拥有类型",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Criteria of Beneficial Ownership",
+      "cn": "实益拥有标准",
+      "value": ""
+    },
+    {
+      "type": "heading",
+      "en": "BENEFICIAL OWNER 2",
+      "cn": "实益拥有人 2"
+    },
+    {
+      "type": "field",
+      "en": "Full Name",
+      "cn": "姓名",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Residential Address",
+      "cn": "住址",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Nationality",
+      "cn": "国籍",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Race",
+      "cn": "种族",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Gender",
+      "cn": "性别",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Date of Birth",
+      "cn": "出生日期",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "NRIC No.",
+      "cn": "身份证号码",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Position in Company",
+      "cn": "公司职务",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Ownership Rights",
+      "cn": "所有权比例",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Voting Rights",
+      "cn": "表决权比例",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Type of Beneficial Ownership",
+      "cn": "实益拥有类型",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Criteria of Beneficial Ownership",
+      "cn": "实益拥有标准",
+      "value": ""
+    }
+  ]
+}
