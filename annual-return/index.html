@@ -10,12 +10,20 @@
 <section class="workspace">
 <div class="panel company-panel"><div class="panel-header"><div><p class="eyebrow">01 / PROFILE</p><h2>Company & review details</h2></div><span id="count" class="pill">0 fields</span></div>
 <div class="field-grid" id="company-fields"></div>
-<div class="signature-grid"><div><h3>Director's confirmation / 董事确认</h3><p>Single director signature. Leave signing date blank if unsigned.</p></div><div class="field-grid" id="signature-fields"></div></div></div>
+<div class="signature-grid"><div><h3>Director's confirmation / 董事确认</h3><p>Enter confirming director particulars. The generated PDF includes a separate signing acknowledgement and blank physical signature line.</p></div><div class="field-grid" id="signature-fields"></div>
+<label class="signing-ack"><input id="acknowledged" type="checkbox"/> <span>Director has expressly acknowledged reviewing these particulars / 董事已明确确认审阅本文件资料 <small>Leave unticked until actually confirmed. This does not apply a digital signature.</small></span></label></div></div>
 <div class="panel review-panel"><div class="panel-header"><div><p class="eyebrow">02 / PARTICULARS</p><h2>Bilingual review fields</h2></div><button id="add-section" class="button mini">+ Section</button></div>
 <div class="section-tools"><input id="search" type="search" placeholder="Search fields or sections..." aria-label="Search fields"/><label class="toggle"><input id="incomplete" type="checkbox"/> Blank fields only</label></div>
+<div class="repeater-tools" aria-label="Add additional particulars">
+<span class="repeater-title">Add-ons / 新增资料</span>
+<button type="button" data-add-group="charge" class="button outline mini">+ Charge / 押记</button>
+<button type="button" data-add-group="director" class="button outline mini">+ Director / 董事</button>
+<button type="button" data-add-group="member" class="button outline mini">+ Member / 股东</button>
+<button type="button" data-add-group="beneficialOwner" class="button outline mini">+ Beneficial Owner / 实益拥有人</button>
+</div>
 <p class="status" id="field-status" role="status"></p><div id="particulars"></div>
 <div class="actions compact"><button id="add-field" class="button outline">+ Add field to last section</button><button id="clear-values" class="button quiet">Clear all values</button></div></div>
-<div class="panel export-panel"><p class="eyebrow">03 / PDF OUTPUT</p><h2>Generate client review PDF</h2><p>The output follows the Apps Script's bilingual table format, with company profile, sections and a single director confirmation. Empty details are shown as <strong>NOT PROVIDED / 未提供资料</strong>.</p>
+<div class="panel export-panel"><p class="eyebrow">03 / PDF OUTPUT</p><h2>Generate client review PDF</h2><p>The output follows the Apps Script's bilingual table format, with company profile, sections, a separate director confirmation and signing acknowledgement. Empty details are shown as <strong>NOT PROVIDED / 未提供资料</strong>.</p>
 <div class="actions"><button id="generate-pdf" class="button primary wide">Generate &amp; Save PDF</button><button id="print" class="button outline">Print review</button></div>
 <div id="download-box" class="download-box" hidden><strong id="download-name"></strong><a id="download-link" class="button outline" download>Direct PDF download</a><button id="share-pdf" class="button outline">Save / Share again</button></div>
 <p class="status" role="status" id="message"></p>
