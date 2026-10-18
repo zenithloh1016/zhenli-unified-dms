@@ -353,7 +353,13 @@ function renderSections(){
   });
   if(!rows.length&&(q||onlyBlank))return '';
   const body=rows.map(({index,item})=>{
-   if(item.type==='heading')return '<div class="heading-entry">'+esc(item.en)+' <small>'+esc(item.cn)+'</small>'+(/^MEMBER \d+$/i.test(item.en)?'<button type="button" class="button mini ar-add-member-field" data-add-to-member="'+index+'">+ Add member field</button>':'')+'</div>';
+   if(item.type==='heading'){
+    const kind=/^DIRECTOR [0-9]+$/i.test(item.en)?'director':/^MEMBER [0-9]+$/i.test(item.en)?'member':/^BENEFICIAL OWNER [0-9]+$/i.test(item.en)?'bo':null;
+    const needle=kind==='bo'?'BENEFICIAL OWNER ':kind==='member'?'MEMBER ':'DIRECTOR ';
+    const count=kind?group.items.filter(r=>r.item.type==='heading'&&r.item.en.startsWith(needle)).length:0;
+    const remove=kind&&(count>1||kind==='bo')?'<button type="button" class="button mini ar-remove-record" data-remove-record="'+index+'" data-record-kind="'+kind+'">Remove '+(kind==='bo'?'Beneficial Owner':kind==='member'?'Member':'Director')+'</button>':'';
+    return '<div class="heading-entry">'+esc(item.en)+' <small>'+esc(item.cn)+'</small>'+(/^MEMBER [0-9]+$/i.test(item.en)?'<button type="button" class="button mini ar-add-member-field" data-add-to-member="'+index+'">+ Add member field</button>':'')+remove+'</div>';
+   }
    return '<div class="field-entry '+(item.value?'':'blank')+'"><div class="title">'+esc(item.en||'Untitled')+
     '<small>'+esc(item.cn||'')+'</small>'+(!['Company Name','Company Registration No.'].includes(item.en)?'<button type="button" class="ar-delete-field" data-delete-field="'+index+'">Delete field</button>':'')+'</div>'+controlsFor(item,index)+'</div>';
   }).join('');
