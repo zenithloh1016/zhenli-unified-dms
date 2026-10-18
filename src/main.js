@@ -1,6 +1,7 @@
 import {createNativeSigning} from './signing-native.js';
 import { createClient } from '@supabase/supabase-js';
 import readExcelFile from 'read-excel-file/browser';
+import {openMasterListingWorkbook} from './master-listing-reader.js';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import {saveOrShareFile} from './file-transfer.js';
@@ -37,7 +38,7 @@ const state = {
   user: null, companies: [], folders: [], documents: [],
   companyId: null, folderId: null, search: '', busy: false, notice: '',
   tab: 'documents', totalDocs: 0, taskFullscreen: false, signingFullscreen: false,
-  modal: null, authMode: 'login', importData: null,
+  modal: null, authMode: 'login', importData: null, importWorkbook: null, importReader: '',
   importSheet: 0, importNameCol: 0, importRegCol: -1, importStartRow: 2,
   importProgress: null, importFileName: '', importError: ''
 };
@@ -173,6 +174,46 @@ function importHint(error) {
     return 'Database permissions or login prevented the import. Sign in again and check the Supabase RLS policies from supabase/setup.sql. Details: '+message;
   return message;
 }
+async function prepareExcelImport(file){
+  let firstError=null;
+  try {
+    const book=await openMasterListingWorkbook(file);
+    const sheets=book.sheetNames.map(sheet=>({sheet,data:null}));
+    const selected=book.sheetNames.indexOf(book.preferred);
+    sheets[selected].data=book.readSheet(book.preferred);
+    return {book,sheets,selected,reader:'Android-compatible Excel reader'};
+  } catch(error){firstError=error;}
+  // Certain Excel variants cannot be read by the first parser. Avoid reading
+  // all worksheets at once: use the best worksheet with the bundled library.
+  try {
+    const info=await readExcelFile(file,{getSheets:true});
+    const names=(info||[]).map(v=>v.name).filter(Boolean);
+    if(!names.length)throw Error('No worksheets found in Excel file.');
+    const selected=Math.max(0,names.findIndex(x=>/master\s*listing/i.test(x)));
+    const readSheet=name=>readExcelFile(file,{sheet:name});
+    const sheets=names.map(sheet=>({sheet,data:null}));
+    sheets[selected].data=await readSheet(names[selected]);
+    return {book:{readSheet},sheets,selected,reader:'Compatibility Excel reader'};
+  } catch(error){
+    throw new Error('Neither Excel reader could open this workbook. Main reader: '
+      +(firstError?.message||'Unknown issue')+'. Compatibility reader: '+(error?.message||'Unknown issue')
+      +'. Try opening the file in Excel and saving a new .xlsx copy without protection.');
+  }
+}
+async function selectImportSheet(index){
+  if(!state.importData?.[index])return;
+  state.importError='';state.importProgress='Opening worksheet '+state.importData[index].sheet+'…';render();
+  try{
+    const entry=state.importData[index];
+    if(!entry.data)entry.data=await state.importWorkbook.readSheet(entry.sheet);
+    if(!Array.isArray(entry.data)||!entry.data.length)throw Error('This worksheet contains no readable rows.');
+    state.importSheet=index;state.importProgress=null;autoColumns();render();
+  }catch(error){
+    state.importProgress=null;
+    state.importError='Could not open '+state.importData[index].sheet+': '+importHint(error);
+    render();
+  }
+}
 function getImportRows() {return state.importData?.[state.importSheet]?.data || [];}
 function importCandidate() {
   const rows = getImportRows(), included = [], seen = new Set(); let rejected=0;
@@ -211,8 +252,8 @@ function columnOptions(selected, includeNone=false) {
 function renderImportModal() {
   const sheets=state.importData||[], rows=getImportRows(), c=importCandidate();
   return `<div class="modal-backdrop"><section class="modal import-modal" role="dialog" aria-modal="true" aria-label="Import Excel Master Listing"><div class="modal-heading"><h3>Import Excel Master Listing</h3>${action('✕','close-modal')}</div>
-  <p class="muted">Import Excel (.xlsx), CSV, or JSON company lists, including Task Hub Master Listing JSON. Existing companies are reused.</p>
-  <label class="input-label">1. Select file (.xlsx, .csv or .json)<input type="file" id="excel-input" accept=".xlsx,.csv,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/json"/></label>${state.importFileName?`<p class="muted">Selected: ${esc(state.importFileName)}</p>`:''}
+  <p class="muted">Import Excel (.xlsx), CSV or JSON company lists. The <strong>Master Listing</strong> worksheet is selected first and other worksheets cannot block it. Review the preview before creating folders; existing company records and files remain untouched.</p>
+  <label class="input-label">1. Select file (.xlsx, .csv or .json)<input type="file" id="excel-input" accept=".xlsx,.csv,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/json"/></label>${state.importFileName?`<p class="muted">Selected: ${esc(state.importFileName)}${state.importReader?' · '+esc(state.importReader):''}</p>`:''}
   <details class="import-paste-wrap"><summary>File picker not working? Paste company names instead</summary><p class="muted">Paste rows copied from Excel, or one company name per line. Tab-separated registration numbers are also supported.</p><textarea id="import-paste" rows="5" placeholder="Company Name,Registration No.&#10;EXAMPLE SDN. BHD.,202601234567"></textarea>${action('Use pasted list','load-paste','','secondary')}</details>
   ${sheets.length ? `<div class="import-grid"><label class="input-label">Worksheet<select id="sheet-choice">${sheets.map((s,i)=>`<option value="${i}" ${state.importSheet===i?'selected':''}>${esc(s.sheet)}</option>`).join('')}</select></label><label class="input-label">Company name column<select id="name-column">${columnOptions(state.importNameCol)}</select></label><label class="input-label">Registration number column<select id="registration-column">${columnOptions(state.importRegCol,true)}</select></label><label class="input-label">First data row (1-based)<input id="start-row" type="number" min="1" max="${Math.max(rows.length,1)}" value="${state.importStartRow}"/></label></div>
   <div class="import-preview"><strong>Selected file preview</strong><div class="preview-scroll"><table><tbody>${rows.slice(0,8).map((row,i)=>`<tr><td class="rowno">${i+1}</td>${row.slice(0,9).map(cell=>`<td>${esc(norm(cell).slice(0,55))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>
@@ -410,7 +451,7 @@ ROOT.addEventListener('click', event=>{
   if(signingUI.onClick(a,id,event))return;
   if(a==='modal-bg' && event.target===button){state.modal=null;render();return;}
   if(a==='dismiss'){state.notice='';render();return;}
-  if(a==='close-modal' && !state.busy){state.modal=null;state.importData=null;render();return;}
+  if(a==='close-modal' && !state.busy){state.modal=null;state.importData=null;state.importWorkbook=null;render();return;}
   if(state.busy) return;
   if(a.startsWith('tab-')){state.tab=a.slice(4);if(state.tab!=='signing')state.signingFullscreen=false;render();return;}
   if(a==='open-signing-fullscreen'||a==='exit-signing-fullscreen'){
@@ -453,7 +494,7 @@ ROOT.addEventListener('click', event=>{
     if(blankTab) blankTab.opener=null;
     busyDo(()=>openDocument(id,a==='download-file',blankTab));return;
   }
-  if(a==='import'){state.modal={kind:'import'};state.importData=null;state.importProgress=null;state.importError='';state.importFileName='';render();return;}
+  if(a==='import'){state.modal={kind:'import'};state.importData=null;state.importWorkbook=null;state.importReader='';state.importProgress=null;state.importError='';state.importFileName='';render();return;}
   if(a==='load-paste'){
     try{
       const raw=document.getElementById('import-paste')?.value||'';
@@ -524,13 +565,14 @@ ROOT.addEventListener('change',e=>{
   if(signingUI.changed(e.target))return;
   if(e.target.id==='document-upload'){const files=[...e.target.files];e.target.value='';if(files.length)busyDo(()=>uploadFiles(files));}
   if(e.target.id==='excel-input'){
-    const file=e.target.files[0];if(!file)return;
+    const file=e.target.files[0];e.target.value='';if(!file)return;
     busyDo(async()=>{
-      state.importError='';state.importProgress='Reading '+file.name+'…';
+      state.importError='';state.importFileName=file.name;state.importProgress='Reading '+file.name+' ('+fileSize(file.size)+')…';render();
       try {
         if(!/\.(xlsx|csv|json)$/i.test(file.name))throw new Error('Select an .xlsx Excel file, .csv file or .json company list.');
         if(file.size>20*1024*1024)throw new Error('File exceeds 20 MB.');
-        let sheets=[];
+        if(file.size===0)throw new Error('The file picker returned an empty Excel file. Choose the original .xlsx from Files → Downloads or local storage.');
+        let sheets=[],prepared=null;
         if(/\.csv$/i.test(file.name)){
           sheets=[{sheet:'CSV import',data:parseDelimitedRows(await file.text())}];
         }else if(/\.json$/i.test(file.name)){
@@ -539,19 +581,18 @@ ROOT.addEventListener('change',e=>{
           if(!Array.isArray(entries)||!entries.length||entries.length>5000)throw Error('JSON requires a companies array (1–5,000 companies).');
           sheets=[{sheet:'JSON company list',data:[['Company Name','Registration No.'],...entries.filter(c=>c&&typeof c.name==='string').map(c=>[c.name,c.reg||c.registration_no||''])]}];
         }else{
-          const sheetNames=await readExcelFile(file,{getSheets:true});
-          const names=(sheetNames||[]).map(x=>x.name).filter(Boolean);
-          if(!names.length)throw new Error('No Excel worksheets found.');
-          sheets=await Promise.all(names.map(async sheetName=>({sheet:sheetName,data:await readExcelFile(file,{sheet:sheetName})})));
+          prepared=await prepareExcelImport(file);
+          sheets=prepared.sheets;
         }
-        if(!sheets.length || !sheets.some(s=>s.data?.length))throw new Error('The file has no readable data.');
+        if(!sheets.length || !sheets.some(s=>s.data?.length))throw new Error('The selected worksheet has no readable data.');
         state.importData=sheets;
-        state.importFileName=file.name;
-        state.importSheet=0;state.importProgress=null;autoColumns();render();
-      }catch(error){state.importData=null;state.importError='Could not read the selected file: '+importHint(error)+'. Try another Excel, CSV or Task Hub Master Listing JSON file.';state.importProgress=null;render();}
+        state.importWorkbook=prepared?.book||null;
+        state.importReader=prepared?.reader||'Text / JSON reader';
+        state.importSheet=prepared?.selected||0;state.importProgress=null;autoColumns();render();
+      }catch(error){state.importData=null;state.importWorkbook=null;state.importError='Could not read '+file.name+': '+importHint(error);state.importProgress=null;render();}
     });return;
   }
-  if(e.target.id==='sheet-choice'){state.importSheet=Number(e.target.value);autoColumns();render();return;}
+  if(e.target.id==='sheet-choice'){busyDo(()=>selectImportSheet(Number(e.target.value)));return;}
   if(e.target.id==='name-column'){state.importNameCol=Number(e.target.value);render();return;}
   if(e.target.id==='registration-column'){state.importRegCol=Number(e.target.value);render();return;}
   if(e.target.id==='start-row'){state.importStartRow=Math.max(1,Number(e.target.value)||1);render();return;}

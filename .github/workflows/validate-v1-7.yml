@@ -12,4 +12,6 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
+      - name: Test Master Listing Excel parser
+        run: npm run test:import
       - run: npm run build
