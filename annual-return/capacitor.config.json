@@ -1,0 +1,8 @@
+{
+  "appId": "com.zhenli.annualreturn",
+  "appName": "ZHENLI Annual Return",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
