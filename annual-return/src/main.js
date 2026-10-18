@@ -61,7 +61,12 @@ function addRecord(kind){
  const start=headings[0],last=headings[headings.length-1];
  let end=until;
  for(let i=last+1;i<until;i++)if(doc.particulars[i].type==='heading'){end=i;break;}
- const next=doc.particulars.slice(start,headings[1]||end).map(x=>({...x,value:''}));
+ let templateEnd=headings[1]||end;
+ if(kind==='charge'){
+  const summary=doc.particulars.findIndex((x,i)=>i>start&&i<templateEnd&&x.type==='field'&&/^Number of Registered Charges$/i.test(x.en));
+  if(summary>=0)templateEnd=summary;
+ }
+ const next=doc.particulars.slice(start,templateEnd).map(x=>({...x,value:''}));
  // New entry is cloned from the first record's field structure, not the last (which may differ).
  const nextNumber=headings.reduce((n,i)=>Math.max(n,Number((doc.particulars[i].en||'').match(/\d+$/)?.[0]||0)),0)+1;
  next[0].en=rule.label.toUpperCase()+' '+nextNumber;
