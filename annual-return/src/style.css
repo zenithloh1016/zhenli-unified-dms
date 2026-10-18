@@ -55,3 +55,18 @@
 .ar-add-member-field{display:inline-flex;margin-left:auto;align-items:center}
 .ar-section .addon-bar{display:flex;flex-wrap:wrap;gap:8px}
 @media(max-width:680px){.ar-add-member-field{margin-left:0}.ar-name-selector .ar-company-full-list{font-size:14px}}
+
+/* Annual Return V1.8 — local Save Draft, Saved Drafts and automatic saving */
+.ar-save-strip{margin-top:12px;padding:11px 13px;border:1px solid #b7d8de;border-radius:10px;background:#eef7f8;color:#205a69;font-size:12px;line-height:1.5}
+.ar-save-strip.draft-error{background:#fff3f2;border-color:#e2a09d;color:#a13236}
+.ar-drafts-panel{margin:14px 0 0;padding:16px;background:#fff;border:1px solid #d4e5ea;border-radius:12px;box-shadow:0 4px 15px #0d385409}
+.ar-drafts-panel[hidden]{display:none!important}
+.ar-drafts-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.ar-drafts-heading h2{font-size:16px;margin:0}
+.ar-draft-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #e8eff3}
+.ar-draft-row:last-child{border-bottom:0}
+.ar-draft-row b{display:block;font-size:13px;overflow-wrap:anywhere}
+.ar-draft-row small{display:block;color:#617c8b;font-size:11px;margin-top:5px;line-height:1.4}
+.ar-draft-actions{display:flex;gap:6px;flex-wrap:wrap}
+.ar-draft-actions .danger{background:#fff8f8;color:#963c44;border:1px solid #eac4c8}
+@media(max-width:600px){.ar-draft-row{align-items:flex-start;flex-direction:column}.ar-draft-actions{width:100%}.ar-draft-actions .button{flex:1}}
