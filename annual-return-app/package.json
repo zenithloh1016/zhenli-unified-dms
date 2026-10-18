@@ -1,0 +1,6 @@
+{
+  "name": "zhenli-annual-return-pdf", "version": "1.0.0", "private": true, "type": "module",
+  "scripts": {"dev":"vite --host 0.0.0.0", "build":"vite build", "android:sync":"npm run build && npx cap sync android"},
+  "dependencies":{"@capacitor/android":"^8.0.0","@capacitor/core":"^8.0.0","@capacitor/filesystem":"^8.0.0","@capacitor/share":"^8.0.0","html2canvas":"^1.4.1","jspdf":"^3.0.3"},
+  "devDependencies":{"@capacitor/cli":"^8.0.0","vite":"^7.1.0"}
+}
