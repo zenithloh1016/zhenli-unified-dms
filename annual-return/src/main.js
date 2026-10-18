@@ -335,14 +335,13 @@ function groups(){
  return all;
 }
 function renderSections(){
- const q=$('search').value.trim().toLowerCase(),onlyBlank=$('incomplete').checked;
+ const onlyBlank=$('incomplete').checked;
  $('particulars').innerHTML=groups().map((group,i)=>{
   const rows=group.items.filter(({item,index})=>{
    if(!showMemberField(doc.particulars,index))return false;
-   const matches=!q||[item.en,item.cn,item.value,group.title].some(x=>String(x||'').toLowerCase().includes(q));
-   return matches&&(!onlyBlank||item.type==='field'&&!String(item.value||'').trim());
+   return !onlyBlank||(item.type==='field'&&!String(item.value||'').trim());
   });
-  if(!rows.length&&(q||onlyBlank))return '';
+  if(!rows.length&&onlyBlank)return '';
   const body=rows.map(({index,item})=>{
    if(item.type==='heading'){
      const matched=ADDONS.find(x=>x.id!=='charge'&&x.heading.test(item.en||''));
@@ -354,14 +353,14 @@ function renderSections(){
    return '<div class="field-entry '+(item.value?'':'blank')+'"><div class="title">'+esc(item.en||'Untitled')+
     '<small>'+esc(item.cn||'')+'</small>'+(!['Company Name','Company Registration No.'].includes(item.en)?'<button type="button" class="ar-delete-field" data-delete-field="'+index+'">Delete field</button>':'')+'</div>'+controlsFor(item,index)+'</div>';
   }).join('');
-  return '<details class="ar-section" '+(i===0||q||onlyBlank?'open':'')+'><summary class="section-header"><span>'+
+  return '<details class="ar-section" '+(i===0||onlyBlank?'open':'')+'><summary class="section-header"><span>'+
    esc(group.title)+'<small>'+esc(group.cn)+'</small></span><span class="pill">'+
    rows.filter(x=>x.item.type==='field').length+' fields</span></summary><div class="section-fields">'+body+
    (group.index>=0?'<div class="addon-bar">'+ADDONS.filter(x=>x.section.test(group.title)).map(x=>'<button class="button mini" type="button" data-add-record="'+x.id+'">+ Add '+x.label+'</button>').join('')+'<button class="button mini" type="button" data-add-to-section="'+group.index+'">+ Add field to this section</button></div>':'')+'</div></details>';
- }).join('')||'<p class="status">No matching fields. Clear search or disable blank-only filter.</p>';
+ }).join('')||'<p class="status">No blank fields remain. Disable the Blank fields only filter.</p>';
  fieldStatus();
 }
-function resetView(){signingInputs();$('search').value='';$('incomplete').checked=false;renderSections();}
+function resetView(){signingInputs();$('incomplete').checked=false;renderSections();}
 function setBusy(flag){busy=flag;$('generate-pdf').disabled=flag;$('save-draft').disabled=flag;}
 async function generate(){
  if(busy)return;
@@ -398,7 +397,6 @@ $('blank').addEventListener('click',()=>{
  doc=cloneBlank();resetView();generated=null;$('download-box').hidden=true;
  draftOptions();draftStatus('New blank form. Changes will autosave on this device.');
 });
-$('search').addEventListener('input',renderSections);
 $('incomplete').addEventListener('change',renderSections);
 $('signature-fields').addEventListener('input',e=>{const k=e.target.dataset.sign;if(k){doc.signatureDirector[k]=e.target.value;queueDraftSave();}});
 $('particulars').addEventListener('input',e=>{
@@ -451,12 +449,6 @@ $('particulars').addEventListener('click',e=>{
  const add=e.target.closest('[data-add-record]');if(add)addRecord(add.dataset.addRecord);
 });
 $('add-field').addEventListener('click',()=>addCustomField());
-$('add-section').addEventListener('click',()=>{
- const en=prompt('Section heading in English:');if(!en?.trim())return;
- const cn=prompt('Chinese section heading (optional):')||'';
- doc.particulars.push({type:'section',en:en.trim().slice(0,350),cn:cn.trim().slice(0,350),value:''});
- renderSections();queueDraftSave();status('New section added. Click + Add field to add data.');
-});
 $('clear-values').addEventListener('click',()=>{
  if(!confirm('Clear every field and signatory value? Your last saved draft remains until new information is entered.'))return;
  if(!flushDraft())return;
