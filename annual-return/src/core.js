@@ -27,6 +27,16 @@ export function syncCompanyDetails(doc,{preferFields=true}={}){
  }
  return doc;
 }
+export function deleteParticularField(doc,index){
+ if(!doc||!Array.isArray(doc.particulars))throw Error('Annual Return particulars are unavailable.');
+ if(!Number.isInteger(index)||index<0||index>=doc.particulars.length)throw Error('Field does not exist.');
+ const item=doc.particulars[index];
+ if(item.type!=='field')throw Error('Only individual fields can be deleted.');
+ if(['Company Name','Company Registration No.'].includes(item.en))
+  throw Error(item.en+' is required for PDF generation and cannot be deleted.');
+ doc.particulars.splice(index,1);
+ return item;
+}
 export function setCompanyDetail(doc,index,value){
  const first=doc.particulars.findIndex(x=>x.type==='section');
  const end=doc.particulars.findIndex((x,i)=>i>first&&x.type==='section');
@@ -58,7 +68,7 @@ function readJsonObjectAfter(script,marker){
   }
   throw Error('Unfinished Apps Script data object: '+marker);
 }
-const EXCLUDED_FIELDS=/^(?:Tax Identification Number(?: \(TIN\))?|TIN|Statutory Lodgement Deadline(?: \(30 calendar days\))?|Master Listing Internal Due Date|Register Last Updated|Master Listing Internal Due vs Statutory 30 Days|Date of Appointment|Date of Secretary Appointment|Date Entered as Member|Date Became\s*\/\s*Ceased as BO|Date of (?:Becoming|Ceasing) (?:a )?(?:Beneficial Owner|BO)|Notice\s*\/\s*BO Confirmation Dates|Date of Notice(?: Issued| of (?:BO|Beneficial Owner|Beneficial Ownership))?|Notice Date|(?:BO|Beneficial Ownership) Notice Date|Date of (?:BO|Beneficial Ownership) Notice)$/i;
+const EXCLUDED_FIELDS=/^(?:Tax Identification Number(?: \(TIN\))?|TIN|Statutory Lodgement Deadline(?: \(30 calendar days\))?|Master Listing Internal Due Date|Register Last Updated|Master Listing Internal Due vs Statutory 30 Days|Recorded Amount of Indebtedness \(not outstanding balance\)|Discharge Date|Date of Appointment|Date of Secretary Appointment|Date Entered as Member|Date Became\s*\/\s*Ceased as BO|Date of (?:Becoming|Ceasing) (?:a )?(?:Beneficial Owner|BO)|Notice\s*\/\s*BO Confirmation Dates|Date of Notice(?: Issued| of (?:BO|Beneficial Owner|Beneficial Ownership))?|Notice Date|(?:BO|Beneficial Ownership) Notice Date|Date of (?:BO|Beneficial Ownership) Notice)$/i;
 function cleanParticulars(items){
  let excludedSection=false;
  return items.filter(x=>{
@@ -86,7 +96,7 @@ export function normalizeDocument(raw){
     }))
   };
   // Historic .gs source may omit this controlled field; append it without deleting any data.
-  if(!doc.particulars.some(x=>x.type==='field'&&x.en==='Type of Shares Issued')){
+  if((!Number(raw.schemaVersion)||Number(raw.schemaVersion)<3)&&!doc.particulars.some(x=>x.type==='field'&&x.en==='Type of Shares Issued')){
     const i=doc.particulars.findIndex(x=>x.type==='section'&&/SHARE CAPITAL/i.test(x.en));
     if(i>=0)doc.particulars.splice(i+1,0,{type:'field',en:'Type of Shares Issued',cn:'股份发行方式（现金／非现金）',value:''});
   }
