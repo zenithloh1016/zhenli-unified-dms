@@ -55,3 +55,18 @@
 .ar-add-member-field{display:inline-flex;margin-left:auto;align-items:center}
 .ar-section .addon-bar{display:flex;flex-wrap:wrap;gap:8px}
 @media(max-width:680px){.ar-add-member-field{margin-left:0}.ar-name-selector .ar-company-full-list{font-size:14px}}
+
+/* Annual Return V1.8 — private device drafts and whole-record removal */
+.ar-draft-actions{display:flex;align-items:flex-end;flex-wrap:wrap;gap:10px;margin-top:12px}
+.ar-draft-actions .field-label{min-width:min(360px,100%);flex:1}
+.ar-draft-actions select{width:100%;border:1px solid #cadce7;border-radius:9px;padding:11px;background:#fff;color:#16364b;font-size:13px;min-height:44px}
+.ar-draft-actions .button{min-height:44px}
+.ar-draft-status{margin:12px 0 0;color:#327284;font-size:12px;line-height:1.55}
+.ar-remove-record{margin-left:auto!important;color:#a23341!important;border-color:#f0bdc5!important;background:#fff4f5!important}
+.heading-entry:has(.ar-remove-record){display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+@media(max-width:600px){
+ .ar-draft-actions{align-items:stretch}
+ .ar-draft-actions .field-label{flex-basis:100%}
+ .ar-draft-actions .button{flex:1}
+ .ar-remove-record{margin-left:0!important}
+}
