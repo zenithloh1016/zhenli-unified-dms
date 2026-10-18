@@ -215,6 +215,25 @@ function companyNameControl(item,index){
   '<div class="ar-name-options" data-company-results="'+index+'">'+companyOptions(value)+'</div>'+
   '<p class="msic-help">All '+dmsCompanies.length+' DMS companies are available in the dropdown. Selecting a new company fills its registration number and starts a blank review for that company; export unfinished JSON first.</p></div>';
 }
+function addCustomField({sectionIndex=null,headingIndex=null}={}){
+ if(doc.particulars.length>=1200)return status('The Annual Return field limit is reached.',true);
+ const en=(prompt('New field label in English:')||'').trim();if(!en)return;
+ const cn=(prompt('New field label in Chinese (optional):')||'').trim();
+ const field={type:'field',en:en.slice(0,350),cn:cn.slice(0,350),value:''};
+ let pos=doc.particulars.length;
+ if(headingIndex!==null){
+  if(doc.particulars[headingIndex]?.type!=='heading')return status('The selected member record no longer exists.',true);
+  pos=headingIndex+1;
+  while(pos<doc.particulars.length&&doc.particulars[pos].type==='field')pos++;
+ }else if(sectionIndex!==null){
+  if(doc.particulars[sectionIndex]?.type!=='section')return status('Section no longer exists.',true);
+  pos=sectionIndex+1;
+  while(pos<doc.particulars.length&&doc.particulars[pos].type!=='section')pos++;
+ }
+ doc.particulars.splice(pos,0,field);
+ renderSections();
+ status('Added "'+field.en+'" to '+(headingIndex!==null?'the selected member record':'the selected section')+'. It will appear in the PDF.');
+}
 function removeReviewField(index){
  const item=doc.particulars[index];if(!item||item.type!=='field')return;
  if(['Company Name','Company Registration No.'].includes(item.en)){
@@ -260,14 +279,14 @@ function renderSections(){
   });
   if(!rows.length&&(q||onlyBlank))return '';
   const body=rows.map(({index,item})=>{
-   if(item.type==='heading')return '<div class="heading-entry">'+esc(item.en)+' <small>'+esc(item.cn)+'</small></div>';
+   if(item.type==='heading')return '<div class="heading-entry">'+esc(item.en)+' <small>'+esc(item.cn)+'</small>'+(/^MEMBER \d+$/i.test(item.en)?'<button type="button" class="button mini ar-add-member-field" data-add-to-member="'+index+'">+ Add member field</button>':'')+'</div>';
    return '<div class="field-entry '+(item.value?'':'blank')+'"><div class="title">'+esc(item.en||'Untitled')+
     '<small>'+esc(item.cn||'')+'</small>'+(!['Company Name','Company Registration No.'].includes(item.en)?'<button type="button" class="ar-delete-field" data-delete-field="'+index+'">Delete field</button>':'')+'</div>'+controlsFor(item,index)+'</div>';
   }).join('');
   return '<details class="ar-section" '+(i===0||q||onlyBlank?'open':'')+'><summary class="section-header"><span>'+
    esc(group.title)+'<small>'+esc(group.cn)+'</small></span><span class="pill">'+
    rows.filter(x=>x.item.type==='field').length+' fields</span></summary><div class="section-fields">'+body+
-   (ADDONS.some(x=>x.section.test(group.title))?'<div class="addon-bar">'+ADDONS.filter(x=>x.section.test(group.title)).map(x=>'<button class="button mini" type="button" data-add-record="'+x.id+'">+ Add '+x.label+'</button>').join('')+'</div>':'')+'</div></details>';
+   (group.index>=0?'<div class="addon-bar">'+ADDONS.filter(x=>x.section.test(group.title)).map(x=>'<button class="button mini" type="button" data-add-record="'+x.id+'">+ Add '+x.label+'</button>').join('')+'<button class="button mini" type="button" data-add-to-section="'+group.index+'">+ Add field to this section</button></div>':'')+'</div></details>';
  }).join('')||'<p class="status">No matching fields. Clear search or disable blank-only filter.</p>';
  fieldStatus();
 }
@@ -385,14 +404,11 @@ $('particulars').addEventListener('click',e=>{
   if(!desc)return;
   changeMSIC(Number(manual.dataset.msicManual),code,false,desc.slice(0,250));return;
  }
+ const memberField=e.target.closest('[data-add-to-member]');if(memberField){addCustomField({headingIndex:Number(memberField.dataset.addToMember)});return;}
+ const sectionField=e.target.closest('[data-add-to-section]');if(sectionField){addCustomField({sectionIndex:Number(sectionField.dataset.addToSection)});return;}
  const add=e.target.closest('[data-add-record]');if(add)addRecord(add.dataset.addRecord);
 });
-$('add-field').addEventListener('click',()=>{
- const en=prompt('English field label:');if(!en?.trim())return;
- const cn=prompt('Chinese field label (optional):')||'';
- doc.particulars.push({type:'field',en:en.trim().slice(0,350),cn:cn.trim().slice(0,350),value:''});
- renderSections();status('New field added to the last section.');
-});
+$('add-field').addEventListener('click',()=>addCustomField());
 $('add-section').addEventListener('click',()=>{
  const en=prompt('Section heading in English:');if(!en?.trim())return;
  const cn=prompt('Chinese section heading (optional):')||'';
