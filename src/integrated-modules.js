@@ -135,7 +135,7 @@ export function installHubBridge(db, getUser, getCompanies, displayError) {
     if(type==='ZHENLI_HUB_EXPORT_FILE'){
       try{
         const {filename,mime,contents}=event.data;
-        if(typeof filename!=='string'||!/^[^/\\]{1,180}\\.(json|csv)$/i.test(filename)
+        if(typeof filename!=='string'||filename.length>180||!filename.trim()||!filename.match(/\.(json|csv)$/i)||filename.includes('/')||filename.includes('\\')
           ||typeof contents!=='string'||contents.length>15_000_000)throw Error('Invalid backup file.');
         const result=await saveOrShareFile(new Blob([contents],{type:mime||'application/json'}),filename,{preferShare:true});
         respond(childWindow,'ZHENLI_HUB_EXPORT_RESULT',requestId,{ok:result.method!=='cancelled',method:result.method,filename:result.filename,
