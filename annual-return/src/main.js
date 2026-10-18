@@ -123,7 +123,7 @@ function applyDmsCompany(company){
   }
  }
  selectedDmsCompanyId=company.id;draftDirty=false;
- generated=null;$('download-box').hidden=true;resetView();drawDrafts();
+ generated=null;$('download-box').hidden=true;resetView();drawDrafts();changedDraft();
  draftStatus('Company selected. Edits save automatically.');
  status('Company loaded from DMS: '+name+'. Complete the remaining particulars.');
  return {ok:true,resumed:false};
