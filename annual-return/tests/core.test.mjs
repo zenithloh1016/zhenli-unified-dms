@@ -167,3 +167,17 @@ test('V1.6 Criteria E is in the selectable BO criteria list and survives JSON se
  assert.ok(!pdf.includes('SIGNING ACKNOWLEDGEMENT'));
  assert.ok(!pdf.includes('sign.date'));
 });
+
+test('legacy Beneficial Owner notice date aliases never appear in saved drafts or PDFs',()=>{
+ const legacy=cloneBlank();
+ const extra=['Date of Notice of BO','Date of Notice of Beneficial Owner',
+   'Date of Notice of Beneficial Ownership','BO Notice Date','Beneficial Ownership Notice Date',
+   'Date of BO Notice','Date of Beneficial Ownership Notice'];
+ legacy.particulars.push(...extra.map(en=>({type:'field',en,cn:'通知日期',value:'2026-10-18'})));
+ for(const extension of ['.json','.gs']){
+   const input=extension==='.gs'?'const AR_SINGLE_COMPANY = '+JSON.stringify(legacy)+';':JSON.stringify(legacy);
+   const result=importAnnualReturnText(input,'older'+extension);
+   assert.equal(result.particulars.length,118);
+   assert.equal(result.particulars.some(x=>extra.includes(x.en)),false);
+ }
+});
