@@ -74,3 +74,46 @@
 .zs-edit-signer-actions{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
 .zs-edit-signer-actions .btn{font-size:11px;min-width:58px}
 @media(max-width:850px){.zs-edit-signer-actions{grid-column:1 / -1}.zs-edit-signer-actions .btn{flex:1}}
+
+
+/* ZHENLI_SIGNING_FULLSCREEN_V1_8_2
+   Task Hub-style in-app overlay; works in Chrome/Brave and Capacitor Android.
+   Neither an iframe nor an external signing origin is introduced. */
+.signing-frame-shell{width:100%;min-width:0}
+.signing-fullscreen-launch{display:flex;justify-content:flex-end;align-items:center;margin:0 0 12px}
+.signing-fullscreen-launch .btn{min-height:44px}
+.signing-fullscreen-toolbar{display:none}
+body.zh-signing-fullscreen-open{overflow:hidden}
+.signing-frame-shell.signing-expanded{
+  position:fixed;inset:0;z-index:150;min-height:0;height:100dvh;
+  width:100%;max-width:none;margin:0;border:0;border-radius:0;
+  display:flex;flex-direction:column;background:#f5f8fb;
+}
+.signing-expanded .signing-fullscreen-toolbar{
+  flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  min-height:60px;padding:calc(8px + env(safe-area-inset-top,0px)) 18px 8px;
+  background:#eff4f8;border-bottom:1px solid #d9e3ee;
+  color:#244963;box-shadow:0 2px 8px #1837520a;
+}
+.signing-expanded .signing-fullscreen-toolbar strong{font-size:15px;line-height:1.4}
+.signing-expanded .signing-fullscreen-toolbar .btn{
+  flex:none;font-size:12px;padding:11px 13px;min-height:43px;
+}
+.signing-expanded .signing-workspace{
+  width:100%;max-width:none;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;
+  overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  padding:24px clamp(14px,3.2vw,44px) calc(36px + env(safe-area-inset-bottom,0px));
+}
+.signing-expanded .signing-fullscreen-launch{display:none}
+.signing-expanded .integration-heading{margin-bottom:18px}
+.signing-expanded .zs-panel{max-width:none}
+@media(max-width:600px){
+  .signing-fullscreen-launch{justify-content:stretch}
+  .signing-fullscreen-launch .btn{width:100%}
+  .signing-expanded .signing-fullscreen-toolbar{padding:calc(7px + env(safe-area-inset-top,0px)) 12px 7px}
+  .signing-expanded .signing-fullscreen-toolbar strong{font-size:13px}
+  .signing-expanded .signing-fullscreen-toolbar .btn{font-size:11px;padding:10px}
+  .signing-expanded .signing-workspace{padding:16px 11px calc(28px + env(safe-area-inset-bottom,0px))}
+  .signing-expanded .integration-heading h1{font-size:26px}
+  .signing-expanded .zs-panel{padding:14px;border-radius:12px}
+}
