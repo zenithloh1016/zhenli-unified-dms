@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {cloneBlank,importAnnualReturnText,normalizeDocument,outputFilename,emptyCount,populatedCount} from '../src/core.js';
 test('blank bilingual template has all current structural fields without real client values',()=>{
   const blank=cloneBlank();
-  assert.equal(blank.particulars.length,127);
-  assert.equal(blank.particulars.filter(x=>x.type==='field').length,110);
+  assert.equal(blank.particulars.length,118);
+  assert.equal(blank.particulars.filter(x=>x.type==='field').length,101);
   assert.equal(populatedCount(blank),0);
-  assert.equal(emptyCount(blank),110);
+  assert.equal(emptyCount(blank),101);
   assert.ok(blank.particulars.some(x=>x.cn.includes('股权')));
   assert.equal(blank.company.name,'');
   assert.equal(blank.signatureDirector.nric,'');
@@ -30,7 +30,7 @@ test('rejects malformed or unsafe scripts and maintains editable draft JSON',()=
   const recovered=importAnnualReturnText(JSON.stringify(draft),'save.json');
   assert.equal(recovered.company.name,'SAMPLE SDN. BHD.');
   assert.equal(recovered.particulars[2].value,'Test');
-  assert.equal(normalizeDocument(draft).particulars.length,127);
+  assert.equal(normalizeDocument(draft).particulars.length,118);
 });
 
 test('preserves multiple BO criteria and director capacity without signing date',()=>{
@@ -82,7 +82,7 @@ test('Company Profile panel removed and Director Confirmation retained without s
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const pdf=readFileSync(new URL('../src/pdf.js',import.meta.url),'utf8');
  assert.ok(html.includes('01 / COMPANY DETAILS'));
- assert.ok(html.includes('V1.5'));
+ assert.ok(html.includes('V1.6'));
  assert.ok(!html.includes('company-panel'));
  assert.ok(!html.includes('id="company-fields"'));
  assert.ok(html.indexOf('id="company-details"')<html.indexOf('id="signature-fields"'));
@@ -101,8 +101,8 @@ test('excluded internal due dates and register update fields never survive .gs o
  draft.company.masterListingDueDate='2026-10-18';
  draft.particulars.push(...forbidden.map(en=>({type:'field',en,cn:'',value:'2026-10-18'})));
  const out=normalizeDocument(draft);
- assert.equal(out.schemaVersion,3);
- assert.equal(out.particulars.length,127);
+ assert.equal(out.schemaVersion,4);
+ assert.equal(out.particulars.length,118);
  assert.equal(out.particulars.some(x=>forbidden.includes(x.en)),false);
  assert.equal(Object.hasOwn(out.company,'lodgementDueDate'),false);
  assert.equal(Object.hasOwn(out.company,'masterListingDueDate'),false);
@@ -112,7 +112,7 @@ test('excluded internal due dates and register update fields never survive .gs o
  assert.ok(parsed.particulars.some(x=>x.en==='Nature of Business / MSIC Code'));
 });
 
-test('V1.5 removes TIN and the entire Company Review and Verification section from old imports',()=>{
+test('V1.6 removes TIN and the entire Company Review and Verification section from old imports',()=>{
  const raw=cloneBlank();
  raw.particulars.splice(4,0,{type:'field',en:'Tax Identification Number (TIN)',cn:'税务识别号码',value:'C-123'});
  raw.particulars.push({type:'section',en:'COMPANY REVIEW AND VERIFICATION NOTES',cn:'公司资料核实事项',value:''});
@@ -121,7 +121,7 @@ test('V1.5 removes TIN and the entire Company Review and Verification section fr
  raw.signatureDirector.date='2026-10-18';
  raw.signatureDirector.acknowledgement='Signed';
  const restored=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(raw)+';', 'legacy.gs');
- assert.equal(restored.particulars.length,127);
+ assert.equal(restored.particulars.length,118);
  assert.equal(restored.particulars.some(x=>/^(?:Tax Identification Number(?: \(TIN\))?|TIN|COMPANY REVIEW AND VERIFICATION NOTES)$/i.test(x.en)),false);
  assert.equal(restored.particulars.some(x=>x.en==='Preference Allotment'&&x.value==='Private client details'),false);
  assert.equal(Object.hasOwn(restored.signatureDirector,'date'),false);
@@ -134,4 +134,36 @@ test('Annual Return module is part of the DMS navigation and bundler',async()=>{
  assert.ok(root.includes("'annual-return'"));
  assert.ok(root.includes('zh-annual-return-frame'));
  assert.ok(pack.includes('dist/annual-return'));
+});
+
+test('V1.6 removes all requested dates in both blank template and legacy imported GS',()=>{
+ const fieldNames=['Date of Appointment','Date of Secretary Appointment','Date Entered as Member',
+ 'Date Became / Ceased as BO','Notice / BO Confirmation Dates','Date of Notice'];
+ const blank=cloneBlank();
+ assert.equal(blank.particulars.some(x=>fieldNames.includes(x.en)),false);
+ const legacy=cloneBlank();
+ legacy.particulars.push(...fieldNames.map(en=>({type:'field',en,cn:'测试',value:'2026-10-18'})));
+ const parsed=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(legacy)+';','legacy.gs');
+ assert.equal(parsed.particulars.length,118);
+ assert.equal(parsed.particulars.some(x=>fieldNames.includes(x.en)),false);
+ assert.equal(parsed.particulars.some(x=>x.en==='Date of Incorporation'),true);
+ assert.equal(parsed.particulars.some(x=>x.en==='Date of Birth'),true);
+ assert.equal(parsed.particulars.some(x=>x.en==='Date of Registration'),true);
+ assert.equal(parsed.particulars.some(x=>x.en==='Discharge Date'),true);
+ assert.deepEqual(Object.keys(parsed.signatureDirector).sort(),['designation','name','nric']);
+});
+test('V1.6 Criteria E is in the selectable BO criteria list and survives JSON serialization',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ const pdf=readFileSync(new URL('../src/pdf.js',import.meta.url),'utf8');
+ assert.ok(main.includes(" E:'Is a member of the company"));
+ assert.ok(main.includes('([ABCDE])'));
+ const draft=cloneBlank();
+ const criteria=draft.particulars.find(x=>x.en==='Criteria of Beneficial Ownership');
+ criteria.value='Criteria A, Criteria C, Criteria E';
+ const imported=importAnnualReturnText(JSON.stringify(draft),'draft.json');
+ assert.equal(imported.particulars.find(x=>x.en==='Criteria of Beneficial Ownership').value,'Criteria A, Criteria C, Criteria E');
+ assert.ok(pdf.includes('DIRECTOR CONFIRMATION'));
+ assert.ok(!pdf.includes('SIGNING ACKNOWLEDGEMENT'));
+ assert.ok(!pdf.includes('sign.date'));
 });
