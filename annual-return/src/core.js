@@ -36,11 +36,17 @@ export function normalizeDocument(raw){
       arYear:safe(company.arYear,12),arDate:safe(company.arDate,40),
       lodgementDueDate:safe(company.lodgementDueDate,40),
       masterListingDueDate:safe(company.masterListingDueDate||'',40)},
-    signatureDirector:{name:safe(director.name,200),nric:safe(director.nric||director.id||'',100),date:safe(director.date||'',40)},
+    signatureDirector:{name:safe(director.name,200),nric:safe(director.nric||director.id||'',100),date:safe(director.date||'',40),
+      acknowledgement:safe(director.acknowledgement||'',500),designation:safe(director.designation||'Director',80)},
     particulars:raw.particulars.filter(x=>x&&['field','section','heading'].includes(x.type)).map(x=>({
       type:x.type,en:safe(x.en,350),cn:safe(x.cn,350),value:x.type==='field'?safe(x.value,15000):''
     }))
   };
+  // Historic .gs source may omit this controlled field; append it without deleting any data.
+  if(!doc.particulars.some(x=>x.type==='field'&&x.en==='Type of Shares Issued')){
+    const i=doc.particulars.findIndex(x=>x.type==='section'&&/SHARE CAPITAL/i.test(x.en));
+    if(i>=0)doc.particulars.splice(i+1,0,{type:'field',en:'Type of Shares Issued',cn:'股份发行方式（现金／非现金）',value:''});
+  }
   if(!doc.particulars.length)throw Error('No valid Annual Return particulars found.');
   return doc;
 }

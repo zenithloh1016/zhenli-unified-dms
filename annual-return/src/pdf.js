@@ -130,10 +130,15 @@ export function renderPages(doc){
   inTable=false;
   const sign=doc.signatureDirector||{};
   const confirmation=block('pdf-confirm',
-    '<h2>DIRECTOR’S CONFIRMATION & ACKNOWLEDGEMENT / 董事确认及声明</h2>'+
+    '<h2>DIRECTOR CONFIRMATION / 董事确认</h2>'+
     '<p>I hereby confirm that the particulars in this document are true and correct to the best of my knowledge, subject to verification of any noted or missing information.</p>'+
     '<p>本人谨此确认，据本人所知，本文件所载资料属真实及正确；待核实或未提供资料须另行确认。</p>'+
+    '<h2 style="margin-top:16px">SIGNING ACKNOWLEDGEMENT / 签署确认</h2>'+
+    '<p>By signing below, I acknowledge reviewing the information provided for the Annual Return particulars and will notify the Company Secretary of any required corrections before lodgement.</p>'+
+    '<p>本人在下方签署，即确认已审阅周年申报资料，并将在呈交前通知公司秘书任何需要更正的资料。</p>'+
+    (sign.acknowledgement?'<p>'+escapeHtml(sign.acknowledgement)+'</p>':'')+
     '<div class="pdf-signature">Signature of Director / 董事签名</div>'+
+    '<p><b>Capacity / 职务:</b> '+escapeHtml(sign.designation||'Director')+'</p>'+
     '<p><b>Name / 姓名:</b> '+escapeHtml(blank(sign.name))+'</p>'+
     '<p><b>NRIC / Passport No. / 身份证或护照号码:</b> '+escapeHtml(blank(sign.nric))+'</p>'+
     '<p><b>Date / 日期:</b> '+escapeHtml(sign.date||'__________________')+'</p>'+

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {cloneBlank,importAnnualReturnText,normalizeDocument,outputFilename,emptyCount,populatedCount} from '../src/core.js';
 test('blank bilingual template has all current structural fields without real client values',()=>{
   const blank=cloneBlank();
-  assert.equal(blank.particulars.length,138);
-  assert.equal(blank.particulars.filter(x=>x.type==='field').length,120);
+  assert.equal(blank.particulars.length,139);
+  assert.equal(blank.particulars.filter(x=>x.type==='field').length,121);
   assert.equal(populatedCount(blank),0);
-  assert.equal(emptyCount(blank),120);
+  assert.equal(emptyCount(blank),121);
   assert.ok(blank.particulars.some(x=>x.cn.includes('股权')));
   assert.equal(blank.company.name,'');
   assert.equal(blank.signatureDirector.nric,'');
@@ -30,5 +30,19 @@ test('rejects malformed or unsafe scripts and maintains editable draft JSON',()=
   const recovered=importAnnualReturnText(JSON.stringify(draft),'save.json');
   assert.equal(recovered.company.name,'SAMPLE SDN. BHD.');
   assert.equal(recovered.particulars[1].value,'Test');
-  assert.equal(normalizeDocument(draft).particulars.length,138);
+  assert.equal(normalizeDocument(draft).particulars.length,139);
+});
+
+test('preserves multiple BO criteria and signing acknowledgement through draft export',()=>{
+ const draft=cloneBlank();
+ const item=draft.particulars.find(x=>x.en==='Criteria of Beneficial Ownership');
+ assert.ok(item);
+ item.value='Criteria A, Criteria C, Criteria D';
+ draft.signatureDirector.acknowledgement='Reviewed and acknowledged';
+ draft.signatureDirector.designation='Director';
+ const recovered=normalizeDocument(draft);
+ assert.equal(recovered.particulars.find(x=>x.en==='Criteria of Beneficial Ownership').value,'Criteria A, Criteria C, Criteria D');
+ assert.equal(recovered.signatureDirector.acknowledgement,'Reviewed and acknowledged');
+ assert.equal(recovered.signatureDirector.designation,'Director');
+ assert.ok(recovered.particulars.some(x=>x.en==='Type of Shares Issued'));
 });
