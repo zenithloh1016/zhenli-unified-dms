@@ -334,7 +334,7 @@ export function createNativeSigning({update,getCompanies}) {
   }
   return {mount:()=>{if(view==='detail'&&detail?.status==='draft')preview.mount(document.getElementById('zs-pdf-preview'));},
     input:target=>{if(target?.closest?.('.zs-placement-row'))preview.drawBoxes(document.getElementById('zs-pdf-preview'));return false;},
-    render:()=>`<div class="integration-heading"><div><p class="eyebrow">DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Administrator login and signing requests directly inside ZHENLI DMS</p></div><span class="zs-version">Native Signing V1.7 Preview · Revoke & Reset</span></div>
+    render:()=>`<div class="integration-heading"><div><p class="eyebrow">DOCUMENT SIGNING</p><h1>Sequential Signing</h1><p class="muted">Administrator login and signing requests directly inside ZHENLI DMS</p></div><span class="zs-version">Native Signing V1.8 Preview · Edit, Revoke & Reset</span></div>
     ${message?`<div class="zs-message ${error?'zs-error':''}" role="status">${e(message)}</div>`:''}
     ${busy?'<div class="zs-message">Connecting to the private signing service…</div>':''}${main()}`,
     onClick,submit,changed};
