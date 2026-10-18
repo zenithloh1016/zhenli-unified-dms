@@ -313,6 +313,7 @@ function setAnnualReturnFullscreen(open){
   const shell=ROOT.querySelector('#zh-ar-shell');
   shell?.classList.toggle('ar-fullscreen-open',state.arFullscreen);
   document.body.classList.toggle('zh-ar-fullscreen-open',state.arFullscreen);
+  shell?.querySelector('#zh-annual-return-frame')?.contentWindow?.postMessage({type:'ZHENLI_DMS_AR_FULLSCREEN_STATE',open:state.arFullscreen},window.location.origin);
   // Do not call render(): it would reload the iframe and could interrupt editing.
   const button=shell?.querySelector('[data-action="'+(state.arFullscreen?'exit-ar-fullscreen':'open-ar-fullscreen')+'"]');
   button?.focus({preventScroll:true});
@@ -699,6 +700,7 @@ window.addEventListener('message',event=>{
    })();
    return;
  }
+ if(event.data.type==='ZHENLI_AR_FULLSCREEN_TOGGLE'){setAnnualReturnFullscreen(!state.arFullscreen);return;}
  if(event.data.type==='ZHENLI_AR_READY'){sendAnnualReturnCompanyList();sendAnnualReturnCompany();return;}
  if(event.data.type==='ZHENLI_AR_SELECT_COMPANY_REQUEST'){
   const id=event.data.id;
