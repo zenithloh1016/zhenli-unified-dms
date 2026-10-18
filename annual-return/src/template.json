@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "templateSource": "Annual Return Review Form (revised)(1).gs; latest structured example 2026-10-13",
   "company": {
     "name": "",
@@ -10,9 +10,7 @@
   "signatureDirector": {
     "name": "",
     "nric": "",
-    "date": "",
-    "designation": "Director",
-    "acknowledgement": ""
+    "designation": "Director"
   },
   "particulars": [
     {
@@ -37,12 +35,6 @@
       "type": "field",
       "en": "Company Registration No.",
       "cn": "公司注册编号",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Tax Identification Number (TIN)",
-      "cn": "税务识别号码",
       "value": ""
     },
     {
@@ -781,48 +773,6 @@
       "type": "field",
       "en": "Notice / BO Confirmation Dates",
       "cn": "通知及实益拥有确认日期",
-      "value": ""
-    },
-    {
-      "type": "section",
-      "en": "COMPANY REVIEW AND VERIFICATION NOTES",
-      "cn": "公司审核及核实事项",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Shareholder registration number discrepancy",
-      "cn": "公司股东 公司号码差异",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Register Update Date versus Director Appointments",
-      "cn": "名册更新日期与董事委任日期差异",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Preference Allotment",
-      "cn": "优先股配发",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "BO Information",
-      "cn": "实益拥有人资料",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Financial Statements/Indebtedness",
-      "cn": "财务记录 / 债务",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Current Particulars Cut-off",
-      "cn": "最新资料截止日期",
       "value": ""
     }
   ]
