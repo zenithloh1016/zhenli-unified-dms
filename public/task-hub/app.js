@@ -79,6 +79,7 @@
   let data=EMBEDDED ? structuredClone(DEFAULT_DATA) : readData();
   let state={deadlineKind:'all',deadlinePeriod:'all',deadlineQuery:'',view:'dashboard',query:'',filterCompany:'',filterPriority:'',filterCategory:'',filterStatus:'',sort:'due',calendarYear:new Date().getFullYear(),calendarMonth:new Date().getMonth(),companyQuery:''};
   let editingSteps=[];
+  let lastExport=null;
 
   function readData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return structuredClone(DEFAULT_DATA);const val=JSON.parse(raw);if(!val||!Array.isArray(val.tasks)||!Array.isArray(val.companies))throw Error('Invalid local data');return {...structuredClone(DEFAULT_DATA),...val,settings:{...DEFAULT_DATA.settings,...val.settings}};}catch(err){console.error('Cannot read storage',err);return structuredClone(DEFAULT_DATA)}}
   function saveData(){
@@ -220,7 +221,7 @@ function populateTaskCompanyDropdown(value='',query='') {
   function openCompany(id=null){const c=id?data.companies.find(x=>x.id===id):null;$('#companyForm').reset();$('#companyId').value=c?.id||'';$('#companyDialogTitle').textContent=c?'Edit company':'Add company';$('#companyName').value=c?.name||'';$('#companyReg').value=c?.reg||'';$('#companyAr').value=c?.arDate||'';$('#companyArDue').value=c?.arDueDate||'';$('#companyAfsDue').value=c?.afsDueDate||'';$('#companyAfsStatus').value=c?.afsDueStatus==='TBC'?'TBC':'not provided';$('#companyFinYearEnded').value=c?.financialYearEnded||'';$('#companyFye').value=c?.fye||'';$('#companyNotes').value=c?.notes||'';$('#deleteCompanyBtn').hidden=!c;$('#companyDialog').showModal();setTimeout(()=>$('#companyName').focus(),50)}
   function saveCompany(ev){ev.preventDefault();const name=$('#companyName').value.trim().toUpperCase();if(!name)return $('#companyName').focus();const id=$('#companyId').value;const old=id?data.companies.find(x=>x.id===id):null;const dupe=data.companies.find(x=>x.name.toUpperCase()===name&&x.id!==id);if(dupe)return toast('Company already exists. Edit that record instead.',true);const val={name,reg:$('#companyReg').value.trim(),arDate:$('#companyAr').value,arDueDate:$('#companyArDue').value,afsDueDate:$('#companyAfsDue').value,afsDueStatus:$('#companyAfsDue').value?'dated':$('#companyAfsStatus').value,financialYearEnded:$('#companyFinYearEnded').value,fye:$('#companyFye').value,notes:$('#companyNotes').value.trim(),updatedAt:timestamp()};if(old){const from=old.name;Object.assign(old,val);if(from!==name)data.tasks.forEach(t=>{if(t.company===from)t.company=name});record('Updated company',name)}else{data.companies.push({id:uniqueId(),...val,createdAt:timestamp()});record('Added company',name)}saveData();$('#companyDialog').close();render();toast(old?'Company updated.':'Company added.')}
   function deleteCompany(){const c=data.companies.find(x=>x.id===$('#companyId').value);if(!c)return;if(!confirm(`Remove "${c.name}" from the company register? Existing tasks will remain unchanged.`))return;data.companies=data.companies.filter(x=>x.id!==c.id);record('Removed company',c.name);saveData();$('#companyDialog').close();render();toast('Company removed. Existing tasks were retained.')}
-  function download(filename,mime,text){const blob=new Blob([text],{type:mime}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+  function download(filename,mime,text){const blob=new Blob([text],{type:mime}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),120000)}
 function mergeCompanyRecords(payload,overwriteDates=false){
     const list=Array.isArray(payload)?payload:payload?.companies;
     if(!Array.isArray(list)||list.length>2000||!list.length)throw Error('Expected a JSON file containing a companies array.');
@@ -273,9 +274,60 @@ function mergeCompanyRecords(payload,overwriteDates=false){
     }
     return {created,existing};
   }
+
+  function hubRequest(type,reply,payload){
+    return new Promise((resolve,reject)=>{
+      if(!EMBEDDED)return reject(Error('DMS connection unavailable.'));
+      const requestId='transfer_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+      const timeout=setTimeout(()=>{window.removeEventListener('message',receive);reject(Error('DMS did not respond. Keep this page open and try again.'));},35000);
+      function receive(e){
+        if(e.source!==window.parent||e.origin!==window.location.origin||e.data?.type!==reply||e.data.requestId!==requestId)return;
+        clearTimeout(timeout);window.removeEventListener('message',receive);
+        if(e.data.ok)resolve(e.data);
+        else reject(Error(e.data.error||'DMS file operation failed.'));
+      }
+      window.addEventListener('message',receive);
+      window.parent.postMessage({type,requestId,...payload},window.location.origin);
+    });
+  }
+  async function persistImport(candidate){
+    if(EMBEDDED)await hubRequest('ZHENLI_HUB_SAVE_CONFIRM','ZHENLI_HUB_SAVE_RESULT',{payload:candidate});
+    else localStorage.setItem(STORAGE_KEY,JSON.stringify(candidate));
+  }
+  function displayBackupStatus(filename,message){
+    const wrap=$('#backupDownloadStatus');
+    if(!wrap)return;
+    wrap.hidden=false;
+    $('#backupDownloadFilename').textContent=filename;
+    $('#backupDownloadMessage').textContent=message;
+  }
+  async function saveExport(exported){
+    const {filename,mime,contents}=exported;
+    if(EMBEDDED){
+      const result=await hubRequest('ZHENLI_HUB_EXPORT_FILE','ZHENLI_HUB_EXPORT_RESULT',{filename,mime,contents});
+      displayBackupStatus(filename,result.method==='share'
+        ? 'Save/share panel opened. Choose Files or Drive and pick a folder to keep this backup.'
+        : 'Download requested. Check the browser Downloads list or Files → Downloads.');
+      toast(result.method==='share'?'Select Files or Drive in the share panel to keep '+filename+'.':'Download started for '+filename+'. Check browser Downloads.');
+      return;
+    }
+    const file=new File([contents],filename,{type:mime});
+    if(typeof navigator.share==='function' && (!navigator.canShare||navigator.canShare({files:[file]}))){
+      try {
+        await navigator.share({title:filename,files:[file]});
+        displayBackupStatus(filename,'Save/share panel opened. Choose Files or Drive and pick a folder.');
+        return;
+      }catch(e){if(e?.name==='AbortError'){displayBackupStatus(filename,'Save cancelled. Tap Save / share backup again when ready.');return;}}
+    }
+    download(filename,mime,contents);
+    displayBackupStatus(filename,'Download started. Find the filename in your browser Downloads or Android Files → Downloads.');
+    toast('Backup download requested: '+filename+'. Check Android Files → Downloads.');
+  }
   async function importCompanies(file) {
     if(!file)return;
+    const previous=structuredClone(data);
     try{
+      if(!/\.(xlsx|json)$/i.test(file.name))throw Error('Select an Excel (.xlsx) or company JSON (.json) file.');
       if(file.size>5*1024*1024)throw Error('Master Listing file exceeds 5 MB.');
       const payload=/\.xlsx$/i.test(file.name)
         ? await window.ZHENLI_XLSX.parse(file)
@@ -290,16 +342,42 @@ function mergeCompanyRecords(payload,overwriteDates=false){
       const result=mergeCompanyRecords(payload,updateDates);
       const tasks=generateTasks?createImportedStatutoryReviewTasks(imported):{created:0,existing:0};
       record('Imported company dates',`${result.added} added, ${result.matched} matched, ${result.updated} dates filled/updated; ${tasks.created} review tasks created`);
-      if(!saveData())throw Error('Could not save the imported list in browser storage.');
-      render();toast(`Imported ${result.added} new companies, ${result.matched} matched; ${nAR} AR and ${nAFS} AFS dates. ${tasks.created} review tasks created (${tasks.existing} already existed).`);
-    }catch(err){toast('Master Listing import failed: '+err.message,true)}
+      await persistImport(data);
+      render();$('#importCompaniesStatus').textContent='Imported '+file.name+': '+result.added+' new, '+result.matched+' matched; '+nAR+' AR and '+nAFS+' AFS due dates; '+tasks.created+' review tasks created.';
+      toast(`Imported ${result.added} new companies, ${result.matched} matched; ${nAR} AR and ${nAFS} AFS dates. ${tasks.created} review tasks created (${tasks.existing} already existed).`);
+    }catch(err){data=previous;render();$('#importCompaniesStatus').textContent='Import failed for '+file.name+': '+err.message;toast('Master Listing import failed: '+err.message,true)}
     finally{$('#importCompaniesFile').value=''}
   }
 
-  function exportJson(){const str=JSON.stringify({...data,exportedAt:timestamp(),app:'ZHENLI Secretarial Task Hub'},null,2);download(`ZHENLI_TaskHub_Backup_${todayStr()}.json`,'application/json;charset=utf-8',str);toast('Backup downloaded. Keep it in a secure location.')}
+  async function exportJson(){
+    const now=new Date(),stamp=now.toISOString().replace(/[:.]/g,'-');
+    lastExport={filename:'ZHENLI_TaskHub_Backup_'+stamp+'.json',mime:'application/json',contents:JSON.stringify({...data,exportedAt:timestamp(),app:'ZHENLI Secretarial Task Hub'},null,2)};
+    displayBackupStatus(lastExport.filename,'Preparing your file…');
+    try{await saveExport(lastExport);}catch(err){
+      displayBackupStatus(lastExport.filename,'Save failed: '+err.message+'. Tap Save / share backup again.');
+      toast('Could not save backup: '+err.message,true);
+    }
+  }
   function csvCell(v){let s=String(v??'');if(/^[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"'}
   function exportCsv(){const fields=['Title','Company','Category','Priority','Status','Due Date','Assigned To','Reference','Notes','Repeat','Checklist Done','Checklist Total','Created At','Updated At','Completed At'];let rows=[fields.join(',')];for(const t of data.tasks){rows.push([t.title,t.company,t.category,priorityObj(t.priority).name,statusObj(t.status).name,t.dueDate,t.assignee,t.reference,t.notes,t.recurrence,(t.checklist||[]).filter(s=>s.done).length,(t.checklist||[]).length,t.createdAt,t.updatedAt,t.completedAt].map(csvCell).join(','))}download(`ZHENLI_Tasks_${todayStr()}.csv`,'text/csv;charset=utf-8','\uFEFF'+rows.join('\r\n'));toast('CSV downloaded for Excel.')}
-  async function importJson(file){if(!file)return;try{if(file.size>10*1024*1024)throw Error('Backup file is too large.');const raw=await file.text(),x=JSON.parse(raw);if(!x||!Array.isArray(x.tasks)||!Array.isArray(x.companies)||x.tasks.length>30000||x.companies.length>10000)throw Error('This is not a compatible Task Hub backup.');if(!confirm(`Replace your current ${data.tasks.length} tasks and ${data.companies.length} companies with the imported backup (${x.tasks.length} tasks, ${x.companies.length} companies)? Export a backup first.`))return;data={version:1,tasks:x.tasks.filter(t=>t&&typeof t.id==='string'&&typeof t.title==='string').map(t=>({id:t.id,title:t.title,company:t.company||'',category:CATEGORIES.includes(t.category)?t.category:'General / Other',priority:PRIORITIES.some(p=>p.id===t.priority)?t.priority:'normal',status:STATUSES.some(s=>s.id===t.status)?t.status:'todo',dueDate:/^\d{4}-\d{2}-\d{2}$/.test(t.dueDate)?t.dueDate:'',assignee:t.assignee||'',reference:t.reference||'',notes:t.notes||'',recurrence:['none','daily','weekly','monthly','yearly'].includes(t.recurrence)?t.recurrence:'none',recurrenceParent:t.recurrenceParent||null,checklist:Array.isArray(t.checklist)?t.checklist.filter(z=>z&&typeof z.text==='string').slice(0,1000):[],createdAt:t.createdAt||timestamp(),updatedAt:t.updatedAt||timestamp(),completedAt:t.completedAt||null})),companies:x.companies.filter(c=>c&&typeof c.id==='string'&&typeof c.name==='string').map(c=>({id:c.id,name:c.name,reg:c.reg||'',arDate:safeDate(c.arDate),arDueDate:safeDate(c.arDueDate),afsDueDate:safeDate(c.afsDueDate),afsDueStatus:c.afsDueStatus||'not provided',financialYearEnded:safeDate(c.financialYearEnded),fye:safeDate(c.fye),notes:c.notes||'',updatedAt:c.updatedAt||timestamp(),createdAt:c.createdAt||timestamp()})),activity:Array.isArray(x.activity)?x.activity.slice(0,400):[],settings:{...DEFAULT_DATA.settings,...x.settings}};record('Restored backup',`${data.tasks.length} tasks, ${data.companies.length} companies`);saveData();$('#settingsDialog').close();render();toast('Backup restored successfully.')}catch(err){toast('Import failed: '+err.message,true)}finally{$('#importJsonFile').value=''}}
+  async function importJson(file){
+    if(!file)return;
+    try{
+      if(!/\.json$/i.test(file.name))throw Error('Select a Task Hub .json backup file.');
+      if(file.size>10*1024*1024)throw Error('Backup file exceeds 10 MB.');
+      const x=JSON.parse(await file.text());
+      if(!x||!Array.isArray(x.tasks)||!Array.isArray(x.companies)||x.tasks.length>30000||x.companies.length>10000)
+        throw Error('This is not a compatible Task Hub backup. For a Master Listing JSON, use Import Master Listing instead.');
+      if(!confirm(`Replace the current ${data.tasks.length} tasks and ${data.companies.length} companies with backup ${file.name} (${x.tasks.length} tasks, ${x.companies.length} companies)? Export a backup before replacing data.`))return;
+      const candidate={version:1,tasks:x.tasks.filter(t=>t&&typeof t.id==='string'&&typeof t.title==='string').map(t=>({id:t.id,title:t.title,company:t.company||'',category:CATEGORIES.includes(t.category)?t.category:'General / Other',priority:PRIORITIES.some(p=>p.id===t.priority)?t.priority:'normal',status:STATUSES.some(s=>s.id===t.status)?t.status:'todo',dueDate:/^\d{4}-\d{2}-\d{2}$/.test(t.dueDate)?t.dueDate:'',assignee:t.assignee||'',reference:t.reference||'',notes:t.notes||'',recurrence:['none','daily','weekly','monthly','yearly'].includes(t.recurrence)?t.recurrence:'none',recurrenceParent:t.recurrenceParent||null,checklist:Array.isArray(t.checklist)?t.checklist.filter(z=>z&&typeof z.text==='string').slice(0,1000):[],createdAt:t.createdAt||timestamp(),updatedAt:t.updatedAt||timestamp(),completedAt:t.completedAt||null})),companies:x.companies.filter(c=>c&&typeof c.id==='string'&&typeof c.name==='string').map(c=>({id:c.id,name:c.name,reg:c.reg||'',arDate:safeDate(c.arDate),arDueDate:safeDate(c.arDueDate),afsDueDate:safeDate(c.afsDueDate),afsDueStatus:c.afsDueStatus||'not provided',financialYearEnded:safeDate(c.financialYearEnded),fye:safeDate(c.fye),notes:c.notes||'',updatedAt:c.updatedAt||timestamp(),createdAt:c.createdAt||timestamp()})),activity:Array.isArray(x.activity)?x.activity.slice(0,400):[],settings:{...DEFAULT_DATA.settings,...x.settings}};
+      candidate.activity=[{id:uniqueId(),at:timestamp(),action:'Restored backup',title:`${candidate.tasks.length} tasks, ${candidate.companies.length} companies`},...candidate.activity].slice(0,400);
+      // Persist first; never replace the current in-memory workspace if save fails.
+      await persistImport(candidate);
+      data=candidate;$('#importBackupStatus').textContent='Restored from '+file.name+': '+candidate.tasks.length+' tasks, '+candidate.companies.length+' companies.';$('#settingsDialog').close();render();
+      toast(`Restored ${candidate.tasks.length} tasks and ${candidate.companies.length} companies from ${file.name}.`);
+    }catch(err){$('#importBackupStatus').textContent='Backup restore failed: '+err.message;toast('Backup restore failed: '+err.message,true);}
+    finally{$('#importJsonFile').value='';}
+  }
   function resetData(){if(!confirm('Permanently erase ALL tasks, companies and activity on this browser?'))return;const answer=prompt('To confirm, type DELETE in capital letters:');if(answer!=='DELETE')return toast('Reset cancelled.');data=structuredClone(DEFAULT_DATA);saveData();$('#settingsDialog').close();setView('dashboard');toast('Local workspace reset.')}
   function closeMobile(){$('#sidebar').classList.remove('open');$('#mobileBackdrop').hidden=true}
   function openMobile(){$('#sidebar').classList.add('open');$('#mobileBackdrop').hidden=false}
@@ -328,6 +406,7 @@ function mergeCompanyRecords(payload,overwriteDates=false){
     $('#topAddTask').addEventListener('click',()=>openTask());$('#quickCompanyBtn').addEventListener('click',()=>openCompany());$('#deleteTaskBtn').addEventListener('click',deleteTask);$('#deleteCompanyBtn').addEventListener('click',deleteCompany);
     $('#openSettings').addEventListener('click',()=>{$('#compactToggle').checked=data.settings.compact;$('#settingsDialog').showModal()});$('#themeToggle').addEventListener('click',()=>{data.settings.theme=data.settings.theme==='dark'?'light':'dark';saveData();render()});
     $('#compactToggle').addEventListener('change',e=>{data.settings.compact=e.target.checked;saveData();render()});
+    $('#retryBackupSave').addEventListener('click',async()=>{if(!lastExport)return;try{await saveExport(lastExport)}catch(err){displayBackupStatus(lastExport.filename,'Save failed: '+err.message);toast(err.message,true)}});
     $('#sidebarBackup').addEventListener('click',exportJson);$('#footerExport').addEventListener('click',exportJson);$('#exportJson').addEventListener('click',exportJson);$('#exportCsv').addEventListener('click',exportCsv);$('#importJsonBtn').addEventListener('click',()=>$('#importJsonFile').click());$('#importJsonFile').addEventListener('change',e=>importJson(e.target.files[0]));$('#importCompaniesBtn').addEventListener('click',()=>$('#importCompaniesFile').click());$('#importCompaniesFile').addEventListener('change',e=>importCompanies(e.target.files[0]));$('#taskCompanySearch').addEventListener('input',e=>{populateTaskCompanyDropdown($('#taskCompany').value,e.target.value);updateTaskDeadlineHint()});$('#taskCompany').addEventListener('change',updateTaskDeadlineHint);$('#resetData').addEventListener('click',resetData);
     $('#menuToggle').addEventListener('click',openMobile);$('#mobileBackdrop').addEventListener('click',closeMobile);
     $('#addChecklistItem').addEventListener('click',()=>{const txt=$('#newChecklistText').value.trim();if(!txt)return;editingSteps.push({id:uniqueId(),text:txt,done:false});$('#newChecklistText').value='';renderSteps();$('#newChecklistText').focus()});$('#newChecklistText').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#addChecklistItem').click()}});
