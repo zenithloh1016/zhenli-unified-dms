@@ -79,7 +79,7 @@
   let data=EMBEDDED ? structuredClone(DEFAULT_DATA) : readData();
   let state={deadlineKind:'all',deadlinePeriod:'all',deadlineQuery:'',view:'dashboard',query:'',filterCompany:'',filterPriority:'',filterCategory:'',filterStatus:'',sort:'due',calendarYear:new Date().getFullYear(),calendarMonth:new Date().getMonth(),companyQuery:''};
   let editingSteps=[];
-  let lastExport=null;
+  let lastExport=null,lastExportUrl=null;
 
   function readData(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return structuredClone(DEFAULT_DATA);const val=JSON.parse(raw);if(!val||!Array.isArray(val.tasks)||!Array.isArray(val.companies))throw Error('Invalid local data');return {...structuredClone(DEFAULT_DATA),...val,settings:{...DEFAULT_DATA.settings,...val.settings}};}catch(err){console.error('Cannot read storage',err);return structuredClone(DEFAULT_DATA)}}
   function saveData(){
@@ -300,9 +300,27 @@ function mergeCompanyRecords(payload,overwriteDates=false){
     wrap.hidden=false;
     $('#backupDownloadFilename').textContent=filename;
     $('#backupDownloadMessage').textContent=message;
+    const link=$('#manualBackupLink');
+    if(link && lastExportUrl){link.href=lastExportUrl;link.download=lastExport?.filename||'ZHENLI_TaskHub_Backup.json';link.hidden=false;}
   }
   async function saveExport(exported){
     const {filename,mime,contents}=exported;
+    // A direct user-tap Share works better in Brave/Chrome than a delayed iframe message.
+    // If browser sharing is unavailable or denied, fall back to the DMS native bridge.
+    if(typeof navigator.share==='function' && typeof File!=='undefined'){
+      const webFile=new File([contents],filename,{type:mime});
+      let supported=true;
+      try{if(navigator.canShare)supported=navigator.canShare({files:[webFile]});}catch{supported=false;}
+      if(supported){
+        try{
+          await navigator.share({title:filename,files:[webFile]});
+          displayBackupStatus(filename,'Save/share panel opened. Choose Files or Drive and pick a folder to keep this backup.');
+          return;
+        }catch(err){
+          if(err?.name==='AbortError'){displayBackupStatus(filename,'Save cancelled. Use Save / share backup again or the direct download link.');return;}
+        }
+      }
+    }
     if(EMBEDDED){
       const result=await hubRequest('ZHENLI_HUB_EXPORT_FILE','ZHENLI_HUB_EXPORT_RESULT',{filename,mime,contents});
       displayBackupStatus(filename,result.method==='share'
@@ -352,6 +370,8 @@ function mergeCompanyRecords(payload,overwriteDates=false){
   async function exportJson(){
     const now=new Date(),stamp=now.toISOString().replace(/[:.]/g,'-');
     lastExport={filename:'ZHENLI_TaskHub_Backup_'+stamp+'.json',mime:'application/json',contents:JSON.stringify({...data,exportedAt:timestamp(),app:'ZHENLI Secretarial Task Hub'},null,2)};
+    if(lastExportUrl)URL.revokeObjectURL(lastExportUrl);
+    lastExportUrl=URL.createObjectURL(new Blob([lastExport.contents],{type:lastExport.mime}));
     displayBackupStatus(lastExport.filename,'Preparing your file…');
     try{await saveExport(lastExport);}catch(err){
       displayBackupStatus(lastExport.filename,'Save failed: '+err.message+'. Tap Save / share backup again.');
