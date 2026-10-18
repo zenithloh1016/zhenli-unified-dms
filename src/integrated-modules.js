@@ -1,5 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
+import readExcelFile from 'read-excel-file/browser';
+import {saveOrShareFile} from './file-transfer.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g,c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const TASK_PAGE = `${import.meta.env.BASE_URL || './'}task-hub/index.html`;
@@ -14,7 +16,7 @@ export function renderIntegratedView(section, companies=[]) {
   const signingLink = getSigningUrl();
   if (section === 'tasks') return `<section class="module-header"><div><p class="eyebrow">TASK MANAGEMENT</p><h1>Secretarial Task Hub V3</h1><p class="muted">Original Kanban, deadlines, recurrence, checklist, calendar and task workflow.</p></div><span class="module-chip">Private cloud sync</span></section>
     <div class="module-notice">Your Task Hub data syncs with your Supabase account after installing the included SQL setup. To restore tasks from your original EdgeOne website, use its <strong>Export backup</strong>, then import that JSON file inside Task Hub here. Do not import a confidential backup into GitHub.</div>
-    <iframe id="zh-task-frame" title="ZHENLI Secretarial Task Hub" loading="eager" src="${esc(TASK_PAGE)}" class="task-hub-frame"></iframe>`;
+    <iframe id="zh-task-frame" title="ZHENLI Secretarial Task Hub" loading="eager" src="${esc(TASK_PAGE)}" class="task-hub-frame" allow="web-share"></iframe>`;
   if (section === 'signing') return `<section class="module-header"><div><p class="eyebrow">SIGNING WORKFLOW</p><h1>Sequential Signing</h1><p class="muted">Continue using your existing Tencent EdgeOne signing engine and private storage.</p></div><span class="module-chip">Existing EdgeOne service</span></section>
     <section class="integration-card"><h2>Keep your established signing process</h2><p>Create a request, upload PDFs, position signature boxes, activate sequential signers, send links, and download signed PDFs with audit records in your original signing deployment.</p>
     <div class="integration-steps"><span>① Draft & upload</span><span>② Place signature boxes</span><span>③ Sign in order</span><span>④ Download signed PDFs</span></div>
@@ -64,20 +66,28 @@ export function installHubBridge(db, getUser, getCompanies, displayError) {
   if(bridgeInstalled)return;
   bridgeInstalled=true;
   const defaultPayload=()=>({version:1,tasks:[],companies:[],activity:[],settings:{theme:'light',compact:false}});
-  let requestedFor=null;
-  async function saveChanges(){
-    if(syncBusy)return;
+  let requestedFor=null, syncPromise=null;
+  function saveChanges(){
+    if(syncPromise)return syncPromise;
     syncBusy=true;
-    try {
+    syncPromise=(async()=>{
       while(queuedState){
-        const value=queuedState; queuedState=null;
+        const value=queuedState;queuedState=null;
         const user=getUser();
-        if(!user || user.id!==lastUserId) return;
+        if(!user || user.id!==lastUserId)throw Error('Task Hub session changed. Sign in again.');
         const {error}=await db.from('task_hub_state').upsert({user_id:user.id,payload:value,updated_at:new Date().toISOString()},{onConflict:'user_id'});
-        if(error) throw error;
+        if(error)throw error;
       }
-    }catch(error){displayError(new Error(`Task Hub cloud save failed: ${error.message}. Export a task backup before leaving.`));}
-    finally{syncBusy=false; if(queuedState)void saveChanges();}
+    })().finally(()=>{
+      syncBusy=false;syncPromise=null;
+      if(queuedState)void saveChanges().catch(displayError);
+    });
+    return syncPromise;
+  }
+  function respond(child,type,requestId,result){
+    if(typeof requestId!=='string'||requestId.length>100)return;
+    if(document.getElementById('zh-task-frame')?.contentWindow===child)
+      child.postMessage({type,requestId,...result},window.location.origin);
   }
   window.addEventListener('message',async(event)=>{
     if(event.origin!==window.location.origin)return;
@@ -103,11 +113,47 @@ export function installHubBridge(db, getUser, getCompanies, displayError) {
       }catch(err){child.contentWindow?.postMessage({type:'ZHENLI_HUB_INIT',error:err.message},window.location.origin);}
       return;
     }
-    if(event.data?.type==='ZHENLI_HUB_SAVE'){
+    const type=event.data?.type,requestId=event.data?.requestId,childWindow=child.contentWindow;
+    if(type==='ZHENLI_HUB_SAVE' || type==='ZHENLI_HUB_SAVE_CONFIRM'){
       const p=event.data.payload;
-      if(!p || !Array.isArray(p.tasks) || !Array.isArray(p.companies) || p.tasks.length>30000 || p.companies.length>10000) return;
-      if(JSON.stringify(p).length>3_000_000) {displayError(new Error('Task Hub payload is too large for cloud sync.'));return;}
-      payload=p;lastUserId=user.id;queuedState=p;void saveChanges();
+      if(!p || !Array.isArray(p.tasks) || !Array.isArray(p.companies) || p.tasks.length>30000 || p.companies.length>10000
+        || JSON.stringify(p).length>3_000_000){
+        if(type==='ZHENLI_HUB_SAVE_CONFIRM')respond(childWindow,'ZHENLI_HUB_SAVE_RESULT',requestId,{ok:false,error:'Invalid or oversized Task Hub data'});
+        else displayError(new Error('Task Hub payload is too large for cloud sync.'));
+        return;
+      }
+      payload=p;lastUserId=user.id;queuedState=p;
+      try {
+        await saveChanges();
+        if(type==='ZHENLI_HUB_SAVE_CONFIRM')respond(childWindow,'ZHENLI_HUB_SAVE_RESULT',requestId,{ok:true});
+      } catch(err) {
+        displayError(new Error('Task Hub cloud save failed: '+err.message));
+        if(type==='ZHENLI_HUB_SAVE_CONFIRM')respond(childWindow,'ZHENLI_HUB_SAVE_RESULT',requestId,{ok:false,error:err.message});
+      }
+      return;
+    }
+    if(type==='ZHENLI_HUB_EXPORT_FILE'){
+      try{
+        const {filename,mime,contents}=event.data;
+        if(typeof filename!=='string'||!/^[^/\\]{1,180}\\.(json|csv)$/i.test(filename)
+          ||typeof contents!=='string'||contents.length>15_000_000)throw Error('Invalid backup file.');
+        const result=await saveOrShareFile(new Blob([contents],{type:mime||'application/json'}),filename,{preferShare:true});
+        respond(childWindow,'ZHENLI_HUB_EXPORT_RESULT',requestId,{ok:result.method!=='cancelled',method:result.method,filename:result.filename,
+          error:result.method==='cancelled'?'Save/share cancelled. You can try again.':''});
+      }catch(err){respond(childWindow,'ZHENLI_HUB_EXPORT_RESULT',requestId,{ok:false,error:err.message});}
+      return;
+    }
+    if(type==='ZHENLI_HUB_PARSE_XLSX'){
+      try{
+        const file=event.data.file;
+        if(!(file instanceof Blob)||file.size<1||file.size>8*1024*1024)throw Error('Choose an Excel workbook smaller than 8 MB.');
+        const names=(await readExcelFile(file,{getSheets:true})).map(s=>s.name).filter(Boolean);
+        const sheet=names.find(n=>/master\s*listing/i.test(n))||names[0];
+        if(!sheet)throw Error('No Excel worksheet found.');
+        const rows=await readExcelFile(file,{sheet});
+        if(!Array.isArray(rows)||rows.length>5000)throw Error('Workbook has too many rows.');
+        respond(childWindow,'ZHENLI_HUB_XLSX_RESULT',requestId,{ok:true,rows,sheet});
+      }catch(err){respond(childWindow,'ZHENLI_HUB_XLSX_RESULT',requestId,{ok:false,error:err.message});}
     }
   });
 }
