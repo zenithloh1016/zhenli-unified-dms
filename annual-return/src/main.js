@@ -1,51 +1,138 @@
 import './style.css';
-import {Capacitor} from '@capacitor/core';
-import {Filesystem,Directory} from '@capacitor/filesystem';
-import {Share} from '@capacitor/share';
-import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField} from './core.js';
+import {cloneBlank,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField} from './core.js';
+import {createDraftStore} from './draft-storage.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
 let selectedDmsCompanyId=null,dmsCompanies=[];
+
+/* On-device drafts are scoped to the authenticated DMS user. */
+let draftStore=null,draftScope=null,activeDraftId=crypto.randomUUID();
+let draftDirty=false,saveTimer=null,draftsVisible=false,draftError='';
+try{draftStore=createDraftStore(window.localStorage);}
+catch(err){draftError='On-device storage unavailable: '+err.message;}
+function hasDraftContent(){
+ return doc.particulars.some(x=>x.type==='field'&&String(x.value||'').trim())||
+ Boolean(String(doc.signatureDirector?.name||'').trim()||String(doc.signatureDirector?.nric||'').trim());
+}
+function draftStatus(message,bad=false){
+ const box=$('draft-save-status');
+ if(box){box.textContent=message;box.classList.toggle('draft-error',bad);}
+}
+function getDrafts(){
+ if(!draftStore||!draftScope)return [];
+ try{return draftStore.list(draftScope);}
+ catch(err){draftError=err.message;draftStatus(err.message,true);return [];}
+}
+function drawDrafts(){
+ const entries=getDrafts();
+ $('show-drafts').textContent='Saved Drafts ('+entries.length+')';
+ $('draft-list-panel').hidden=!draftsVisible;
+ if(!draftsVisible)return;
+ $('draft-list').innerHTML=entries.map(x=>{
+  const date=Number.isFinite(Date.parse(x.updatedAt))?new Date(x.updatedAt).toLocaleString():'Date unknown';
+  return '<div class="ar-draft-row"><div><b>'+esc(x.companyName||'Unnamed Annual Return')+'</b><small>'+
+   esc((x.registrationNo||'No registration number')+(x.year?' · AR '+x.year:'')+' · Saved '+date)+
+   '</small></div><div class="ar-draft-actions"><button type="button" class="button mini" data-resume-draft="'+esc(x.id)+'">Resume</button>'+
+   '<button type="button" class="button mini danger" data-delete-draft="'+esc(x.id)+'">Delete</button></div></div>';
+ }).join('')||'<p class="status">No saved drafts yet. Fill in the form or choose Save Draft.</p>';
+}
+function saveCurrentDraft({manual=false}={}){
+ if(saveTimer!==null){clearTimeout(saveTimer);saveTimer=null;}
+ if(!draftDirty&&!manual)return true;
+ if(!hasDraftContent()&&!manual){draftDirty=false;return true;}
+ if(!draftStore||!draftScope){
+  draftError=draftError||'Draft storage is not ready';
+  draftStatus('Draft not saved — '+draftError,true);return false;
+ }
+ try{
+  syncCompanyDetails(doc);
+  const result=draftStore.save(draftScope,activeDraftId,normalizeDocument(doc),selectedDmsCompanyId||'');
+  draftDirty=false;draftError='';
+  draftStatus('Saved on this device · '+new Date(result.updatedAt).toLocaleTimeString()+(doc.company.name?' · '+doc.company.name:''));
+  drawDrafts();return true;
+ }catch(err){draftError=err.message;draftStatus('Draft not saved — '+err.message,true);return false;}
+}
+function changedDraft(){
+ draftDirty=true;
+ draftStatus('Saving changes on this device…');
+ if(saveTimer!==null)clearTimeout(saveTimer);
+ saveTimer=setTimeout(()=>saveCurrentDraft(),350);
+}
+function resumeDraft(id,{fromCompany=false}={}){
+ if(!draftStore||!draftScope)return false;
+ try{
+  const snapshot=draftStore.load(draftScope,id);
+  if(!snapshot)throw Error('This draft is no longer available.');
+  if(!fromCompany&&!saveCurrentDraft())return false;
+  const record=getDrafts().find(x=>x.id===id);
+  doc=normalizeDocument(snapshot);
+  selectedDmsCompanyId=record?.companyId||null;
+  activeDraftId=id;draftDirty=false;
+  generated=null;$('download-box').hidden=true;
+  resetView();
+  if(selectedDmsCompanyId&&window.parent!==window)
+   window.parent.postMessage({type:'ZHENLI_AR_RESUME_COMPANY',id:selectedDmsCompanyId},window.location.origin);
+  draftStatus('Resumed draft: '+(doc.company.name||'Unnamed company')+' · '+(record?.updatedAt?new Date(record.updatedAt).toLocaleString():''));
+  drawDrafts();return true;
+ }catch(err){draftStatus('Cannot resume draft: '+err.message,true);return false;}
+}
+function scopeDrafts(scope){
+ if(typeof scope!=='string'||!/^(?:standalone|dms:[a-zA-Z0-9_-]{1,130})$/.test(scope))return;
+ if(draftScope===scope)return;
+ draftScope=scope;selectedDmsCompanyId=null;activeDraftId=crypto.randomUUID();
+ doc=cloneBlank();draftDirty=false;
+ const latest=getDrafts()[0];
+ if(latest)resumeDraft(latest.id,{fromCompany:true});
+ else{resetView();drawDrafts();draftStatus('Edits save automatically on this device. Tap Save Draft at any time.');}
+}
+window.__zhenliFlushDraft=()=>saveCurrentDraft();
+window.addEventListener('pagehide',()=>saveCurrentDraft());
 function isValidCompanyRecord(value){
  return value&&typeof value==='object'&&
  typeof value.id==='string'&&value.id.length>0&&value.id.length<130&&
  typeof value.name==='string'&&value.name.trim().length>=2&&value.name.length<=300&&
  typeof value.registrationNo==='string'&&value.registrationNo.length<=120;
 }
-function hasUnsavedAnnualReturnData(){
- return doc.particulars.some(x=>x.type==='field'&&!['Company Name','Company Registration No.'].includes(x.en)&&String(x.value||'').trim()!=='')||
-   Boolean(doc.signatureDirector?.name||doc.signatureDirector?.nric);
-}
 function applyDmsCompany(company){
- if(!isValidCompanyRecord(company))return {ok:false,reason:'Invalid company record from DMS.'};
- const name=company.name.trim(),registrationNo=company.registrationNo.trim();
- if(selectedDmsCompanyId===company.id&&doc.company.name===name&&doc.company.no===registrationNo)
-   return {ok:true};
- const changedCompany=Boolean(selectedDmsCompanyId&&selectedDmsCompanyId!==company.id);
- if((changedCompany||hasUnsavedAnnualReturnData())&&!confirm(
-   'Switch to '+name+' from DMS Documents? This starts a new Annual Return form and discards unsaved particulars. Export editable JSON first if you need the current draft.'
- ))return {ok:false,reason:'Selection cancelled to preserve the current draft.'};
- // A new company must never inherit another company's directors, shareholdings,
- // charges or beneficial owner particulars. Start with a fresh clean template.
- doc=cloneBlank();
- doc.company.name=name;doc.company.no=registrationNo;
- for(let i=0;i<doc.particulars.length;i++){
-   if(doc.particulars[i].type!=='field')continue;
-   if(doc.particulars[i].en==='Company Name'){doc.particulars[i].value=name;setCompanyDetail(doc,i,name);}
-   else if(doc.particulars[i].en==='Company Registration No.'){doc.particulars[i].value=registrationNo;setCompanyDetail(doc,i,registrationNo);}
+ if(!isValidCompanyRecord(company))return {ok:false,reason:'Invalid DMS company.'};
+ if(!draftScope)return {ok:false,reason:'Draft workspace is still loading.'};
+ const name=company.name.trim(),reg=company.registrationNo.trim();
+ if(selectedDmsCompanyId===company.id&&doc.company.name===name&&doc.company.no===reg)return {ok:true};
+ if(!saveCurrentDraft())return {ok:false,reason:'Unfinished draft could not be saved. Check device storage first.'};
+ const previous=getDrafts().find(x=>x.companyId===company.id);
+ if(previous){
+  if(!resumeDraft(previous.id,{fromCompany:true}))return {ok:false,reason:'Saved company draft could not be read.'};
+  doc.company.name=name;doc.company.no=reg;
+  for(let i=0;i<doc.particulars.length;i++){
+   const field=doc.particulars[i];
+   if(field.en==='Company Name'||field.en==='Company Registration No.'){
+    field.value=field.en==='Company Name'?name:reg;setCompanyDetail(doc,i,field.value);
+   }
+  }
+  selectedDmsCompanyId=company.id;resetView();changedDraft();
+  status('Resumed saved Annual Return for '+name+'.');
+  return {ok:true,resumed:true};
  }
- selectedDmsCompanyId=company.id;
- generated=null;$('download-box').hidden=true;
- resetView();
- status('Company loaded from DMS Documents: '+name+(registrationNo?' ('+registrationNo+')':' — registration number missing; please enter it before PDF generation')+'. Complete and verify all remaining statutory particulars.');
- return {ok:true};
+ doc=cloneBlank();activeDraftId=crypto.randomUUID();doc.company.name=name;doc.company.no=reg;
+ for(let i=0;i<doc.particulars.length;i++){
+  const field=doc.particulars[i];
+  if(field.type==='field'&&(field.en==='Company Name'||field.en==='Company Registration No.')){
+   field.value=field.en==='Company Name'?name:reg;setCompanyDetail(doc,i,field.value);
+  }
+ }
+ selectedDmsCompanyId=company.id;draftDirty=false;
+ generated=null;$('download-box').hidden=true;resetView();drawDrafts();
+ draftStatus('Company selected. Edits save automatically.');
+ status('Company loaded from DMS: '+name+'. Complete the remaining particulars.');
+ return {ok:true,resumed:false};
 }
 if(window.parent!==window){
  window.addEventListener('message',event=>{
   if(event.source!==window.parent||event.origin!==window.location.origin)return;
+  if(event.data?.type==='ZHENLI_DMS_AR_WORKSPACE'){scopeDrafts('dms:'+String(event.data.userId||''));return;}
   if(event.data?.type==='ZHENLI_DMS_AR_COMPANY_LIST'){
    const records=Array.isArray(event.data.companies)?event.data.companies:[];
    dmsCompanies=records.slice(0,5000).filter(isValidCompanyRecord).sort((a,b)=>a.name.localeCompare(b.name));
