@@ -3,7 +3,7 @@ import {jsPDF} from 'jspdf';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {outputFilename} from './core.js';
+import {outputFilename,showMemberField} from './core.js';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
@@ -126,7 +126,8 @@ export function renderPages(doc){
   push(block('pdf-title','<h1>'+escapeHtml(doc.company.name||'COMPANY NAME TO CONFIRM')+
     ' — ANNUAL RETURN '+escapeHtml(doc.company.arYear||'')+'</h1><div class="pdf-kicker">ANNUAL RETURN PARTICULARS REVIEW / 周年申报资料审核</div>'));
   // Company Details is the first particulars section below; avoid a duplicate profile table.
-  for(const item of doc.particulars){
+  for(const [itemIndex,item] of doc.particulars.entries()){
+    if(!showMemberField(doc.particulars,itemIndex))continue;
     if(item.type==='section'||item.type==='heading'){
       section(item.en,item.cn,item.type);continue;
     }
