@@ -219,7 +219,18 @@ function addRecord(kind){
  if(section<0){status('Could not find the '+rule.label+' section in this imported script.',true);return;}
  const headings=[];
  for(let i=section+1;i<until;i++)if(doc.particulars[i].type==='heading'&&rule.heading.test(doc.particulars[i].en||''))headings.push(i);
- if(!headings.length){status('No '+rule.label+' template found. Import a current Annual Return script.',true);return;}
+ if(!headings.length){
+  if(kind==='bo'){
+   const source=cloneBlank().particulars,src=source.findIndex(x=>x.type==='heading'&&rule.heading.test(x.en||''));
+   if(src<0)return status('Beneficial Owner template is missing.',true);
+   let stop=src+1;while(stop<source.length&&source[stop].type==='field')stop++;
+   const entry=source.slice(src,stop).map(x=>({...x,value:''}));
+   if(doc.particulars.length+entry.length>1200)return status('Too many fields.',true);
+   doc.particulars.splice(until,0,...entry);renderSections();queueDraftSave();
+   status('Added Beneficial Owner 1.');return;
+  }
+  return status('At least one Director or Member record is required.',true);
+ }
  const start=headings[0],last=headings[headings.length-1];
  let end=until;
  for(let i=last+1;i<until;i++)if(doc.particulars[i].type==='heading'){end=i;break;}
@@ -242,7 +253,7 @@ function addRecord(kind){
  }
  if(doc.particulars.length+next.length>1200)return status('Too many review items; remove unnecessary entries first.',true);
  doc.particulars.splice(insertAt,0,...next);
- renderSections();status('Added '+rule.label+' '+nextNumber+'. All its fields are blank.');
+ renderSections();queueDraftSave();status('Added '+rule.label+' '+nextNumber+'. All its fields are blank.');
 }
 
 function companyNameControl(item,index){
@@ -275,7 +286,7 @@ function addCustomField({sectionIndex=null,headingIndex=null}={}){
   while(pos<doc.particulars.length&&doc.particulars[pos].type!=='section')pos++;
  }
  doc.particulars.splice(pos,0,field);
- renderSections();
+ renderSections();queueDraftSave();
  status('Added "'+field.en+'" to '+(headingIndex!==null?'the selected member record':'the selected section')+'. It will appear in the PDF.');
 }
 function removeReviewField(index){
@@ -285,9 +296,19 @@ function removeReviewField(index){
  }
  if(!confirm('Delete "'+item.en+'" and its value from this Annual Return form and generated PDF?'))return;
  try {deleteParticularField(doc,index);}catch(err){status(err.message,true);return;}
- renderSections();status('Removed field: '+item.en+'. Export JSON to preserve this customisation.');
+ renderSections();queueDraftSave();status('Removed field: '+item.en+'. Change autosaved.');
 }
 
+function removeWholeRecord(index){
+ const entry=doc.particulars[index];
+ if(!entry||entry.type!=='heading')return;
+ if(!confirm('Remove entire '+entry.en+' record and all of its fields?'))return;
+ try{
+  const result=removeAnnualReturnRecord(doc,index);
+  renderSections();queueDraftSave();
+  status('Removed '+result.removedHeading+'. '+result.remaining+' '+result.kind+' record(s) remain.');
+ }catch(err){status('Cannot remove record: '+err.message,true);}
+}
 function controlsFor(item,index){
  const value=String(item.value||''),common=' data-item="'+index+'"';
  if(item.en==='Company Name')return companyNameControl(item,index);
@@ -323,7 +344,13 @@ function renderSections(){
   });
   if(!rows.length&&(q||onlyBlank))return '';
   const body=rows.map(({index,item})=>{
-   if(item.type==='heading')return '<div class="heading-entry">'+esc(item.en)+' <small>'+esc(item.cn)+'</small>'+(/^MEMBER \d+$/i.test(item.en)?'<button type="button" class="button mini ar-add-member-field" data-add-to-member="'+index+'">+ Add member field</button>':'')+'</div>';
+   if(item.type==='heading'){
+     const matched=ADDONS.find(x=>x.id!=='charge'&&x.heading.test(item.en||''));
+     const canRemove=matched&&(matched.id==='bo'||doc.particulars.filter(x=>x.type==='heading'&&matched.heading.test(x.en||'')).length>1);
+     return '<div class="heading-entry">'+esc(item.en)+' <small>'+esc(item.cn)+'</small>'+
+       (/^MEMBER \d+$/i.test(item.en)?'<button type="button" class="button mini ar-add-member-field" data-add-to-member="'+index+'">+ Add member field</button>':'')+
+       (canRemove?'<button type="button" class="button mini ar-remove-record" data-remove-record="'+index+'">Remove '+esc(matched.label)+'</button>':'')+'</div>';
+    }
    return '<div class="field-entry '+(item.value?'':'blank')+'"><div class="title">'+esc(item.en||'Untitled')+
     '<small>'+esc(item.cn||'')+'</small>'+(!['Company Name','Company Registration No.'].includes(item.en)?'<button type="button" class="ar-delete-field" data-delete-field="'+index+'">Delete field</button>':'')+'</div>'+controlsFor(item,index)+'</div>';
   }).join('');
@@ -335,35 +362,7 @@ function renderSections(){
  fieldStatus();
 }
 function resetView(){signingInputs();$('search').value='';$('incomplete').checked=false;renderSections();}
-function setBusy(flag){busy=flag;$('generate-pdf').disabled=flag;$('export-json').disabled=flag;}
-async function importFile(file){
- if(!file)return;
- try{
-  if(file.size>3_000_000)throw Error('Selected file exceeds 3 MB. Choose a company-specific .gs/.json file.');
-  const incoming=importAnnualReturnText(await file.text(),file.name);
-  if(!confirm('Load '+file.name+'? Unsaved edits in the current form will be replaced.'))return;
-  doc=incoming;selectedDmsCompanyId=null;resetView();$('download-box').hidden=true;generated=null;
-  status('Imported '+file.name+' locally. Review '+populatedCount(doc)+' populated fields before generating the PDF.');
- }catch(error){status('Import failed: '+error.message,true);}
-}
-async function saveJson(){
- const filename=(doc.company.name||'ZHENLI_Annual_Return').replace(/[\\/:*?"<>|\u0000-\u001f]/g,'_').slice(0,80)+'_Review_Draft.json';
- const payload=JSON.stringify(normalizeDocument(doc),null,2);
- const blob=new Blob([payload],{type:'application/json'});
- if(Capacitor.isNativePlatform()){
-  const data=await new Promise((resolve,reject)=>{
-   const reader=new FileReader();
-   reader.onload=()=>resolve(String(reader.result).split(',')[1]);
-   reader.onerror=()=>reject(Error('Could not prepare JSON export.'));
-   reader.readAsDataURL(blob);
-  });
-  const {uri}=await Filesystem.writeFile({directory:Directory.Cache,path:'annual-return/'+Date.now()+'-'+filename,data,recursive:true});
-  await Share.share({title:filename,url:uri,dialogTitle:'Save Annual Return JSON'});
-  status('Select Files or Drive to save your editable JSON draft.');return;
- }
- const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();
- setTimeout(()=>URL.revokeObjectURL(url),120000);status('Download requested: '+filename+'. Check Brave Downloads.');
-}
+function setBusy(flag){busy=flag;$('generate-pdf').disabled=flag;$('save-draft').disabled=flag;}
 async function generate(){
  if(busy)return;
  if(!String(doc.company.name).trim()||!String(doc.company.no).trim())
@@ -384,15 +383,24 @@ async function generate(){
  }catch(error){status('PDF generation failed: '+error.message+'. Try a smaller draft or check available device memory.',true);}
  finally{setBusy(false);}
 }
-$('import-file').addEventListener('change',e=>{const file=e.target.files?.[0];e.target.value='';void importFile(file);});
-$('blank').addEventListener('click',()=>{
- if(!confirm('Start a blank form? Unsaved edits will be discarded.'))return;
- doc=cloneBlank();resetView();generated=null;$('download-box').hidden=true;status('Blank bilingual form ready.');
+$('save-draft').addEventListener('click',()=>{if(!hasDraftData())return draftStatus('Enter some particulars before saving.',true);saveDraftNow();});
+$('resume-draft').addEventListener('click',()=>{if(flushDraft())resumeLocalDraft($('draft-picker').value);});
+$('delete-draft').addEventListener('click',()=>{
+ const key=$('draft-picker').value;if(!key)return;
+ if(!confirm('Permanently delete this locally saved Annual Return draft? The currently open form remains unchanged.'))return;
+ try{removeAnnualReturnDraft(localStorage,key,draftScope);draftOptions();draftStatus('Selected local draft deleted.');}
+ catch(err){draftStatus('Delete failed: '+err.message,true);}
 });
-$('export-json').addEventListener('click',()=>saveJson().catch(e=>status('JSON export failed: '+e.message,true)));
+$('blank').addEventListener('click',()=>{
+ if(!confirm('Start a blank Annual Return? The current unfinished form will be saved on this device.'))return;
+ if(!flushDraft())return;
+ selectedDmsCompanyId=null;newDraftId='new-'+Date.now().toString(36);
+ doc=cloneBlank();resetView();generated=null;$('download-box').hidden=true;
+ draftOptions();draftStatus('New blank form. Changes will autosave on this device.');
+});
 $('search').addEventListener('input',renderSections);
 $('incomplete').addEventListener('change',renderSections);
-$('signature-fields').addEventListener('input',e=>{const k=e.target.dataset.sign;if(k)doc.signatureDirector[k]=e.target.value;});
+$('signature-fields').addEventListener('input',e=>{const k=e.target.dataset.sign;if(k){doc.signatureDirector[k]=e.target.value;queueDraftSave();}});
 $('particulars').addEventListener('input',e=>{
  if(e.target.dataset.msicSearch!==undefined){refreshMSICResults(e.target);return;}
  const index=e.target.dataset.item;
@@ -400,7 +408,7 @@ $('particulars').addEventListener('input',e=>{
   doc.particulars[+index].value=e.target.value;
   setCompanyDetail(doc,Number(index),e.target.value);
   e.target.closest('.field-entry')?.classList.toggle('blank',!e.target.value.trim());
-  fieldStatus();
+  fieldStatus();queueDraftSave();
  }
 });
 $('particulars').addEventListener('change',e=>{
@@ -411,7 +419,7 @@ $('particulars').addEventListener('change',e=>{
   return;
  }
  if(el.dataset.item!==undefined&&doc.particulars[Number(el.dataset.item)]?.en==='Member Type'){
-  renderSections();return;
+  queueDraftSave();renderSections();return;
  }
  if(el.dataset.criteria!==undefined){
   const i=Number(el.dataset.criteria);
