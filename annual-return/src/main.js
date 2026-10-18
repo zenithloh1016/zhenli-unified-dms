@@ -23,7 +23,7 @@ function fieldStatus(){
 function profileInputs(){
  $('company-fields').innerHTML=profileFields.map(([key,label])=>'<label class="field-label">'+esc(label)+
   '<input data-company="'+esc(key)+'" type="text" value="'+esc(doc.company[key])+'" autocomplete="off" placeholder="Enter or import information"></label>').join('');
- const signs=[['name','Confirming director / 签署董事姓名'],['nric','NRIC / Passport / 身份证或护照号码'],['date','Actual signing date (optional) / 签署日期']];
+ const signs=[['name','Confirming director / 签署董事姓名'],['nric','NRIC / Passport / 身份证或护照号码'],['designation','Capacity / 职务'],['acknowledgement','Signing acknowledgement / 签署确认说明'],['date','Actual signing date (optional) / 签署日期']];
  $('signature-fields').innerHTML=signs.map(([key,label])=>'<label class="field-label">'+esc(label)+
   '<input data-sign="'+esc(key)+'" type="text" value="'+esc(doc.signatureDirector[key]||'')+'" placeholder="'+
   (key==='date'?'Leave blank until signed':'Enter signatory details')+'" autocomplete="off"></label>').join('');
