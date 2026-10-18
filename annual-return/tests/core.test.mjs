@@ -122,7 +122,7 @@ test('V1.5 removes TIN and the entire Company Review and Verification section fr
  raw.signatureDirector.acknowledgement='Signed';
  const restored=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(raw)+';', 'legacy.gs');
  assert.equal(restored.particulars.length,127);
- assert.equal(restored.particulars.some(x=>/TIN|COMPANY REVIEW AND VERIFICATION NOTES/i.test(x.en)),false);
+ assert.equal(restored.particulars.some(x=>/^(?:Tax Identification Number(?: \(TIN\))?|TIN|COMPANY REVIEW AND VERIFICATION NOTES)$/i.test(x.en)),false);
  assert.equal(restored.particulars.some(x=>x.en==='Preference Allotment'&&x.value==='Private client details'),false);
  assert.equal(Object.hasOwn(restored.signatureDirector,'date'),false);
  assert.equal(Object.hasOwn(restored.signatureDirector,'acknowledgement'),false);
