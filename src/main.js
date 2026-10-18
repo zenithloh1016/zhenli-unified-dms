@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import readExcelFile from 'read-excel-file/browser';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
+import {saveOrShareFile} from './file-transfer.js';
 import './style.css';
 import {installHubBridge} from './integrated-modules.js';
 
@@ -136,7 +137,7 @@ function renderFolder() {
   const docs=current ? state.documents.filter(d=>d.folder_id===current.id) : [];
   const crumbs = `<button type="button" data-action="home">Companies</button><span>›</span><button type="button" data-action="open-company" data-id="${company.id}">${esc(company.name)}</button>${trail.map(f=>`<span>›</span><button type="button" data-action="open-folder" data-id="${f.id}">${esc(f.name)}</button>`).join('')}`;
   return `<div class="breadcrumbs">${crumbs}</div><div class="content-header"><div><p class="eyebrow">${current?'FOLDER CONTENTS':'COMPANY DOCUMENTS'}</p><h1>${esc(current?.name||company.name)}</h1><p class="muted">${current ? `${childFolders.length} subfolders • ${docs.length} documents` : esc(company.registration_no||'Select a statutory category below')}</p></div><div class="header-buttons">${action('+ New '+(current?'subfolder':'folder'),'new-folder','','secondary')}${current?action('↑ Upload documents','upload-trigger','','primary'):''}</div></div>
-  ${current?`<div class="upload-zone" id="dropzone" role="button" tabindex="0"><strong>↑ Upload documents here</strong><span>Choose files or drop files here. Max 50 MB per file.</span></div>`:`<div class="info-strip">Your 11 standard categories are shown below. Open a category to upload files or create nested folders.</div>`}
+  ${current?`<div class="upload-zone" id="dropzone" role="button" tabindex="0"><strong>↑ Upload documents here</strong><span>Choose PDFs, Word, Excel, images, JSON or ZIP. Max 50 MB per file; upload progress and errors shown.</span></div>`:`<div class="info-strip">Your 11 standard categories are shown below. Open a category to upload files or create nested folders.</div>`}
   <section class="items"><div class="section-caption">FOLDERS <span>${childFolders.length}</span></div>${childFolders.map(folderCard).join('') || '<div class="empty-line">No subfolders yet.</div>'}
   ${current ? `<div class="section-caption">DOCUMENTS <span>${docs.length}</span></div>${docs.map(documentCard).join('') || '<div class="empty-line">No documents in this folder. Upload PDFs, Word documents, Excel files or images.</div>'}` : ''}</section>`;
 }
@@ -210,11 +211,11 @@ function columnOptions(selected, includeNone=false) {
 function renderImportModal() {
   const sheets=state.importData||[], rows=getImportRows(), c=importCandidate();
   return `<div class="modal-backdrop"><section class="modal import-modal" role="dialog" aria-modal="true" aria-label="Import Excel Master Listing"><div class="modal-heading"><h3>Import Excel Master Listing</h3>${action('✕','close-modal')}</div>
-  <p class="muted">Import your Excel Master Listing (.xlsx), a simple CSV, or paste company names. Existing companies are reused; no duplicate folders are created.</p>
-  <label class="input-label">1. Select file (.xlsx or .csv)<input type="file" id="excel-input" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"/></label>${state.importFileName?`<p class="muted">Selected: ${esc(state.importFileName)}</p>`:''}
+  <p class="muted">Import Excel (.xlsx), CSV, or JSON company lists, including Task Hub Master Listing JSON. Existing companies are reused.</p>
+  <label class="input-label">1. Select file (.xlsx, .csv or .json)<input type="file" id="excel-input" accept=".xlsx,.csv,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/json"/></label>${state.importFileName?`<p class="muted">Selected: ${esc(state.importFileName)}</p>`:''}
   <details class="import-paste-wrap"><summary>File picker not working? Paste company names instead</summary><p class="muted">Paste rows copied from Excel, or one company name per line. Tab-separated registration numbers are also supported.</p><textarea id="import-paste" rows="5" placeholder="Company Name,Registration No.&#10;EXAMPLE SDN. BHD.,202601234567"></textarea>${action('Use pasted list','load-paste','','secondary')}</details>
   ${sheets.length ? `<div class="import-grid"><label class="input-label">Worksheet<select id="sheet-choice">${sheets.map((s,i)=>`<option value="${i}" ${state.importSheet===i?'selected':''}>${esc(s.sheet)}</option>`).join('')}</select></label><label class="input-label">Company name column<select id="name-column">${columnOptions(state.importNameCol)}</select></label><label class="input-label">Registration number column<select id="registration-column">${columnOptions(state.importRegCol,true)}</select></label><label class="input-label">First data row (1-based)<input id="start-row" type="number" min="1" max="${Math.max(rows.length,1)}" value="${state.importStartRow}"/></label></div>
-  <div class="import-preview"><strong>Excel preview</strong><div class="preview-scroll"><table><tbody>${rows.slice(0,8).map((row,i)=>`<tr><td class="rowno">${i+1}</td>${row.slice(0,9).map(cell=>`<td>${esc(norm(cell).slice(0,55))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>
+  <div class="import-preview"><strong>Selected file preview</strong><div class="preview-scroll"><table><tbody>${rows.slice(0,8).map((row,i)=>`<tr><td class="rowno">${i+1}</td>${row.slice(0,9).map(cell=>`<td>${esc(norm(cell).slice(0,55))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>
   <div class="import-summary"><strong>${c.included.length} unique company names found</strong><span>${c.rejected} empty / duplicate / skipped rows</span><small>First names: ${esc(c.included.slice(0,5).map(x=>x.name).join(' • ')||'None')}</small></div>` : `<div class="info-strip">Your Master Listing stays on your device; only the company names and selected registration numbers are uploaded to your private database.</div>`}
   ${state.importProgress?`<div class="notice">${esc(state.importProgress)}</div>`:''}
   ${state.importError?`<div class="alert">${esc(state.importError)}</div>`:''}
@@ -326,31 +327,52 @@ async function deleteTarget(m) {
   state.modal=null;await refresh();toast('Deleted permanently.');
 }
 async function uploadFiles(files) {
-  if(!state.folderId){toast('Open a folder before uploading documents.');return;}
-  const currentId=state.folderId, companyId=state.companyId;
-  let count=0;
-  for(const file of files){
-    if(file.size>50*1024*1024) throw new Error(`File ${file.name} exceeds the 50 MB limit.`);
-    if(file.size===0) throw new Error(`File ${file.name} is empty.`);
-    const path=`${state.user.id}/${companyId}/${crypto.randomUUID()}`;
-    const {error:uploadErr}=await db.storage.from(BUCKET).upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});check(uploadErr);
-    const {error}=await db.from('documents').insert({
-      user_id:state.user.id, company_id:companyId, folder_id:currentId,
-      name:file.name,storage_path:path,size_bytes:file.size,mime_type:file.type||null
-    });
-    if(error){await db.storage.from(BUCKET).remove([path]);throw error;}
-    count++;
-  }
-  await reloadContent();toast(`${count} file(s) uploaded successfully.`);
+  if(!state.folderId||!state.user){toast('Open a company folder before uploading documents.');return;}
+  const folderId=state.folderId,companyId=state.companyId,userId=state.user.id;
+  const existing=new Set(state.documents.filter(d=>d.folder_id===folderId).map(d=>d.name+'|'+(d.size_bytes||0)));
+  let saved=0,skipped=0;const failed=[];
+  try{
+    for(const [i,file] of files.entries()){
+      state.notice='Uploading '+(i+1)+'/'+files.length+': '+file.name+'…';render();
+      if(!file||!file.size){failed.push((file?.name||'Unnamed')+': empty file');continue;}
+      if(file.size>50*1024*1024){failed.push(file.name+': exceeds the 50 MB limit');continue;}
+      if(file.name.length>240){failed.push('Filename exceeds 240 characters');continue;}
+      const fingerprint=file.name+'|'+file.size;
+      if(existing.has(fingerprint)){skipped++;continue;}
+      const path=userId+'/'+companyId+'/'+crypto.randomUUID();
+      try{
+        const {error:uploadErr}=await db.storage.from(BUCKET).upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});check(uploadErr);
+        const {error}=await db.from('documents').insert({user_id:userId,company_id:companyId,folder_id:folderId,
+          name:file.name,storage_path:path,size_bytes:file.size,mime_type:file.type||null});
+        if(error){await db.storage.from(BUCKET).remove([path]).catch(()=>{});throw error;}
+        saved++;existing.add(fingerprint);
+      }catch(err){failed.push(file.name+': '+(err.message||String(err)));}
+    }
+  }finally{await reloadContent().catch(console.error);}
+  if(failed.length)toast(saved+' uploaded, '+skipped+' duplicates skipped, '+failed.length+' failed: '+failed.slice(0,2).join(' | ')+'. Check your folder and retry failed files.');
+  else toast(saved+' uploaded successfully'+(skipped?'; '+skipped+' identical duplicate(s) skipped':'')+'. Saved in this company folder.');
 }
 async function openDocument(id, download=false, blankTab=null) {
   const d=getDocument(id);if(!d){blankTab?.close();return;}
   try {
     const {data,error}=await db.storage.from(BUCKET).createSignedUrl(d.storage_path,120, download?{download:d.name}:{});check(error);
-    if(Capacitor.isNativePlatform()) await Browser.open({url:data.signedUrl});
-    else if (blankTab) blankTab.location.replace(data.signedUrl);
-    else { const a=document.createElement('a'); a.href=data.signedUrl; a.target='_blank'; a.rel='noopener noreferrer'; a.click(); }
-  } catch(e) { blankTab?.close(); throw e; }
+    if(Capacitor.isNativePlatform()){
+      if(download && (d.size_bytes||0)<=25*1024*1024){
+        const response=await fetch(data.signedUrl,{cache:'no-store'});
+        if(!response.ok)throw Error('Cannot retrieve document for saving (HTTP '+response.status+').');
+        const saved=await saveOrShareFile(await response.blob(),d.name,{preferShare:true});
+        toast(saved.method==='cancelled'?'Save cancelled. Tap Download to try again.':'Choose Files or Drive in the Android share sheet to keep this document.');
+      }else {
+        await Browser.open({url:data.signedUrl});
+        if(download)toast('Opened in your browser. Use its Download option; check Android Files → Downloads.');
+      }
+    }else if(blankTab){
+      blankTab.location.replace(data.signedUrl);
+      if(download)toast('Download started in a browser tab. Look for '+d.name+' in browser Downloads.');
+    }else{
+      const a=document.createElement('a');a.href=data.signedUrl;a.target='_blank';a.rel='noopener noreferrer';a.click();
+    }
+  }catch(err){blankTab?.close();throw err;}
 }
 async function runImport() {
   const chosen=importCandidate().included;
@@ -500,17 +522,22 @@ document.addEventListener('keydown',event=>{
 ROOT.addEventListener('input',e=>{signingUI.input(e.target);if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
 ROOT.addEventListener('change',e=>{
   if(signingUI.changed(e.target))return;
-  if(e.target.id==='document-upload'){const files=[...e.target.files];if(files.length)busyDo(()=>uploadFiles(files));}
+  if(e.target.id==='document-upload'){const files=[...e.target.files];e.target.value='';if(files.length)busyDo(()=>uploadFiles(files));}
   if(e.target.id==='excel-input'){
     const file=e.target.files[0];if(!file)return;
     busyDo(async()=>{
       state.importError='';state.importProgress='Reading '+file.name+'…';
       try {
-        if(!/\.(xlsx|csv)$/i.test(file.name))throw new Error('Select an .xlsx Excel file or a .csv file.');
+        if(!/\.(xlsx|csv|json)$/i.test(file.name))throw new Error('Select an .xlsx Excel file, .csv file or .json company list.');
         if(file.size>20*1024*1024)throw new Error('File exceeds 20 MB.');
         let sheets=[];
         if(/\.csv$/i.test(file.name)){
           sheets=[{sheet:'CSV import',data:parseDelimitedRows(await file.text())}];
+        }else if(/\.json$/i.test(file.name)){
+          const imported=JSON.parse(await file.text());
+          const entries=Array.isArray(imported)?imported:imported?.companies;
+          if(!Array.isArray(entries)||!entries.length||entries.length>5000)throw Error('JSON requires a companies array (1–5,000 companies).');
+          sheets=[{sheet:'JSON company list',data:[['Company Name','Registration No.'],...entries.filter(c=>c&&typeof c.name==='string').map(c=>[c.name,c.reg||c.registration_no||''])]}];
         }else{
           const sheetNames=await readExcelFile(file,{getSheets:true});
           const names=(sheetNames||[]).map(x=>x.name).filter(Boolean);
@@ -521,7 +548,7 @@ ROOT.addEventListener('change',e=>{
         state.importData=sheets;
         state.importFileName=file.name;
         state.importSheet=0;state.importProgress=null;autoColumns();render();
-      }catch(error){state.importData=null;state.importError='Could not read the selected file: '+importHint(error)+'. You can try the cleaned Excel or CSV file instead.';state.importProgress=null;render();}
+      }catch(error){state.importData=null;state.importError='Could not read the selected file: '+importHint(error)+'. Try another Excel, CSV or Task Hub Master Listing JSON file.';state.importProgress=null;render();}
     });return;
   }
   if(e.target.id==='sheet-choice'){state.importSheet=Number(e.target.value);autoColumns();render();return;}
