@@ -26,10 +26,10 @@ test('imports JSON-compatible Google Apps Script without executing arbitrary JS'
 });
 test('rejects malformed or unsafe scripts and maintains editable draft JSON',()=>{
   assert.throws(()=>importAnnualReturnText('const AR_SINGLE_COMPANY = {}; alert(1);','bad.gs'),/Expected/);
-  const draft=cloneBlank();draft.company.name='SAMPLE SDN. BHD.';draft.particulars[1].value='Test';
+  const draft=cloneBlank();draft.company.name='SAMPLE SDN. BHD.';draft.particulars[2].value='Test';
   const recovered=importAnnualReturnText(JSON.stringify(draft),'save.json');
   assert.equal(recovered.company.name,'SAMPLE SDN. BHD.');
-  assert.equal(recovered.particulars[1].value,'Test');
+  assert.equal(recovered.particulars[2].value,'Test');
   assert.equal(normalizeDocument(draft).particulars.length,139);
 });
 
