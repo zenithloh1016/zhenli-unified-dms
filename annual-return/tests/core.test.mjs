@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {cloneBlank,importAnnualReturnText,normalizeDocument,outputFilename,emptyCount,populatedCount} from '../src/core.js';
 test('blank bilingual template has all current structural fields without real client values',()=>{
   const blank=cloneBlank();
-  assert.equal(blank.particulars.length,127);
-  assert.equal(blank.particulars.filter(x=>x.type==='field').length,110);
+  assert.equal(blank.particulars.length,118);
+  assert.equal(blank.particulars.filter(x=>x.type==='field').length,101);
   assert.equal(populatedCount(blank),0);
-  assert.equal(emptyCount(blank),110);
+  assert.equal(emptyCount(blank),101);
   assert.ok(blank.particulars.some(x=>x.cn.includes('股权')));
   assert.equal(blank.company.name,'');
   assert.equal(blank.signatureDirector.nric,'');
@@ -30,7 +30,7 @@ test('rejects malformed or unsafe scripts and maintains editable draft JSON',()=
   const recovered=importAnnualReturnText(JSON.stringify(draft),'save.json');
   assert.equal(recovered.company.name,'SAMPLE SDN. BHD.');
   assert.equal(recovered.particulars[2].value,'Test');
-  assert.equal(normalizeDocument(draft).particulars.length,127);
+  assert.equal(normalizeDocument(draft).particulars.length,118);
 });
 
 test('preserves multiple BO criteria and director capacity without signing date',()=>{
@@ -102,7 +102,7 @@ test('excluded internal due dates and register update fields never survive .gs o
  draft.particulars.push(...forbidden.map(en=>({type:'field',en,cn:'',value:'2026-10-18'})));
  const out=normalizeDocument(draft);
  assert.equal(out.schemaVersion,3);
- assert.equal(out.particulars.length,127);
+ assert.equal(out.particulars.length,118);
  assert.equal(out.particulars.some(x=>forbidden.includes(x.en)),false);
  assert.equal(Object.hasOwn(out.company,'lodgementDueDate'),false);
  assert.equal(Object.hasOwn(out.company,'masterListingDueDate'),false);
@@ -121,7 +121,7 @@ test('V1.5 removes TIN and the entire Company Review and Verification section fr
  raw.signatureDirector.date='2026-10-18';
  raw.signatureDirector.acknowledgement='Signed';
  const restored=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(raw)+';', 'legacy.gs');
- assert.equal(restored.particulars.length,127);
+ assert.equal(restored.particulars.length,118);
  assert.equal(restored.particulars.some(x=>/^(?:Tax Identification Number(?: \(TIN\))?|TIN|COMPANY REVIEW AND VERIFICATION NOTES)$/i.test(x.en)),false);
  assert.equal(restored.particulars.some(x=>x.en==='Preference Allotment'&&x.value==='Private client details'),false);
  assert.equal(Object.hasOwn(restored.signatureDirector,'date'),false);
@@ -134,4 +134,22 @@ test('Annual Return module is part of the DMS navigation and bundler',async()=>{
  assert.ok(root.includes("'annual-return'"));
  assert.ok(root.includes('zh-annual-return-frame'));
  assert.ok(pack.includes('dist/annual-return'));
+});
+
+test('appointment/member entry/BO status and notice dates are removed on all imports and never reach PDF fields',()=>{
+ const forbidden=['Date of Appointment','Date of Secretary Appointment','Date Entered as Member',
+ 'Date Became / Ceased as BO','Notice / BO Confirmation Dates','Date of Notice of BO'];
+ const draft=cloneBlank();
+ assert.equal(draft.particulars.some(x=>forbidden.includes(x.en)),false);
+ draft.particulars.splice(48,0,...forbidden.map(en=>({type:'field',en,cn:'test',value:'2026-10-18'})));
+ const restored=normalizeDocument(draft);
+ assert.equal(restored.particulars.length,118);
+ assert.equal(restored.particulars.filter(x=>x.type==='field').length,101);
+ assert.equal(restored.particulars.some(x=>forbidden.includes(x.en)),false);
+ const importedGS=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(draft)+';','historic.gs');
+ assert.equal(importedGS.particulars.some(x=>forbidden.includes(x.en)),false);
+ const importedJSON=importAnnualReturnText(JSON.stringify(draft),'historic.json');
+ assert.equal(importedJSON.particulars.some(x=>forbidden.includes(x.en)),false);
+ assert.ok(importedJSON.particulars.some(x=>x.en==='Date of Birth'));
+ assert.ok(importedJSON.particulars.some(x=>x.en==='Date of Incorporation'));
 });
