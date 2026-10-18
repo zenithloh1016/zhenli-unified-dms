@@ -263,15 +263,20 @@ async function generate(){
  if(busy)return;
  if(!String(doc.company.name).trim()||!String(doc.company.no).trim())
   return status('Enter company name and registration number first.',true);
- if(!confirm('Generate a CLIENT REVIEW PDF? Verify missing details, director particulars and statutory dates before sending.'))return;
+ if(!confirm('Generate a CLIENT REVIEW PDF? Verify company details and missing statutory particulars before sending.'))return;
  setBusy(true);
  try{
   syncCompanyDetails(doc);
   const {blob,filename,pages}=await buildPdf(doc,status);
   generated={blob,filename};exposeDownload(blob,filename);
-  const note=await savePdf(blob,filename);
-  status('Generated '+pages+' pages: '+filename+'. '+note);
- }catch(error){status('PDF generation failed: '+error.message+'. Try Brave or reduce very long field values.',true);}
+  status('PDF generated ('+pages+' pages, '+Math.ceil(blob.size/1024)+' KB). Opening Android Save As…');
+  try{
+    const note=await savePdf(blob,filename);
+    status('Generated '+pages+' pages: '+filename+'. '+note);
+  }catch(saveError){
+    status('PDF successfully generated, but not saved: '+saveError.message+'. Tap Save PDF to Files to try again. No PDF data was lost.',true);
+  }
+ }catch(error){status('PDF generation failed: '+error.message+'. Try a smaller draft or check available device memory.',true);}
  finally{setBusy(false);}
 }
 $('import-file').addEventListener('change',e=>{const file=e.target.files?.[0];e.target.value='';void importFile(file);});
@@ -342,8 +347,8 @@ $('clear-values').addEventListener('click',()=>{
 $('generate-pdf').addEventListener('click',generate);
 $('share-pdf').addEventListener('click',async()=>{
  if(!generated)return status('Generate a PDF first.',true);
- try{status(await savePdf(generated.blob,generated.filename,{share:true}));}
- catch(error){status('Save/share failed: '+error.message,true);}
+ try{status(await savePdf(generated.blob,generated.filename));}
+ catch(error){status('PDF saved in memory but not written to your folder: '+error.message+'. Try again.',true);}
 });
 $('print').addEventListener('click',()=>{
  if(!doc.company.name.trim())return status('Enter company name first.',true);
