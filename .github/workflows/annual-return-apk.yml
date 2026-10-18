@@ -1,0 +1,60 @@
+name: ZHENLI Annual Return PDF Web Test and Android APK
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'annual-return/**'
+      - '.github/workflows/annual-return-apk.yml'
+  pull_request:
+    paths:
+      - 'annual-return/**'
+      - '.github/workflows/annual-return-apk.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Annual Return app
+        run: cd annual-return && npm install --no-audit --no-fund
+      - name: Test GS import and bilingual schema
+        run: cd annual-return && npm run test
+      - name: Build Annual Return website
+        run: cd annual-return && npm run build
+  android:
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v4
+      - name: Install Annual Return dependencies
+        run: cd annual-return && npm install --no-audit --no-fund
+      - name: Build app and initialize Capacitor Android
+        run: |
+          cd annual-return
+          npm run build
+          npx cap add android
+          npx cap sync android
+      - name: Build Annual Return APK
+        run: |
+          cd annual-return/android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZHENLI-Annual-Return-PDF-Android-APK
+          path: annual-return/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 60
