@@ -27,6 +27,16 @@ export function syncCompanyDetails(doc,{preferFields=true}={}){
  }
  return doc;
 }
+export function deleteParticularField(doc,index){
+ if(!doc||!Array.isArray(doc.particulars))throw Error('Annual Return particulars are unavailable.');
+ if(!Number.isInteger(index)||index<0||index>=doc.particulars.length)throw Error('Field does not exist.');
+ const item=doc.particulars[index];
+ if(item.type!=='field')throw Error('Only individual fields can be deleted.');
+ if(['Company Name','Company Registration No.'].includes(item.en))
+  throw Error(item.en+' is required for PDF generation and cannot be deleted.');
+ doc.particulars.splice(index,1);
+ return item;
+}
 export function setCompanyDetail(doc,index,value){
  const first=doc.particulars.findIndex(x=>x.type==='section');
  const end=doc.particulars.findIndex((x,i)=>i>first&&x.type==='section');
