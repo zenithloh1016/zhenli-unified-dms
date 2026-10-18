@@ -7,8 +7,9 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "android:sync": "npm run build && npx cap sync android",
-    "test:import": "node --test tests/master-listing-reader.test.js"
+    "android:sync": "npm run build:integrated && npx cap sync android",
+    "test:import": "node --test tests/master-listing-reader.test.js",
+    "build:integrated": "npm run build && npm --prefix annual-return install --no-audit --no-fund && npm --prefix annual-return run build && node scripts/bundle-annual-return.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",

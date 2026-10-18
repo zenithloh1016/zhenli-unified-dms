@@ -18,7 +18,7 @@ function fieldStatus(){
  $('field-status').textContent=emptyCount(doc)+' blank items remain. Empty values appear as NOT PROVIDED / 未提供资料 in PDF.';
 }
 function signingInputs(){
- const signs=[['name','Confirming director / 签署董事姓名'],['nric','NRIC / Passport / 身份证或护照号码'],['designation','Capacity / 职务'],['acknowledgement','Signing acknowledgement / 签署确认说明'],['date','Actual signing date (optional) / 签署日期']];
+ const signs=[['name','Confirming director / 签署董事姓名'],['nric','NRIC / Passport / 身份证或护照号码'],['designation','Capacity / 职务']];
  $('signature-fields').innerHTML=signs.map(([key,label])=>'<label class="field-label">'+esc(label)+
   '<input data-sign="'+esc(key)+'" type="text" value="'+esc(doc.signatureDirector[key]||'')+'" placeholder="'+
   (key==='date'?'Leave blank until signed':'Enter signatory details')+'" autocomplete="off"></label>').join('');
@@ -304,5 +304,5 @@ $('print').addEventListener('click',()=>{
 });
 window.addEventListener('afterprint',()=>{$('pdf-stage').textContent='';});
 resetView();
-status('V1.4 loaded — Company Details first. SSM MSIC lookup: maximum 3 codes. No deadline or register-last-update fields.');
+status('V1.5 loaded — TIN and Review Notes removed; Director Confirmation only. DMS integrated Annual Return.');
 void loadMSIC();
