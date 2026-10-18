@@ -502,16 +502,17 @@ ROOT.addEventListener('click', event=>{
   if(a.startsWith('tab-')){
     const nextTab=a.slice(4);
     // Drafts are saved as edits are made; no JSON export is needed before switching modules.
-    state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;render();return;
+    state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;if(state.tab!=='annual-return')state.arFullscreen=false;render();return;
   }
   if(a==='prepare-annual-return'||a==='select-ar-company'){
      const company=state.companies.find(c=>c.id===id);
      if(!company)return toast('Company no longer exists in the Documents list.');
      state.arSelectedCompanyId=id;
-     if(a==='prepare-annual-return'){state.tab='annual-return';state.signingFullscreen=false;render();}
+     if(a==='prepare-annual-return'){state.tab='annual-return';state.signingFullscreen=false;state.arFullscreen=false;render();}
      else{sendAnnualReturnCompany();}
      return;
    }
+   if(a==='open-ar-fullscreen'||a==='exit-ar-fullscreen'){if(state.tab==='annual-return')setAnnualReturnFullscreen(a==='open-ar-fullscreen');return;}
    if(a==='open-signing-fullscreen'||a==='exit-signing-fullscreen'){
     if(state.tab==='signing')setSigningFullscreen(a==='open-signing-fullscreen');
     return;
@@ -536,7 +537,7 @@ ROOT.addEventListener('click', event=>{
     return;
   }
   if(a==='auth-login'||a==='auth-signup'){state.authMode=a==='auth-login'?'login':'signup';state.notice='';render();return;}
-  if(a==='sign-out'){busyDo(async()=>{check((await db.auth.signOut()).error);state.user=null;state.companies=[];state.companyId=null;state.notice='';state.signingFullscreen=false;});return;}
+  if(a==='sign-out'){busyDo(async()=>{check((await db.auth.signOut()).error);state.user=null;state.companies=[];state.companyId=null;state.notice='';state.signingFullscreen=false;state.arFullscreen=false;});return;}
   if(a==='home'){state.tab='documents';state.companyId=null;state.folderId=null;state.search='';render();return;}
   if(a==='open-company'){openCompany(id);return;}
   if(a==='open-folder'){openFolder(id);return;}
@@ -616,7 +617,8 @@ ROOT.addEventListener('submit',event=>{
   });
 });
 document.addEventListener('keydown',event=>{
-  if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
+  if(event.key==='Escape'&&state.arFullscreen){event.preventDefault();setAnnualReturnFullscreen(false);}
+   else if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
 });
 ROOT.addEventListener('input',e=>{
 
@@ -687,6 +689,7 @@ window.addEventListener('message',event=>{
    })();
    return;
  }
+ if(event.data.type==='ZHENLI_AR_FULLSCREEN_TOGGLE'){setAnnualReturnFullscreen(!state.arFullscreen);return;}
  if(event.data.type==='ZHENLI_AR_READY'){sendAnnualReturnCompanyList();sendAnnualReturnCompany();return;}
  if(event.data.type==='ZHENLI_AR_SELECT_COMPANY_REQUEST'){
   const id=event.data.id;
