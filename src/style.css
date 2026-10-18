@@ -135,3 +135,18 @@ body.zh-signing-fullscreen-open{overflow:hidden}
  .tab{min-width:0;flex:1 1 0;padding:4px 2px;line-height:1.15;font-size:11px;overflow-wrap:anywhere;height:53px;border-radius:8px}
  .ar-integration-frame{min-height:820px;height:calc(100dvh - 210px)}
 }
+
+
+/* DMS → Documents company search shared with the embedded Annual Return editor */
+.ar-company-picker{padding:18px 20px;margin:12px 0 16px;border:1px solid #cddde8;border-radius:14px;background:#fff}
+.ar-company-picker>label{display:block;font-size:13px;color:#214763;margin-bottom:9px}
+.ar-company-picker input{width:100%;padding:12px 13px;min-height:44px;border:1px solid #bdcfdd;border-radius:9px;font:inherit;box-sizing:border-box}
+.ar-current-company{font-size:12px;padding:9px 0;color:#1e6481;font-weight:700;line-height:1.5}
+.ar-companies-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:7px;max-height:260px;overflow-y:auto;overscroll-behavior:contain}
+.ar-search-summary{grid-column:1/-1;font-size:12px;margin:3px 0}
+.ar-company-option{text-align:left;border:1px solid #d9e6ee;border-radius:9px;background:#f8fbfd;padding:10px 12px;color:#29475d;cursor:pointer;display:flex;flex-direction:column;gap:5px;min-height:65px}
+.ar-company-option strong{font-size:12px;overflow-wrap:anywhere}
+.ar-company-option small{font-size:11px;color:#6b8595;overflow-wrap:anywhere}
+.ar-company-option:hover,.ar-company-option:focus-visible{border-color:#3997b6;background:#ebf6fa}
+.ar-company-option.ar-selected{border:2px solid #1684a6;background:#eaf7fa}
+@media(max-width:600px){.ar-company-picker{padding:12px 10px}.ar-companies-results{grid-template-columns:1fr;max-height:210px}}
