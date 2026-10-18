@@ -36,3 +36,15 @@
 
 /* Browser blob links do not download reliably in the Android WebView. */
 #download-link[hidden]{display:none!important}
+
+/* Annual Return V1.6: individual field removal and searchable private Documents companies */
+.ar-delete-field{display:block;margin-top:7px;padding:5px 8px;border-radius:6px;border:1px solid #e9b9ba;background:#fff9f9;color:#a13c44;font-size:11px;font-weight:700;cursor:pointer;min-height:30px}
+.ar-delete-field:hover,.ar-delete-field:focus{background:#ffe9ea;outline:1px solid #ce797d}
+.ar-name-selector{width:100%;min-width:0;display:flex;flex-direction:column;gap:8px}
+.ar-name-selector .field-label input{width:100%;border:1px solid #9dc6d5;border-radius:9px;padding:11px;background:#fff;color:#183349;outline-color:#2d829f}
+.ar-name-options{width:100%;min-width:0;max-height:260px;overflow-y:auto;border:1px solid #e0eaf0;border-radius:10px;background:#fff;overscroll-behavior:contain}
+.ar-name-option{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;padding:10px 12px;border:0;border-bottom:1px solid #edf2f5;background:#fff;color:#193d55;font-size:12px;text-align:left;cursor:pointer;white-space:normal}
+.ar-name-option:hover,.ar-name-option:focus{background:#eaf5fa;outline:1px solid #b4d3e2}
+.ar-name-option:last-child{border-bottom:0}
+.ar-name-option small{color:#5c7b8c}
+@media(max-width:680px){.ar-name-options{max-height:225px}.ar-delete-field{min-height:36px}}

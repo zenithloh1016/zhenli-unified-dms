@@ -243,18 +243,6 @@
     },
     {
       "type": "field",
-      "en": "Recorded Amount of Indebtedness (not outstanding balance)",
-      "cn": "押记记录债务金额（非现欠余额）",
-      "value": ""
-    },
-    {
-      "type": "field",
-      "en": "Discharge Date",
-      "cn": "解除日期",
-      "value": ""
-    },
-    {
-      "type": "field",
       "en": "Number of Registered Charges",
       "cn": "已登记押记数量",
       "value": ""
