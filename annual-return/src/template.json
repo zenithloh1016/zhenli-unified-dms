@@ -12,7 +12,9 @@
   "signatureDirector": {
     "name": "",
     "nric": "",
-    "date": ""
+    "date": "",
+    "designation": "Director",
+    "acknowledgement": ""
   },
   "particulars": [
     {
@@ -127,6 +129,12 @@
       "type": "section",
       "en": "SECTION B - SHARE CAPITAL AND SHAREHOLDING",
       "cn": "B部分 - 股本及股权结构",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Type of Shares Issued",
+      "cn": "股份发行方式（现金／非现金）",
       "value": ""
     },
     {
