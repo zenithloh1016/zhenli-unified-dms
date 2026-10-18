@@ -1,5 +1,5 @@
 import template from './template.json' with {type:'json'};
-export const SCHEMA_VERSION=1;
+export const SCHEMA_VERSION=2;
 export const cloneBlank=()=>structuredClone(template);
 const safe=(s,n=20000)=>String(s??'').slice(0,n);
 
@@ -10,9 +10,7 @@ export const COMPANY_DETAILS={
  'Company Name':'name',
  'Company Registration No.':'no',
  'Annual Return Year':'arYear',
- 'Anniversary Date':'arDate',
- 'Statutory Lodgement Deadline (30 calendar days)':'lodgementDueDate',
- 'Master Listing Internal Due Date':'masterListingDueDate'
+ 'Anniversary Date':'arDate'
 };
 export function syncCompanyDetails(doc,{preferFields=true}={}){
  if(!doc?.company||!Array.isArray(doc.particulars))return doc;
@@ -68,12 +66,11 @@ export function normalizeDocument(raw){
   const doc={
     schemaVersion:SCHEMA_VERSION,
     company:{name:safe(company.name,300),no:safe(company.no,120),
-      arYear:safe(company.arYear,12),arDate:safe(company.arDate,40),
-      lodgementDueDate:safe(company.lodgementDueDate,40),
-      masterListingDueDate:safe(company.masterListingDueDate||'',40)},
+      arYear:safe(company.arYear,12),arDate:safe(company.arDate,40)},
     signatureDirector:{name:safe(director.name,200),nric:safe(director.nric||director.id||'',100),date:safe(director.date||'',40),
       acknowledgement:safe(director.acknowledgement||'',500),designation:safe(director.designation||'Director',80)},
-    particulars:raw.particulars.filter(x=>x&&['field','section','heading'].includes(x.type)).map(x=>({
+    particulars:raw.particulars.filter(x=>x&&['field','section','heading'].includes(x.type)&&!
+      /^(?:Statutory Lodgement Deadline(?: \(30 calendar days\))?|Master Listing Internal Due Date|Register Last Updated|Master Listing Internal Due vs Statutory 30 Days)$/i.test(String(x.en||'').trim())).map(x=>({
       type:x.type,en:safe(x.en,350),cn:safe(x.cn,350),value:x.type==='field'?safe(x.value,15000):''
     }))
   };
