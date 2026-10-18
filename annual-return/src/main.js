@@ -193,7 +193,7 @@ function addRecord(kind){
 
 function companyOptions(search){
  const q=String(search||'').trim().toLowerCase();
- const rows=(q?dmsCompanies.filter(c=>(c.name+' '+c.registrationNo).toLowerCase().includes(q)):dmsCompanies);
+ const rows=(q?dmsCompanies.filter(c=>(c.name+' '+c.registrationNo).toLowerCase().includes(q)):dmsCompanies).slice(0,q?35:12); // full list remains in native select
  return rows.length?rows.map(c=>'<button type="button" class="ar-name-option" data-dms-company-id="'+esc(c.id)+'">'+
   '<strong>'+esc(c.name)+'</strong><small>'+esc(c.registrationNo||'Registration number not recorded')+'</small></button>').join(''):
   '<span class="msic-help">No matching Documents company. Adjust your search or type the company name manually.</span>';
@@ -434,6 +434,6 @@ $('print').addEventListener('click',()=>{
 });
 window.addEventListener('afterprint',()=>{$('pdf-stage').textContent='';});
 resetView();
-status('V1.5 loaded — TIN and Review Notes removed; Director Confirmation only. DMS integrated Annual Return.');
+status('V1.7 loaded — Individual/Corporate Members, full DMS company dropdown and section-level Add Field.');
 void loadMSIC();
 if(window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_READY'},window.location.origin);
