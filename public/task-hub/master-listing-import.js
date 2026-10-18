@@ -110,7 +110,7 @@
     if(headerRow<0)throw new Error('Missing Master Listing columns: Company Name, Registration No., AR lodgement due date.');
     const header=rows[headerRow].map(cleanHeader);
     const at=key=>header.indexOf(cleanHeader(key));
-    const cell=(row,key)=>{const n=at(key);return n<0?'':String(row[n]??'').trim();};
+    const cell=(row,key)=>{const n=at(key),v=n<0?'':row[n];return v instanceof Date?(isNaN(v)?'':v.toISOString().slice(0,10)):String(v??'').trim();};
     const companyList=[];
     for(const row of rows.slice(headerRow+1)){
       const full=cell(row,'Company Name');
