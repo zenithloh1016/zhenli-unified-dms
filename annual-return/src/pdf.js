@@ -130,15 +130,24 @@ export function renderPages(doc){
   inTable=false;
   const sign=doc.signatureDirector||{};
   const confirmation=block('pdf-confirm',
-    '<h2>DIRECTOR’S CONFIRMATION & ACKNOWLEDGEMENT / 董事确认及声明</h2>'+
-    '<p>I hereby confirm that the particulars in this document are true and correct to the best of my knowledge, subject to verification of any noted or missing information.</p>'+
-    '<p>本人谨此确认，据本人所知，本文件所载资料属真实及正确；待核实或未提供资料须另行确认。</p>'+
-    '<div class="pdf-signature">Signature of Director / 董事签名</div>'+
+    '<h2>DIRECTOR’S CONFIRMATION / 董事确认</h2>'+
+    '<p>I have reviewed the particulars presented in this Annual Return review document. To the best of my knowledge, the information stated is accurate, subject to verification of any missing or flagged particulars.</p>'+
+    '<p>本人已审阅本周年申报资料审核文件。就本人所知，所列资料属实，但未提供或注明须核实的资料仍须确认。</p>'+
+    '<p class="pdf-note">This is a review document and not an SSM Annual Return lodgement. / 本文件仅供审核，并非向马来西亚公司委员会正式提交的周年申报。</p>');
+  push(confirmation);
+  const acknowledgement=block('pdf-confirm pdf-acknowledgement',
+    '<h2>SIGNING ACKNOWLEDGEMENT / 签署确认</h2>'+
+    '<p>By signing below, the director acknowledges having reviewed and confirmed the particulars in this document and authorises the preparation of the Annual Return for the company, subject to statutory verification.</p>'+
+    '<p>董事于下方签署，即确认已审阅本文件所列资料，并同意在完成法定核实后，为公司准备周年申报。</p>'+
+    '<p><b>Acknowledgement status / 审阅确认状态:</b> '+
+      (sign.acknowledged===true?'Recorded as acknowledged (signature still required) / 已记录确认（仍需签署）':
+       'Pending director acknowledgement / 待董事确认')+'</p>'+
+    '<div class="pdf-signature">Director’s actual signature / 董事本人签名</div>'+
     '<p><b>Name / 姓名:</b> '+escapeHtml(blank(sign.name))+'</p>'+
     '<p><b>NRIC / Passport No. / 身份证或护照号码:</b> '+escapeHtml(blank(sign.nric))+'</p>'+
-    '<p><b>Date / 日期:</b> '+escapeHtml(sign.date||'__________________')+'</p>'+
-    '<p class="pdf-note">For review and confirmation only. This document does not replace the prescribed Annual Return lodged with SSM. / 本文件仅供审核及确认，不能代替向马来西亚公司委员会提交的法定周年申报。</p>');
-  push(confirmation);
+    '<p><b>Date of actual signing / 实际签署日期:</b> '+escapeHtml(sign.date||'__________________')+'</p>'+
+    '<p class="pdf-note">Selecting an acknowledgement checkbox in the editor does not create or apply a handwritten or digital signature. / 在编辑页面勾选确认，不代表已完成手写或数码签署。</p>');
+  push(acknowledgement);
   pages.forEach((p,i)=>p.querySelector('.page-number').textContent='PAGE '+(i+1)+' / '+pages.length);
   return pages;
 }
