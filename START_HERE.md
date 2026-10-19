@@ -77,3 +77,14 @@ This workflow creates an **internal test/debug APK**, not a production-signed Pl
 - JavaScript syntax and source structure were checked. The current session could not fetch npm packages (installation timed out), so **a compiled web site and Android APK have not been built or tested** here.
 - GitHub Actions deployment, EdgeOne iframe permission, EdgeOne protected access, and actual Supabase database login must be verified in your environment.
 - Cloud document retention, document versioning, recovery backups, user roles and confidential-data compliance need separate production hardening. A delete is permanent by default, so keep statutory backups.
+
+## Constitution folder — standard category 13 (October 2026)
+
+The **Documents** module creates a root-level **Constitution** folder for every company.
+
+- New companies: `supabase/setup.sql` now defines Constitution as folder **13**. If your Supabase database was installed earlier, the authenticated DMS app independently adds missing Constitution folders after you sign in, so you do not need to reset your database.
+- Existing companies: an idempotent sync runs after each signed-in portfolio refresh. It recognises root folders already named *Constitution*, *Company Constitution*, or *Memorandum and Articles of Association* as equivalent and will not create another one. If needed, open **Documents → Ensure Constitution folders** to retry and see how many were created, already present or failed.
+- Optional database-wide repair: `supabase/constitution_folder_backfill.sql` in Supabase SQL Editor. This inserts only missing folders and does **not** delete, rename, or relocate files. The app's automatic sync normally makes this optional.
+- For future Supabase company-creation RPCs on databases installed before this revision, run the updated `create_company_with_folders` function block from `supabase/setup.sql` in the SQL Editor. Running that block does not affect existing files.
+- No real company credentials, documents or database rows are committed to GitHub. The source cannot independently confirm the live database backfill until a signed-in user opens DMS.
+

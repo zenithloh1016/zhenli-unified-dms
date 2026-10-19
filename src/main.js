@@ -7,7 +7,8 @@ import { Browser } from '@capacitor/browser';
 import {saveOrShareFile} from './file-transfer.js';
 import {browserDownload} from './file-transfer.js';
 import {savePdfToAndroidFiles,validatedPdf} from './native-pdf-save.js';
-import {BO_FOLDER_NAME,BO_FOLDER_SORT_ORDER,STANDARD_FOLDER_COUNT,missingBeneficialOwnerFolders} from './beneficial-owners-folders.js';
+import {BO_FOLDER_NAME,BO_FOLDER_SORT_ORDER,missingBeneficialOwnerFolders} from './beneficial-owners-folders.js';
+import {CONSTITUTION_FOLDER_NAME,CONSTITUTION_FOLDER_SORT_ORDER,STANDARD_FOLDER_COUNT,missingConstitutionFolders} from './constitution-folders.js';
 import './style.css';
 import {installHubBridge} from './integrated-modules.js';
 
@@ -120,12 +121,54 @@ async function ensureBeneficialOwnersFolders({force=false}={}){
   return {created,existing,failed};
 }
 
+// Constitution root folders are created only when absent for the authenticated company.
+const constitutionVerifiedCompanyIds=new Set();
+let constitutionVerifiedForUser=null;
+async function ensureConstitutionFolders({force=false}={}){
+  const user=state.user;
+  if(!user?.id)return {created:0,existing:0,failed:0};
+  if(constitutionVerifiedForUser!==user.id){constitutionVerifiedForUser=user.id;constitutionVerifiedCompanyIds.clear();}
+  if(force)constitutionVerifiedCompanyIds.clear();
+  const pending=state.companies.filter(c=>!constitutionVerifiedCompanyIds.has(c.id));
+  let created=0,existing=0,failed=0;
+  for(let i=0;i<pending.length;i+=80){
+    const group=pending.slice(i,i+80),ids=group.map(c=>c.id);
+    const {data,error}=await db.from('folders')
+      .select('company_id,name,parent_id').in('company_id',ids).is('parent_id',null)
+      .or('name.ilike.%constitution%,name.ilike.%memorandum%,name.ilike.%articles%').limit(1000);
+    if(error)throw Error('Constitution folder check failed: '+error.message);
+    const missing=missingConstitutionFolders(group,data||[]);
+    const missingIds=new Set(missing.map(c=>c.id));
+    for(const c of group)if(!missingIds.has(c.id)){constitutionVerifiedCompanyIds.add(c.id);existing++;}
+    for(let k=0;k<missing.length;k+=8){
+      const results=await Promise.all(missing.slice(k,k+8).map(async company=>{
+        const {error:insertError}=await db.from('folders').insert({
+          user_id:user.id,company_id:company.id,parent_id:null,
+          name:CONSTITUTION_FOLDER_NAME,sort_order:CONSTITUTION_FOLDER_SORT_ORDER
+        });
+        if(!insertError)return {id:company.id,created:true};
+        if(insertError.code==='23505')return {id:company.id,created:false};
+        return {id:company.id,error:insertError.message};
+      }));
+      for(const result of results){
+        if(result.error){failed++;console.warn('Constitution folder creation failed:',result.error);}
+        else{constitutionVerifiedCompanyIds.add(result.id);result.created?created++:existing++;}
+      }
+    }
+  }
+  return {created,existing,failed};
+}
+
 async function refresh() {
   await reloadCompanies();
   try{
     const bo=await ensureBeneficialOwnersFolders();
     if(bo.failed)state.notice='Beneficial Owners folders could not be created for '+bo.failed+' companies. Tap Ensure BO folders to retry.';
   }catch(error){console.warn(error);state.notice='Beneficial Owners folders need attention: '+error.message;}
+  try{
+    const constitution=await ensureConstitutionFolders();
+    if(constitution.failed)state.notice='Constitution folders could not be created for '+constitution.failed+' companies. Tap Ensure Constitution folders to retry.';
+  }catch(error){console.warn(error);state.notice='Constitution folders need attention: '+error.message;}
   await reloadContent();
   const {count,error} = await db.from('documents').select('id',{count:'exact',head:true});
   if(!error) state.totalDocs = count || 0;
@@ -170,7 +213,7 @@ function renderCompanyCard(company) {
 function renderCompanies() {
   const q=state.search.trim().toLowerCase();
   const matches=state.companies.filter(x=>`${x.name} ${x.registration_no||''}`.toLowerCase().includes(q));
-  return `<div class="content-header"><div><p class="eyebrow">CLIENT PORTFOLIO</p><h1>Companies</h1><p class="muted">${state.companies.length} companies • 12 standard folders per company</p></div><div class="header-buttons">${action('↑ Import Master Listing','import', '', 'secondary')}${action('Ensure BO folders','ensure-bo-folders','','secondary')}${action('+ Add company','new-company', '', 'primary')}</div></div>
+  return `<div class="content-header"><div><p class="eyebrow">CLIENT PORTFOLIO</p><h1>Companies</h1><p class="muted">${state.companies.length} companies • 13 standard folders per company</p></div><div class="header-buttons">${action('↑ Import Master Listing','import', '', 'secondary')}${action('Ensure BO folders','ensure-bo-folders','','secondary')}${action('Ensure Constitution folders','ensure-constitution-folders','','secondary')}${action('+ Add company','new-company', '', 'primary')}</div></div>
   <div class="searchbar"><span>⌕</span><input aria-label="Search companies" id="search" placeholder="Search by company name or registration number" value="${esc(state.search)}"/></div>
   ${matches.length ? `<div class="company-grid">${matches.map(renderCompanyCard).join('')}</div>` : `<div class="empty-state"><div>📁</div><h3>${q ? 'No matching companies' : 'Your company portfolio is empty'}</h3><p>${q ? 'Try another search term.' : 'Add a company or import your Excel Master Listing to create the standard folders automatically.'}</p></div>`}`;
 }
@@ -189,7 +232,7 @@ function renderFolder() {
   const docs=current ? state.documents.filter(d=>d.folder_id===current.id) : [];
   const crumbs = `<button type="button" data-action="home">Companies</button><span>›</span><button type="button" data-action="open-company" data-id="${company.id}">${esc(company.name)}</button>${trail.map(f=>`<span>›</span><button type="button" data-action="open-folder" data-id="${f.id}">${esc(f.name)}</button>`).join('')}`;
   return `<div class="breadcrumbs">${crumbs}</div><div class="content-header"><div><p class="eyebrow">${current?'FOLDER CONTENTS':'COMPANY DOCUMENTS'}</p><h1>${esc(current?.name||company.name)}</h1><p class="muted">${current ? `${childFolders.length} subfolders • ${docs.length} documents` : esc(company.registration_no||'Select a statutory category below')}</p></div><div class="header-buttons">${action('Generate Annual Return','prepare-annual-return',company.id,'secondary')}${action('+ New '+(current?'subfolder':'folder'),'new-folder','','secondary')}${current?action('↑ Upload documents','upload-trigger','','primary'):''}</div></div>
-  ${current?`<div class="upload-zone" id="dropzone" role="button" tabindex="0"><strong>↑ Upload documents here</strong><span>Choose PDFs, Word, Excel, images, JSON or ZIP. Max 50 MB per file; upload progress and errors shown.</span></div>`:`<div class="info-strip">Your 12 standard categories, including Beneficial Owners, are shown below. Open a category to upload files or create nested folders.</div>`}
+  ${current?`<div class="upload-zone" id="dropzone" role="button" tabindex="0"><strong>↑ Upload documents here</strong><span>Choose PDFs, Word, Excel, images, JSON or ZIP. Max 50 MB per file; upload progress and errors shown.</span></div>`:`<div class="info-strip">Your 13 standard categories, including Beneficial Owners and Constitution, are shown below. Open a category to upload files or create nested folders.</div>`}
   <section class="items"><div class="section-caption">FOLDERS <span>${childFolders.length}</span></div>${childFolders.map(folderCard).join('') || '<div class="empty-line">No subfolders yet.</div>'}
   ${current ? `<div class="section-caption">DOCUMENTS <span>${docs.length}</span></div>${docs.map(documentCard).join('') || '<div class="empty-line">No documents in this folder. Upload PDFs, Word documents, Excel files or images.</div>'}` : ''}</section>`;
 }
@@ -588,6 +631,16 @@ ROOT.addEventListener('click', event=>{
   if(a==='home'){state.tab='documents';state.companyId=null;state.folderId=null;state.search='';render();return;}
   if(a==='open-company'){openCompany(id);return;}
   if(a==='open-folder'){openFolder(id);return;}
+  if(a==='ensure-constitution-folders'){
+    busyDo(async()=>{
+      await reloadCompanies();
+      const report=await ensureConstitutionFolders({force:true});
+      await reloadContent();
+      if(report.failed)throw Error('Created '+report.created+' Constitution folders; '+report.failed+' failed. Retry or check Supabase folder permissions.');
+      toast('Constitution folders ready: '+report.created+' created, '+report.existing+' already present. Existing documents unchanged.');
+    });
+    return;
+  }
   if(a==='ensure-bo-folders'){
     busyDo(async()=>{
       await reloadCompanies();
