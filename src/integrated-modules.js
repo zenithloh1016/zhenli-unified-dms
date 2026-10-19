@@ -25,7 +25,7 @@ export function renderIntegratedView(section, companies=[]) {
   const count = companies.length;
   return `<section class="module-header"><div><p class="eyebrow">ZHENLI WORKSPACE</p><h1>Company Secretarial Dashboard</h1><p class="muted">Quick access to your client records, statutory task tracking and sequential signing.</p></div></section>
     <div class="module-grid">
-      <button type="button" data-action="zh-module" data-id="portfolio" class="module-tile"><span>📁</span><strong>Document Management</strong><b>${count} companies</b><small>11 standard folders per company</small></button>
+      <button type="button" data-action="zh-module" data-id="portfolio" class="module-tile"><span>📁</span><strong>Document Management</strong><b>${count} companies</b><small>12 standard folders per company</small></button>
       <button type="button" data-action="zh-module" data-id="tasks" class="module-tile"><span>📋</span><strong>Secretarial Task Hub</strong><small>Kanban, AR/AFS deadlines and recurring tasks</small></button>
       <button type="button" data-action="zh-module" data-id="signing" class="module-tile"><span>✍️</span><strong>Sequential Signing</strong><small>Original Tencent EdgeOne workflow</small></button>
     </div>
