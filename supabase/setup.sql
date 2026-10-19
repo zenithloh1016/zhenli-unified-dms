@@ -66,7 +66,7 @@ with check ((select auth.uid()) = user_id);
 grant select, insert, update, delete on public.companies, public.folders, public.documents to authenticated;
 revoke all on public.companies, public.folders, public.documents from anon;
 
--- Atomic, repeatable import of a company and exactly 11 standard root folders.
+-- Atomic, repeatable import of a company and exactly 12 standard root folders (including Beneficial Owners).
 -- SECURITY INVOKER uses caller's RLS and needs no privileged secret.
 create or replace function public.create_company_with_folders(p_name text, p_registration_no text default null)
 returns uuid
@@ -106,7 +106,8 @@ begin
     ('Registered Address', 8),
     ('Business Address & Nature', 9),
     ('Other Statutory Matters', 10),
-    ('Correspondence', 11)
+    ('Correspondence', 11),
+    ('Beneficial Owners', 12)
   ) as labels(folder,rank)
   on conflict do nothing;
   return v_id;
