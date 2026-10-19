@@ -9,7 +9,7 @@ A new, independent DMS implementation. **One codebase, two outputs:** a browser 
 ## Features
 
 - Create a company manually, or **bulk import Excel Master Listing (`.xlsx`)**.
-- Automatically create **exactly 11 default root folders** on every new company:
+- Automatically create **12 default root folders** on every new company:
   1. Incorporation
   2. Board & Members' Resolution
   3. Annual Return
@@ -21,6 +21,7 @@ A new, independent DMS implementation. **One codebase, two outputs:** a browser 
   9. Business Address & Nature
   10. Other Statutory Matters
   11. Correspondence
+  12. Beneficial Owners (eBOS / BO supporting documents)
 - Unlimited nested subfolders, rename and permanent delete (files inside deleted folders are also deleted).
 - Upload multiple PDFs, images, Word/Excel documents or other files, then view, download, rename or delete files.
 - Search company names and registration numbers.
@@ -91,7 +92,7 @@ If Android displays a protection or unknown-source warning, verify that the file
 3. Choose the correct **Worksheet**. Choose the column containing **Company Name** and, if available, **Company Registration Number**.
 4. Set **First data row** to the row containing the **first company** (not the headings).
 5. Review the sheet preview and number of companies detected carefully. Selecting the wrong name column can create unwanted company records.
-6. Click **Create company folders**. Each company is created with its 11 folders. Already existing names are left intact. Repeating the same import is safe and does not create duplicate companies with the same normalized name.
+6. Click **Create company folders**. Each company is created with its 12 folders. Already existing names are left intact. Repeating the same import is safe and does not create duplicate companies with the same normalized name.
 7. Larger files are processed 5 names at a time and may take longer. Keep the page open until the final count is shown.
 
 **Important:** The Excel importer creates companies and blank standard folder structures; it does **not** import PDFs/Word documents referenced by your Master Listing, and it does not move any pre-existing laptop files automatically. Upload such documents into the relevant folders afterward. It handles .xlsx up to 20 MB and up to 5,000 company rows at a time.
@@ -141,3 +142,9 @@ cd android && ./gradlew assembleDebug
 - Supabase Storage policies: https://supabase.com/docs/guides/storage/security/access-control
 - GitHub Pages with Vite: https://vite.dev/guide/static-deploy.html
 - Capacitor Android setup: https://capacitorjs.com/docs/android
+
+## New Beneficial Owners folder (DMS update)
+
+The **Beneficial Owners** folder is the twelfth default root category for every company. The updated web and Android DMS automatically checks **all companies belonging to the signed-in user** and creates missing BO folders upon sign-in/refresh and after new company or Master Listing imports. Use **Documents → Ensure BO folders** to retry and confirm counts. It only inserts missing root folders; existing folders, documents, signatures and storage paths are not changed. Existing equivalent roots named `Register of Beneficial Owners`, `Beneficial Ownership` or `eBOS` are recognized and not duplicated.
+
+For a one-time *optional* database-wide backfill, a Supabase administrator can run [beneficial_owners_folder_backfill.sql](supabase/beneficial_owners_folder_backfill.sql) in the existing project's SQL Editor. **Do not rerun `setup.sql` on an existing populated project.** The new setup script makes 12 folders for freshly installed projects.
