@@ -19,7 +19,7 @@ const isMissing=error=>/object not found|not found|404|no such key/i.test(String
 
 export function createMasterListingTab({db,bucket='dms-private',getUser,getCompanies,openCompany,refreshCompanies,notify}){
  const state={userId:'',loaded:false,loading:false,saving:false,
-  model:null,error:'',status:'',search:'',page:0,columnStart:0,editIndex:null,
+  model:null,error:'',status:'',search:'',page:0,columnStart:0,fullScreen:false,editIndex:null,
   source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,preview:null,
   selectedFile:null};
  const storage=db?.storage?.from(bucket);
@@ -29,7 +29,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
  let onRender=null;
  const afterRender=cb=>{onRender=cb;};
 
- const reset=()=>{Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,model:null,error:'',status:'',search:'',page:0,columnStart:0,editIndex:null,source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,preview:null,selectedFile:null});};
+ const reset=()=>{Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,model:null,error:'',status:'',search:'',page:0,columnStart:0,fullScreen:false,editIndex:null,source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,preview:null,selectedFile:null});};
  async function load(force=false){
   const user=getUser?.();
   if(!user?.id){reset();return;}
@@ -56,9 +56,9 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   return model?listingRowsForSearch(model,state.search):[];
  }
  function companyRows(){
-  const rows=selectedRows();const pages=Math.max(1,Math.ceil(rows.length/PER_PAGE));
+  const rows=selectedRows();const pageSize=state.fullScreen?40:PER_PAGE;const pages=Math.max(1,Math.ceil(rows.length/pageSize));
   state.page=clamp(state.page,0,pages-1);
-  return {rows:rows.slice(state.page*PER_PAGE,(state.page+1)*PER_PAGE),total:rows.length,pages};
+  return {rows:rows.slice(state.page*pageSize,(state.page+1)*pageSize),total:rows.length,pages};
  }
  function importPreview(){
   const source=state.sheets[state.sheetIndex];if(!source?.rows)return null;
@@ -174,12 +174,14 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   const selectable=Array.from({length:width},(_,j)=>'<option value="'+j+'">'+(j+1)+' — '+esc(String(data[state.headingRow-1]?.[j]||'Column '+(j+1)).slice(0,60))+'</option>');
   const selector=(id,value,none=false)=>'<select id="'+id+'">'+(none?'<option value="-1"'+(value<0?' selected':'')+'>Not available</option>':'')+
     selectable.map((x,j)=>x.replace('<option value="'+j+'">','<option value="'+j+'"'+(j===value?' selected':'')+'>')).join('')+'</select>';
-  const first=state.columnStart,end=model?Math.min(model.columns.length,first+6):0;
+  const first=state.fullScreen?0:state.columnStart,end=model?(state.fullScreen?model.columns.length:Math.min(model.columns.length,first+6)):0;
   const cols=model?.columns.slice(first,end)||[];
   const disabled=state.saving||state.loading;
-  return '<div class="content-header"><div><p class="eyebrow">STATUTORY COMPANY INFORMATION</p><h1>Master Listing</h1>'+
+  return '<section class="ml-workspace'+(state.fullScreen?' ml-workspace-fullscreen':'')+'" aria-label="Master Listing workspace">'+
+   '<div class="content-header"><div><p class="eyebrow">STATUTORY COMPANY INFORMATION</p><h1>Master Listing</h1>'+
    '<p class="muted">Import an Excel workbook, keep all company-information columns, and edit each company inside this private DMS tab.</p></div>'+
-   '<div class="header-buttons">'+(model?act('Export CSV','ml-export','','secondary'):'')+act('Import Excel','ml-upload','','primary')+'</div></div>'+
+   '<div class="header-buttons">'+(model?act(state.fullScreen?'Exit full screen ✕':'Full screen ⛶','ml-fullscreen','','secondary'):'')+
+   (model?act('Export CSV','ml-export','','secondary'):'')+act('Import Excel','ml-upload','','primary')+'</div></div>'+
    '<input id="ml-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>'+
    (state.error?'<div class="alert" role="alert">'+esc(state.error)+'</div>':'')+
    (state.status?'<div class="info-strip" role="status">'+esc(state.status)+'</div>':'')+
@@ -199,9 +201,10 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
     '<div class="ml-toolbar"><label>Search company or any field <input id="ml-search" type="search" value="'+esc(state.search)+'" placeholder="Search company name, number or details"></label>'+
     act('Search','ml-search-do','','secondary')+act('Clear','ml-search-clear','','secondary')+
     act('Sync missing company folders','ml-sync','','secondary')+'</div>'+
+    (state.fullScreen?'<p class="ml-fullscreen-help">Full-screen table · all '+model.columns.length+' columns · scroll right or down to browse.</p>':
     '<div class="ml-columns-nav">'+act('← Columns','ml-prev-cols','','secondary')+
     '<span>Columns '+(first+1)+'–'+end+' of '+model.columns.length+'</span>'+
-    act('Columns →','ml-next-cols','','secondary')+'</div>'+
+    act('Columns →','ml-next-cols','','secondary')+'</div>')+
     '<div class="ml-table-scroll"><table class="ml-table"><thead><tr><th>#</th><th>Company</th><th>Registration No.</th>'+
     cols.map(c=>'<th title="'+esc(c.label)+'">'+esc(c.label)+'</th>').join('')+'<th>Actions</th></tr></thead><tbody>'+
     rows.map(({row,index})=>{
@@ -218,7 +221,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
    :(!state.loading&&!state.sheets.length?'<div class="empty-state"><div>📊</div><h3>No Master Listing imported yet</h3>'+
     '<p>Use Import Excel to load your company data, including deadlines, directors, filing details, fees and other worksheet columns.</p>'+
     act('Import Master Listing Excel','ml-upload','','primary')+'</div>':''))+
-   (state.editIndex!==null&&model?.rows[state.editIndex]?renderEditor(): '');
+   '</section>'+(state.editIndex!==null&&model?.rows[state.editIndex]?renderEditor(): '');
  }
  function renderEditor(){
   const model=state.model,index=state.editIndex,row=model.rows[index],company=companyData(model,row);
@@ -239,6 +242,10 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   if(action==='ml-confirm'){asyncRun(importSelected);return true;}
   if(action==='ml-edit'){state.editIndex=Number(id);onRender?.();return true;}
   if(action==='ml-close-edit'){state.editIndex=null;onRender?.();return true;}
+  if(action==='ml-fullscreen'){
+   state.fullScreen=!state.fullScreen;state.page=0;
+   onRender?.();return true;
+  }
   if(action==='ml-export'){
    if(!state.model)return true;
    const csv=listingCSV(state.model),blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
@@ -280,5 +287,6 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   Promise.resolve().then(()=>saveEdit(form)).catch(fail);
   return true;
  }
- return {render,load,reset,onClick,onChange,onSubmit,afterRender,get model(){return state.model;},get state(){return state;}};
+ const exitFullscreen=()=>{if(!state.fullScreen)return false;state.fullScreen=false;state.page=0;onRender?.();return true;};
+ return {render,load,reset,onClick,onChange,onSubmit,afterRender,exitFullscreen,get model(){return state.model;},get state(){return state;}};
 }
