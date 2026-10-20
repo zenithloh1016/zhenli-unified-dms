@@ -1,3 +1,25 @@
+## Repairing previously imported Excel date serials (20 October 2026)
+
+Older Master Listing data in DMS may contain Excel serials even if the workbook
+reader was fixed later. The Master Listing table now **displays** plausible
+serials in unambiguously date-related columns as DD/MM/YYYY, leaving
+registration numbers, issued shares, capital, payment amounts and other numeric
+columns untouched. This display is non-destructive.
+
+When an older saved listing contains such serials, select **Save corrected
+dates** in the Master Listing tab to review representative changes and
+confirm conversion. DMS backs up the original listing to the signed-in
+user's existing private Master Listing history before writing a corrected
+version. Exports use displayed date values as well.
+
+If the older listing has no original Excel number-format or 1904-date-system
+metadata, its precise displayed format cannot be reconstructed from a serial
+alone. The repair assumes the 1900 system and DD/MM/YYYY; to reproduce a
+distinct source format (e.g. DD.MM.YYYY), re-import the original .xlsx file.
+New imports use Excel cell formatting where present and otherwise infer dates
+only from clearly date-related column headers. Always verify dates used for
+statutory filings before lodging.
+
 ## Master Listing full-screen table and Excel date display (20 October 2026)
 
 Use **Master Listing → Full screen ⛶** to expand the editable company table
