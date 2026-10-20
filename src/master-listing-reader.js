@@ -172,5 +172,5 @@ export async function openMasterListingWorkbook(file){
   }
   const preferred=sheetNames.find(x=>normalized(x)==='masterlisting')||
     sheetNames.find(x=>/master\s*listing/i.test(x))||sheetNames[0];
-  return {sheetNames,preferred,readSheet};
+  return {sheetNames,preferred,readSheet,date1904:formatInfo.date1904};
 }
