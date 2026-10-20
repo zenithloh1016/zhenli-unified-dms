@@ -2,32 +2,10 @@
 
 Standalone local-only bilingual Annual Return **particulars review** PDF generator, based on the user's revised Google Apps Script template (9 October 2026) and latest structured example (13 October 2026). The **118 sections/headings/field rows** in `src/template.json` have their client values cleared and personal names removed. No client data, directors' NRICs, live database records or Google credentials are committed.
 
-## Register Book import (V1.9)
-
-A **Register Book file** selector now appears before Company Details. It supports machine-readable
-PDF, ZIP containing a PDF, and a TXT text extract (maximum 30 MB per upload).
-Files are processed locally in the website or Android WebView; the raw Register Book is
-not uploaded to SSM, Supabase or GitHub.
-
-1. If you are in DMS, select the correct company in the Annual Return form first.
-2. Select the text-based statutory Register Book PDF (or ZIP/TXT). For ZIPs containing
-   multiple company registers, the importer selects a unique PDF matching the current
-   company; otherwise select the individual company PDF.
-3. Review the extraction summary and click **Import extracted fields into Annual Return**.
-   The importer rejects mismatched company names / 12-digit registration numbers, fills
-   blank fields only, preserves completed fields, and creates additional Director, Member
-   and Beneficial Owner records when required. It then resumes local draft autosaving.
-4. Verify against updated SSM records and the requested Annual Return date before PDF
-   generation. Corporate-member details, charges, share-capital totals, addresses in
-   multi-column registers and BO date-specific changes may require manual completion.
-   Cessation filtering is best-effort, not a replacement for statutory verification.
-
-Scanned/image-only PDFs are not supported without OCR. No automatic SSM filing is performed.
-
 ## Use
 
 1. Open **https://zenithloh1016.github.io/zhenli-unified-dms/annual-return/** or install the separate **ZHENLI Annual Return** APK from the GitHub Action artifact.
-2. Enter company details or **Import .gs / JSON**. The import parser recognises `const AR_SINGLE_COMPANY = {...};` and optional `const AR_SIGNATURE_DIRECTOR = {...};`; it never executes Apps Script code.
+2. Enter company details or **Import .gs / JSON**. Register Books are imported centrally in **DMS → Documents**, not into Annual Return particulars. The import parser recognises `const AR_SINGLE_COMPANY = {...};` and optional `const AR_SIGNATURE_DIRECTOR = {...};`; it never executes Apps Script code.
 3. Review the bilingual particulars section by section. Blank source values remain blank in the editor and appear as *NOT PROVIDED / 未提供资料* in the PDF. Use Add field or Add section where necessary.
 4. Enter the **one director** who will confirm the particulars (name, NRIC/passport, capacity). No signing date or separate signing acknowledgement is requested. There is no director's resolution or members' resolution component.
 5. Click **Generate PDF**. Web browsers download the file and reveal a retryable direct download link; Android uses the native Share chooser to save to Files or Drive.
