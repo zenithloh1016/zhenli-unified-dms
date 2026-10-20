@@ -222,7 +222,12 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
     '<label>Registration no. column'+selector('ml-reg-col',state.regColumn,true)+'</label></div>'+
     '<p class="muted">Date cells retain their Excel display format (for example DD/MM/YYYY or DD.MM.YYYY). Re-import the original .xlsx to correct dates imported previously. Excel regional built-in short-date formats may vary.</p><p class="muted">Preview: '+(preview?.error?'<strong>'+esc(preview.error)+'</strong>':
      '<strong>'+preview.rows.length+' company rows × '+preview.columns.length+' columns</strong> ('+preview.skipped.blank+' blank, '+preview.skipped.duplicate+' duplicates skipped)')+'</p>'+
-    '<div class="ml-table-scroll"><table class="ml-table"><tbody>'+data.slice(0,7).map((r,i)=>'<tr><th>'+(i+1)+'</th>'+Array.from({length:Math.min(10,width)},(_,j)=>'<td>'+esc(safeText(r?.[j]).slice(0,90))+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'+
+    '<div class="ml-table-scroll"><table class="ml-table"><tbody>'+
+    (preview&&!preview.error?
+     '<tr><th>#</th>'+preview.columns.slice(0,10).map(c=>'<th>'+esc(c.label)+'</th>').join('')+'</tr>'+
+     preview.rows.slice(0,7).map((r,i)=>'<tr><th>'+(i+1)+'</th>'+r.values.slice(0,10).map(v=>'<td>'+esc(v.slice(0,90))+'</td>').join('')+'</tr>').join('')
+     :data.slice(0,7).map((r,i)=>'<tr><th>'+(i+1)+'</th>'+Array.from({length:Math.min(10,width)},(_,j)=>'<td>'+esc(safeText(r?.[j]).slice(0,90))+'</td>').join('')+'</tr>').join(''))+
+    '</tbody></table></div>'+
     '<div class="ml-actions">'+act('Cancel import','ml-cancel','','secondary')+
     (!preview?.error?act('Import '+preview.rows.length+' companies','ml-confirm','','primary'):'')+'</div></section>':'')+
    (model?'<div class="ml-dashboard"><strong>'+model.rows.length+' companies</strong><span>'+model.columns.length+' editable fields</span>'+
