@@ -81,8 +81,16 @@ function dateStyles(bytes,workbook){
  return {date1904,formats:entries.map(xf=>{
   const id=Number(attr(xf,'numFmtId')||0);
   const format=formats.get(id)??builtins[id]??null;
-  if(!format||!SSF.is_date(format))return null;
-  return format;
+  if(!format)return null;
+  // SSF interprets a leading unquoted "." as a numeric decimal pattern,
+  // skipping the following date tokens in formats like dd.mm.yyyy.
+  // Quote date-separator dots so the same visual separators survive.
+  const dottedDate=/(?:d{1,4}|m{1,5}|y{2,4})\.(?:d{1,4}|m{1,5}|y{2,4})/i.test(format);
+  const normalized=dottedDate
+   ?format.replace(/(d{1,4}|m{1,5}|y{2,4})\.(?=[dmy])/gi,'$1"."')
+   :format;
+  if(!SSF.is_date(normalized))return null;
+  return normalized;
  })};
 }
 function excelISOToSerial(iso,date1904){
