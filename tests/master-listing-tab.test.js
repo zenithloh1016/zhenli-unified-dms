@@ -181,3 +181,17 @@ test('editing blank Master Listing cells saves N/A and leaves existing nondate I
  assert.equal(model.rows[0].values[3],'20/10/2026');
  assert.equal(model.rows[0].values[1],'202601234567');
 });
+
+
+test('N/A placeholder for missing registration never merges different companies',()=>{
+ const model=buildMasterListing([
+  ['No.','Company Name','Registration No.','Remarks'],
+  ['1','A ONE SDN BHD','',''],
+  ['2','B TWO SDN BHD','','']
+ ]);
+ assert.equal(model.rows.length,2);
+ assert.equal(model.skipped.duplicate,0);
+ assert.equal(model.rows[0].values[2],'N/A');
+ assert.equal(model.rows[1].values[2],'N/A');
+ assert.equal(findCompanyMatch(model,model.rows[0],[]),null);
+});
