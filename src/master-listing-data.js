@@ -39,7 +39,7 @@ export function normalizeListingDateText(value,{dateColumn=false,date1904=false}
  }
  let m;
  // Standard Excel date forms, including alternate source punctuation.
- if((m=/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:\s+00:00(?::00)?)?$/.exec(raw))){
+ if((m=/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T ]00:00(?::00)?(?:\.0+)?Z?)?$/.exec(raw))){
   const y=+m[1],month=+m[2],day=+m[3];
   return validDate(day,month,y)?fmtDate(day,month,y):null;
  }
@@ -198,8 +198,9 @@ export function changeListingCell(model,rowIndex,columnIndex,nextValue){
  validateMasterListing(model);
  if(!Number.isInteger(rowIndex)||rowIndex<0||rowIndex>=model.rows.length)throw Error('Invalid company row.');
  if(!Number.isInteger(columnIndex)||columnIndex<0||columnIndex>=model.columns.length)throw Error('Invalid listing column.');
- const value=formattedListingCell(model,columnIndex,clean(nextValue));
- if(columnIndex===model.nameColumn&&normal(value).length<3)throw Error('Company name is required.');
+ const typed=clean(nextValue);
+ if(columnIndex===model.nameColumn&&(!normal(typed)||normal(typed).length<3))throw Error('Company name is required.');
+ const value=formattedListingCell(model,columnIndex,typed);
  model.rows[rowIndex].values[columnIndex]=value;
  return model;
 }
