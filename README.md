@@ -1,26 +1,15 @@
-## In-website Excel and Word editing with DMS autosave (20 October 2026)
+## Word and Excel document handling (20 October 2026)
 
-In **Documents → Company → Folder**, click an `.xlsx` or `.docx` file, or
-select **Edit in DMS**. Edit Excel cells or Word body/table paragraphs in
-the private in-browser editor. The app saves edits automatically after a short
-pause in typing and on field exit. **Save now** forces an immediate save.
-**Close editor** waits for pending saves; errors leave the editor open.
+Uploaded Word and Excel files remain in the same company document folders.
+Both the **Edit in DMS** and **Open with installed app** functions have been
+removed at the user's request. Use **Download** for Word and Excel files;
+users can open the downloaded copy with their preferred Office application.
+Clicking an Office filename in Documents now invokes the existing Download
+workflow. The DMS does not edit or automatically save changes to these files.
 
-On the **first successful save**, DMS keeps the earlier uploaded file as an
-independent **(previous YYYYMMDD-HHMMSS)** document in the SAME company folder.
-Subsequent autosaves update the same current document. An optimistic storage
-path check prevents overwriting an update made from another session.
-All data is saved to the signed-in user's existing private Supabase storage.
-
-The in-website editor is a basic editor, **not full Microsoft Office**.
-Excel cell values and formulas are supported, and untouched workbook sections
-are preserved. Word text edits can alter per-run formatting within the edited
-paragraph, so verify all company resolutions, letterheads, tables and other
-statutory documents in Office before release. It supports `.xlsx` and `.docx`
-files up to 24 MB. For older `.doc`/`.xls` or complex Office features,
-**Open in Word / Excel** remains available alongside the **Download** option.
-Opening in an external Office app does not sync its edits automatically;
-the **Edit in DMS** route is required for DMS autosaving.
+Existing private uploads, PDF preview, company folders, Register Book ZIP
+import, Annual Return generator, Task Hub and signing integration are
+otherwise unaffected.
 
 ## Register Book folders and bulk ZIP filing (20 October 2026)
 
