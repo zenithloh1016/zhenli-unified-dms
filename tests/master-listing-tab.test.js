@@ -82,7 +82,7 @@ test('full screen shows every imported Master Listing column and can be exited',
  html=tab.render();
  assert.match(html,/ml-workspace-fullscreen/);
  assert.match(html,/Exit full screen/);
- assert.ok(html.includes('<th title="Extra notes">'));
+ assert.match(html,/<th class="" title="Extra notes">Extra notes<\/th>/);
  assert.ok(html.includes('20/10/2026'));
  assert.ok(!html.includes('20.10.2026'));
  assert.ok(html.includes('20/10/2026'));
@@ -166,11 +166,11 @@ test('legacy numbering is hidden, blank cells are N/A, and ALL dates show DD/MM/
  const html=tab.render();
  assert.ok(!html.includes('<th>#</th>'));
  assert.ok(!html.includes('<th title="No.">'));
- assert.ok(html.includes('<th title="AR Lodgement">'));
+ assert.match(html,/<th class="ml-date-col" title="AR Lodgement">AR Lodgement<\/th>/);
  assert.ok(!html.includes('20.10.2026'));
  assert.ok(html.includes('20/10/2026'));
  assert.ok(html.includes('N/A'));
- assert.ok(html.includes('<th title="Other Date">'));
+ assert.match(html,/<th class="ml-date-col" title="Other Date">Other Date<\/th>/);
  assert.ok(!html.includes('<tr><td>1</td><td><strong>ALPHA'));
 });
 test('editing blank Master Listing cells saves N/A and leaves existing nondate IDs unchanged',()=>{
