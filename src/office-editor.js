@@ -200,19 +200,35 @@ function applyWord(model){
   for(let i=1;i<texts.length;i++)texts[i].textContent='';
  }
 }
-export function exportOfficeDocument(model){
- if(!model?.dirty)throw Error('There are no edits to save.');
+export function exportOfficeDocument(model,{allowUnchanged=false}={}){
+ if(!model)throw Error('No Office document open.');
+ if(!model.dirty&&!allowUnchanged)throw Error('There are no edits to save.');
+ // Important: render EVERY revision from the original OOXML bytes.
+ // Reusing mutated model.zip would fail when a cell is edited and then
+ // reverted to its original value in a subsequent autosave.
+ const output=Object.fromEntries(Object.entries(model.zip).map(([p,bytes])=>[p,bytes.slice()]));
  if(model.type==='xlsx'){
-  for(const sheet of model.sheets){
-   if(!sheet.edits.size)continue;
-   applySheet(sheet);
-   model.zip[sheet.path]=strToU8(new XMLSerializer().serializeToString(sheet.xml));
+  if(model.dirty){
+   const sheets=loadWorkbook(output);
+   for(let i=0;i<model.sheets.length;i++){
+    const originalSheet=model.sheets[i];
+    const staged=sheets[i];
+    if(!staged||!originalSheet.edits.size)continue;
+    staged.edits=new Map(originalSheet.edits);
+    applySheet(staged);
+    output[staged.path]=strToU8(new XMLSerializer().serializeToString(staged.xml));
+   }
   }
  }else if(model.type==='docx'){
-  applyWord(model);
-  model.zip['word/document.xml']=strToU8(new XMLSerializer().serializeToString(model.word.xml));
+  if(model.dirty){
+   const word=loadWord(output);
+   if(word.paragraphs.length!==model.word.paragraphs.length)throw Error('Word paragraph structure unexpectedly changed.');
+   for(let i=0;i<word.paragraphs.length;i++)word.paragraphs[i].text=model.word.paragraphs[i].text;
+   applyWord({word});
+   output['word/document.xml']=strToU8(new XMLSerializer().serializeToString(word.xml));
+  }
  }else throw Error('Unsupported Office document type.');
- const bytes=zipSync(model.zip,{level:4});
+ const bytes=zipSync(output,{level:4});
  if(bytes.byteLength>50*1024*1024)throw Error('Edited Office document exceeds the DMS 50 MB upload limit.');
  return new Blob([bytes],{type:model.type==='xlsx'?
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
