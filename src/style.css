@@ -310,3 +310,16 @@ body.zh-ar-fullscreen-open{overflow:hidden}
 .ml-workspace-fullscreen>.ml-table-scroll .ml-table td.ml-no-col{
   min-width:64px;width:64px;max-width:78px;
 }
+
+
+/* Master Listing: every visible header and value is centered in both views. */
+.ml-table-scroll .ml-table th,
+.ml-table-scroll .ml-table td{
+  text-align:center;
+  vertical-align:middle;
+}
+.ml-workspace-fullscreen .ml-table-scroll .ml-table th,
+.ml-workspace-fullscreen .ml-table-scroll .ml-table td{
+  text-align:center;
+  vertical-align:middle;
+}
