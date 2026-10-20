@@ -87,7 +87,7 @@ test('full screen shows every imported Master Listing column and can be exited',
  assert.ok(!html.includes('20.10.2026'));
  assert.ok(html.includes('20/10/2026'));
  assert.ok(!html.includes('<th>#</th>'));
- assert.ok(!html.includes('>1</td><td><strong>TEST COMPANY'));
+ assert.match(html,/<td class="ml-no-col">1<\/td><td><strong>TEST COMPANY SDN BHD<\/strong>/);
  assert.equal(tab.exitFullscreen(),true);
  assert.equal(tab.exitFullscreen(),false);
  assert.ok(!tab.render().includes('ml-workspace-fullscreen'));
