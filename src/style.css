@@ -180,3 +180,13 @@ body.zh-ar-fullscreen-open{overflow:hidden}
  .annual-return-module.ar-fullscreen-open .ar-fullscreen-toolbar strong{font-size:12px}
  .annual-return-module.ar-fullscreen-open .ar-fullscreen-toolbar button{font-size:11px;padding:8px 10px}
 }
+
+/* Private Register Book ZIP import — desktop / mobile preview. */
+.rb-modal{width:min(100%,850px)}
+.rb-summary{display:flex;gap:9px;flex-wrap:wrap;margin:16px 0}
+.rb-summary>*{padding:9px 13px;border:1px solid #dce6ee;border-radius:10px;background:#f4f7fa;color:#28475e;font-size:13px}
+.rb-rows{max-height:min(42vh,370px);overflow:auto;border:1px solid #dce6ee;border-radius:10px}
+.rb-file-line{display:grid;grid-template-columns:1.1fr 1fr;gap:14px;padding:10px 13px;border-bottom:1px solid #edf1f5;font-size:12px;word-break:break-word}
+.rb-file-line:last-child{border-bottom:0}
+.rb-file-line span:last-child{color:#456b80}
+@media(max-width:600px){.rb-file-line{grid-template-columns:1fr;gap:5px}.rb-modal{padding:16px}.rb-summary{flex-direction:column}}
