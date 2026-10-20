@@ -332,6 +332,100 @@ function folderTrail() {
   return trail;
 }
 
+
+function renderRegisterZipModal(){
+ const p=state.registerZipPreview;
+ const files=p?.rows||[];
+ const yes=files.filter(x=>x.company),no=files.filter(x=>!x.company);
+ const line=x=>'<div class="rb-file-line"><span>'+esc(x.path)+'</span><span>'+
+  (x.company?'✓ '+esc(x.company.name):'⚠ '+esc(x.reason))+'</span></div>';
+ return '<div class="modal-backdrop"><section class="modal rb-modal" role="dialog" aria-modal="true" aria-label="Import Register Books ZIP">'+
+  '<div class="modal-heading"><h3>Import Register Books ZIP</h3>'+action('✕','close-modal')+'</div>'+
+  '<p class="muted">Upload one ZIP containing PDF, Word or Excel Register Books for multiple companies. Files are matched to existing DMS company names or registration numbers. Only unambiguous matches will be imported into each company’s Register Book folder.</p>'+
+  '<p class="muted">This creates missing folders automatically. Existing documents are never overwritten. Unmatched files stay in your ZIP, not your DMS.</p>'+
+  '<div class="modal-actions">'+action('Choose ZIP archive','choose-register-zip','','secondary')+'</div>'+
+  (state.registerZipFilename?'<p><strong>Selected:</strong> '+esc(state.registerZipFilename)+'</p>':'')+
+  (state.registerZipStatus?'<div class="info-strip" role="status">'+esc(state.registerZipStatus)+'</div>':'')+
+  (p?'<div class="rb-summary"><strong>'+p.matched+' matched</strong><span>'+p.unmatched+' unmatched / ambiguous</span><span>'+p.ignored+' unsupported files skipped</span></div>'+
+   '<p class="muted">Review this list before uploading. '+yes.length+' matched files will be stored; '+no.length+' will remain untouched in the original ZIP.</p>'+
+   '<div class="rb-rows">'+yes.slice(0,80).map(line).join('')+
+   (yes.length>80?'<p>… and '+(yes.length-80)+' other matched files</p>':'')+
+   no.slice(0,80).map(line).join('')+
+   (no.length>80?'<p>… and '+(no.length-80)+' other unmatched files</p>':'')+'</div>'+
+   '<div class="modal-actions">'+action('Cancel','close-modal','','secondary')+
+   (yes.length?action('Import '+yes.length+' matched Register Books','run-register-zip','','primary'):'')+'</div>'
+   :'<div class="modal-actions">'+action('Cancel','close-modal','','secondary')+'</div>')+
+  '</section></div>';
+}
+function resetRegisterZip(){
+ state.registerZipPreview=null;state.registerZipStatus='';state.registerZipFilename='';
+}
+async function runRegisterZipImport(){
+ const p=state.registerZipPreview;
+ if(!p?.matched)throw Error('No Register Books matched a company in the ZIP.');
+ const rows=p.rows.filter(x=>x.company);
+ const accepted=window.confirm('Save '+rows.length+' matched files to the corresponding companies’ Register Book folders? Existing documents will not be replaced. '+p.unmatched+' unmatched files will be skipped.');
+ if(!accepted)return;
+ const report=await ensureRegisterBookFolders({force:true});
+ if(report.failed)throw Error('Could not create Register Book folders for '+report.failed+' companies. No ZIP files have been uploaded.');
+ const ids=[...new Set(rows.map(r=>r.company.id))],folders=new Map();
+ for(let i=0;i<ids.length;i+=80){
+  const {data,error}=await db.from('folders').select('id,company_id,name').in('company_id',ids.slice(i,i+80))
+   .is('parent_id',null).ilike('name',REGISTER_BOOK_FOLDER_NAME).limit(1000);
+  check(error);
+  for(const f of data||[])folders.set(f.company_id,f.id);
+ }
+ if(ids.some(id=>!folders.has(id)))throw Error('One or more company Register Book folders are missing. Please retry folder creation first.');
+ const fingerprints=new Map();
+ let saved=0,skipped=0;const failures=[];
+ for(let i=0;i<rows.length;i++){
+  const row=rows[i],companyId=row.company.id,folderId=folders.get(companyId);
+  try{
+   let known=fingerprints.get(folderId);
+   if(!known){
+    const {data,error}=await db.from('documents').select('name,size_bytes').eq('folder_id',folderId).limit(1000);
+    check(error);
+    known=new Set((data||[]).map(x=>x.name+'|'+x.size_bytes));fingerprints.set(folderId,known);
+   }
+   const key=row.filename+'|'+row.bytes.length;
+   if(known.has(key)){skipped++;continue;}
+   const path=state.user.id+'/'+companyId+'/'+crypto.randomUUID();
+   const kind=/\.pdf$/i.test(row.filename)?'application/pdf':
+    /\.docx$/i.test(row.filename)?'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    /\.xlsx$/i.test(row.filename)?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+    'application/vnd.ms-excel';
+   const {error:uploadError}=await db.storage.from(BUCKET).upload(path,
+    new Blob([row.bytes],{type:kind}),{upsert:false,contentType:kind});
+   check(uploadError);
+   const {error:insertError}=await db.from('documents').insert({
+    user_id:state.user.id,company_id:companyId,folder_id:folderId,name:row.filename,
+    storage_path:path,size_bytes:row.bytes.length,mime_type:kind
+   });
+   if(insertError){
+    await db.storage.from(BUCKET).remove([path]).catch(()=>{});
+    throw insertError;
+   }
+   saved++;known.add(key);
+  }catch(error){failures.push(row.path+': '+(error?.message||String(error)));}
+  if((i+1)%4===0||i===rows.length-1){
+   state.registerZipStatus='Processed '+(i+1)+'/'+rows.length+': '+saved+
+    ' uploaded, '+skipped+' duplicates, '+failures.length+' failed.';
+   render();
+  }
+ }
+ await refresh();
+ if(failures.length){
+  state.registerZipStatus='Uploaded '+saved+'; '+skipped+' duplicates skipped; '+failures.length+
+   ' failed. First errors: '+failures.slice(0,4).join(' | ')+'. You may retry; successful copies will not be replaced.';
+  state.notice='Register Book ZIP import partially completed. Review the error list and retry.';
+  render();return;
+ }
+ const note='Register Books: '+saved+' uploaded across '+ids.length+
+  ' matched companies; '+skipped+' duplicates skipped; '+p.unmatched+' unmatched files not uploaded.';
+ resetRegisterZip();state.modal=null;
+ toast(note);
+}
+
 function modalHTML() {
   const m = state.modal;
   if (!m) return '';
