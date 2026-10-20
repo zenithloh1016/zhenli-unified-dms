@@ -13,7 +13,7 @@ import {WORKING_RESOLUTION_FOLDER_NAME,WORKING_RESOLUTION_FOLDER_SORT_ORDER,miss
 import {CHARGES_FOLDER_NAME,CHARGES_FOLDER_SORT_ORDER,missingChargesFolders} from './charges-folders.js';
 import {REGISTER_BOOK_FOLDER_NAME,REGISTER_BOOK_FOLDER_SORT_ORDER,STANDARD_FOLDER_COUNT,missingRegisterBookFolders} from './register-book-folders.js';
 import {previewRegisterZip} from './register-book-zip.js';
-import {officeType,officeViewUri,openOfficeOnAndroid} from './office-launch.js';
+import {officeType,officeViewUri,openOfficeOnAndroid,makeOfficeFile,supportsOfficeFileShare} from './office-launch.js';
 import './style.css';
 import {installHubBridge} from './integrated-modules.js';
 
@@ -338,14 +338,19 @@ function folderTrail() {
 function renderOfficeLaunchModal(){
  const office=state.officeLaunch;
  if(!office)return '';
- return '<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="Open Microsoft Office">'+
-  '<div class="modal-heading"><h3>Open in Microsoft '+esc(office.kind)+'</h3>'+action('✕','close-modal')+'</div>'+
+ const mobileShare=office.canShare;
+ const title='Open with '+office.kind;
+ return '<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="'+esc(title)+'">'+
+  '<div class="modal-heading"><h3>'+esc(title)+'</h3>'+action('✕','close-modal')+'</div>'+
   '<p><strong>'+esc(office.filename)+'</strong></p>'+
-  '<p class="muted">Choose Open in '+esc(office.kind)+' to hand this private file to the installed Microsoft Office application. Your browser may ask permission to launch it.</p>'+
-  '<p class="muted">The file opens for viewing. Changes made in Office are not automatically saved back to the DMS company folder; upload a revised document separately if needed.</p>'+
+  '<p class="muted">This document is private. The original stored in DMS is not modified by opening it.</p>'+
+  (mobileShare?'<p class="muted">Choose <strong>Open with installed app</strong>, then select Word, Excel or another compatible app from your phone’s app chooser. No manual Downloads step is needed.</p>':
+   '<p class="muted">Desktop browsers cannot reliably start Microsoft Office from private cloud files. You can try the Office app link; if Office cannot read it, select <strong>Save copy for Office</strong> and open the saved file in Word or Excel.</p>')+
   '<div class="modal-actions">'+action('Cancel','close-modal','','secondary')+
-  action('Open in '+esc(office.kind),'launch-office-app','','primary')+'</div>'+
-  '<p class="fineprint">Requires installed Microsoft '+esc(office.kind)+'. If it does not open, use the separate Download option. The temporary access link expires automatically.</p>'+
+  (mobileShare?action('Open with installed app','share-office-file','','primary'):'')+
+  (office.uri?action('Try opening in '+esc(office.kind),'launch-office-app','','secondary'):'')+
+  action('Save copy for Office','office-save-copy','','secondary')+'</div>'+
+  '<p class="fineprint">Changes in external Office apps are not synced back automatically. To update DMS, upload a revised copy. Mobile app users should install the latest DMS APK for the native app chooser.</p>'+
   '</section></div>';
 }
 async function openInOfficeApplication(id){
@@ -353,16 +358,25 @@ async function openInOfficeApplication(id){
  const kind=officeType(d.name);
  if(!kind)throw Error('Only Word and Excel files can open in Microsoft Office.');
  if(Capacitor.isNativePlatform()){
-  if(d.size_bytes>25*1024*1024)throw Error('This file exceeds the 25 MB Office opener limit; choose Download instead.');
+  if(d.size_bytes>25*1024*1024)throw Error('This file exceeds the 25 MB Office opener limit. Use Download instead.');
   const {data,error}=await db.storage.from(BUCKET).download(d.storage_path);check(error);
   const result=await openOfficeOnAndroid(data,d.name);
-  if(result.method==='cancelled')toast('Office app selection cancelled; the DMS document is unchanged.');
-  else toast('Opening with '+kind.kind+' or your chosen Office-compatible app. The DMS file remains unchanged.');
+  if(result.method==='cancelled')toast('Office app selection cancelled. The original DMS file is unchanged.');
+  else toast('File handed to the Android Office app chooser. Your original DMS file is unchanged.');
   return;
  }
- const {data,error}=await db.storage.from(BUCKET).createSignedUrl(d.storage_path,600);
- check(error);
- state.officeLaunch={filename:d.name,kind:kind.kind,uri:officeViewUri(d.name,data.signedUrl)};
+ const {data:blob,error:readError}=await db.storage.from(BUCKET).download(d.storage_path);check(readError);
+ let file=null,canShare=false;
+ try{file=makeOfficeFile(blob,d.name);canShare=supportsOfficeFileShare(file);}
+ catch(e){console.warn('Browser file sharing unsupported:',e);}
+ let uri=null;
+ // Office protocol URLs require Microsoft Office installed and publicly reachable
+ // direct document URLs; a private Supabase signed URL may not be accepted.
+ if(!canShare){
+  const {data,error}=await db.storage.from(BUCKET).createSignedUrl(d.storage_path,900,{download:d.name});
+  check(error);uri=officeViewUri(d.name,data.signedUrl);
+ }
+ state.officeLaunch={filename:d.name,kind:kind.kind,uri,file,blob,canShare};
  state.modal={kind:'officeLaunch'};render();
 }
 function renderRegisterZipModal(){
@@ -972,10 +986,30 @@ ROOT.addEventListener('click', event=>{
   if(a.startsWith('delete-')){const target=a.slice(7), record=target==='company'?state.companies.find(x=>x.id===id):target==='folder'?getFolder(id):getDocument(id);if(record){state.modal={kind:'delete',target,id,name:record.name};render();}return;}
   if(a==='upload-trigger'){document.getElementById('document-upload').click();return;}
   if(a==='open-office'){busyDo(()=>openInOfficeApplication(id));return;}
+  if(a==='share-office-file'){
+    const f=state.officeLaunch?.file;
+    if(!f||!supportsOfficeFileShare(f)){toast('This browser does not support opening files through the app chooser. Use Save copy for Office.');return;}
+    // navigator.share MUST run immediately within this direct user click.
+    try{
+      const task=navigator.share({files:[f],title:'Open '+f.name+' in Microsoft Office'});
+      Promise.resolve(task).then(()=>toast('File handed to the app chooser. The DMS original is unchanged.'))
+       .catch(err=>{if(err?.name==='AbortError')toast('App chooser cancelled.');else toast('The app chooser could not open this file: '+(err?.message||String(err))+' — use Save copy for Office.');});
+    }catch(err){toast('File share unavailable: '+(err?.message||String(err)));}
+    return;
+  }
+  if(a==='office-save-copy'){
+    if(!state.officeLaunch?.blob)return;
+    const o=state.officeLaunch;
+    browserDownload(o.blob,o.filename);
+    toast('Saved '+o.filename+' for opening in '+o.kind+'. The original DMS file is unchanged.');
+    return;
+  }
   if(a==='launch-office-app'){
-    if(!state.officeLaunch)return;
-    // Launch from the actual user click so the browser can hand the link to Office.
-    window.location.href=state.officeLaunch.uri;
+    const u=state.officeLaunch?.uri;if(!u)return;
+    // Scheme links may be blocked by some browsers and are not guaranteed to
+    // work with a private storage URL; never destroy the current DMS page.
+    const link=document.createElement('a');link.href=u;link.target='_blank';link.rel='noopener noreferrer';
+    document.body.appendChild(link);link.click();link.remove();
     return;
   }
   if(a==='view-file'||a==='download-file'){
