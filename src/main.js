@@ -831,7 +831,7 @@ ROOT.addEventListener('click', event=>{
   if(signingUI.onClick(a,id,event))return;
   if(a==='modal-bg' && event.target===button){state.modal=null;render();return;}
   if(a==='dismiss'){state.notice='';render();return;}
-  if(a==='close-modal' && !state.busy){state.modal=null;state.importData=null;state.importWorkbook=null;render();return;}
+  if(a==='close-modal' && !state.busy){state.modal=null;state.importData=null;state.importWorkbook=null;resetRegisterZip();render();return;}
   if(state.busy) return;
   if(a.startsWith('tab-')){
     const nextTab=a.slice(4);
@@ -875,6 +875,21 @@ ROOT.addEventListener('click', event=>{
   if(a==='home'){state.tab='documents';state.companyId=null;state.folderId=null;state.search='';render();return;}
   if(a==='open-company'){openCompany(id);return;}
   if(a==='open-folder'){openFolder(id);return;}
+  if(a==='ensure-register-folders'){
+    busyDo(async()=>{
+      await reloadCompanies();
+      const report=await ensureRegisterBookFolders({force:true});
+      await reloadContent();
+      if(report.failed)throw Error('Could not create Register Book folders for '+report.failed+' companies.');
+      toast('Register Book folders ready: '+report.created+' created, '+report.existing+
+       ' already present. Existing company documents unchanged.');
+    });return;
+  }
+  if(a==='register-zip'){
+    resetRegisterZip();state.modal={kind:'registerZip'};render();return;
+  }
+  if(a==='choose-register-zip'){document.getElementById('register-zip-input')?.click();return;}
+  if(a==='run-register-zip'){busyDo(runRegisterZipImport);return;}
   if(a==='ensure-charges-folders'){
     busyDo(async()=>{
       await reloadCompanies();
@@ -1000,6 +1015,21 @@ ROOT.addEventListener('input',e=>{
 ROOT.addEventListener('change',e=>{
   if(signingUI.changed(e.target))return;
   if(e.target.id==='document-upload'){const files=[...e.target.files];e.target.value='';if(files.length)busyDo(()=>uploadFiles(files));}
+  if(e.target.id==='register-zip-input'){
+    const file=e.target.files?.[0];e.target.value='';if(!file)return;
+    if(state.modal?.kind!=='registerZip')return;
+    busyDo(async()=>{
+      resetRegisterZip();state.registerZipFilename=file.name;
+      const preview=await previewRegisterZip(file,state.companies,{onProgress:message=>{
+       state.registerZipStatus=message;render();
+      }});
+      state.registerZipPreview=preview;
+      state.registerZipStatus='Ready to import: '+preview.matched+
+       ' matched file(s), '+preview.unmatched+' unmatched/ambiguous. Review before confirming.';
+      render();
+    });
+    return;
+  }
   if(e.target.id==='excel-input'){
     const file=e.target.files[0];e.target.value='';if(!file)return;
     busyDo(async()=>{
