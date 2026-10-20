@@ -917,6 +917,7 @@ ROOT.addEventListener('click', event=>{
   if(a==='dismiss'){state.notice='';render();return;}
   if(a==='close-modal' && !state.busy){state.modal=null;state.importData=null;state.importWorkbook=null;resetRegisterZip();render();return;}
   if(a==='close-office'){
+   if(state.busy)return;
    if(state.officeEditor?.dirty&&!window.confirm('Close the Office editor without saving your changes?'))return;
    resetOfficeEditor();state.modal=null;render();return;
   }
