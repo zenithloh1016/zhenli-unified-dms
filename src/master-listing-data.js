@@ -167,5 +167,5 @@ export function listingCSV(model){
   return '"'+s.replace(/"/g,'""')+'"';
  };
  return [model.columns.map(x=>csvCell(x.label)).join(','),
-  ...model.rows.map(row=>row.values.map(csvCell).join(','))].join('\r\n');
+  ...model.rows.map(row=>row.values.map((v,i)=>csvCell(displayedListingValue(model,i,v))).join(','))].join('\r\n');
 }
