@@ -8,6 +8,51 @@ const key=s=>normal(s).toLowerCase().replace(/[^a-z0-9]/g,'');
 const nameHeader=/^(?:company(?:name|names)?|nameofcompan(?:y|ies)|companysname|clientsname|clientname|namasyarikat|namapelanggan|syarikat)$/;
 const regHeader=/(?:reg(?:istration)?|company|ssm|roc).*?(?:no|number)$|registrationnumber/;
 const invalidName=/^(?:company|name|total|grand total|no|bil|remarks|summary|registration|number|client|sheet\d+)$/i;
+// Old uploads could contain Excel serials rather than formatted date strings.
+// Infer dates ONLY in clearly date-specific columns. Never convert company
+// numbers, incorporation IDs, share quantities, fees, capital or tax data.
+export function isListingDateColumn(label){
+ const words=normal(label).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+ if(!words||/(?:registration|reg no|company no|amount|fees?|capital|share|tax|tin|number|balance|percentage|paid|year only)/.test(words))return false;
+ return /\b(?:date|fye|fy end|financial year end|year end|anniversary|deadline|due|expiry|expiration|expires|renewal date|renewal due)\b/.test(words);
+}
+export function excelSerialToDateString(value,{date1904=false}={}){
+ const raw=String(value??'').trim();
+ if(!/^\d{5}(?:\.0+)?$/.test(raw))return null;
+ const serial=Number(raw);
+ // Constrain to plausible modern statutory dates: 1954–2119 (1900 system).
+ if(!Number.isSafeInteger(serial)||serial<20000||serial>80000)return null;
+ const epoch=date1904?Date.UTC(1904,0,1):Date.UTC(1899,11,30);
+ const date=new Date(epoch+serial*86400000);
+ if(!Number.isFinite(date.getTime()))return null;
+ return String(date.getUTCDate()).padStart(2,'0')+'/'+String(date.getUTCMonth()+1).padStart(2,'0')+'/'+date.getUTCFullYear();
+}
+export function displayedListingValue(model,columnIndex,value){
+ const v=String(value??'');
+ if(!isListingDateColumn(model?.columns?.[columnIndex]?.label))return v;
+ return excelSerialToDateString(v,{date1904:!!model?.date1904})??v;
+}
+export function countLegacyDateSerials(model){
+ if(!model?.columns||!model?.rows)return 0;
+ const cols=model.columns.map((c,i)=>isListingDateColumn(c.label)?i:-1).filter(i=>i>=0);
+ let count=0;
+ for(const row of model.rows)for(const i of cols)
+  if(excelSerialToDateString(row.values[i],{date1904:!!model?.date1904}))count++;
+ return count;
+}
+export function repairLegacyDateSerials(model){
+ validateMasterListing(model);
+ const copy={...model,rows:model.rows.map(r=>({...r,values:r.values.slice()}))};
+ let count=0;
+ const columns=model.columns.map((c,i)=>isListingDateColumn(c.label)?i:-1).filter(i=>i>=0);
+ for(const row of copy.rows)for(const i of columns){
+  const old=row.values[i];
+  const formatted=excelSerialToDateString(old,{date1904:!!copy.date1904});
+  if(formatted!==null){row.values[i]=formatted;count++;}
+ }
+ return {model:copy,count};
+}
+
 function clean(value){
  if(value===null||value===undefined)return '';
  const text=String(value);
@@ -47,7 +92,11 @@ export function buildMasterListing(rows,opts={}){
  }));
  const seen=new Set(),importRows=[],skipped={blank:0,duplicate:0};
  for(let i=startIndex;i<rows.length;i++){
-  const values=columns.map((_,j)=>clean(rows[i]?.[j]));
+  const values=columns.map((column,j)=>{
+   const raw=clean(rows[i]?.[j]);
+   if(!isListingDateColumn(column.label))return raw;
+   return excelSerialToDateString(raw,{date1904:!!options.date1904})??raw;
+  });
   const name=normal(values[nameColumn]).split(/\r?\n/)[0];
   if(!name||name.length<3||/^[\d\W]+$/.test(name)||invalidName.test(name)){skipped.blank++;continue;}
   const normalized=key(name),registration=regColumn>=0?normal(values[regColumn]):'';
@@ -60,7 +109,7 @@ export function buildMasterListing(rows,opts={}){
  if(!importRows.length)throw Error('No valid company rows were found. Check the heading row and company name column.');
  return {version:1,filename:String(options.filename||'Master Listing.xlsx').slice(0,250),
   worksheet:String(options.worksheet||'Master Listing').slice(0,120),
-  headerRow:headerIndex+1,startRow:startIndex+1,nameColumn,registrationColumn:regColumn,
+  headerRow:headerIndex+1,startRow:startIndex+1,nameColumn,registrationColumn:regColumn,date1904:!!options.date1904,
   columns,rows:importRows,importedAt:new Date().toISOString(),skipped};
 }
 export function validateMasterListing(value){
