@@ -2,6 +2,28 @@
 
 Standalone local-only bilingual Annual Return **particulars review** PDF generator, based on the user's revised Google Apps Script template (9 October 2026) and latest structured example (13 October 2026). The **118 sections/headings/field rows** in `src/template.json` have their client values cleared and personal names removed. No client data, directors' NRICs, live database records or Google credentials are committed.
 
+## Register Book import (V1.9)
+
+A **Register Book file** selector now appears before Company Details. It supports machine-readable
+PDF, ZIP containing a PDF, and a TXT text extract (maximum 30 MB per upload).
+Files are processed locally in the website or Android WebView; the raw Register Book is
+not uploaded to SSM, Supabase or GitHub.
+
+1. If you are in DMS, select the correct company in the Annual Return form first.
+2. Select the text-based statutory Register Book PDF (or ZIP/TXT). For ZIPs containing
+   multiple company registers, the importer selects a unique PDF matching the current
+   company; otherwise select the individual company PDF.
+3. Review the extraction summary and click **Import extracted fields into Annual Return**.
+   The importer rejects mismatched company names / 12-digit registration numbers, fills
+   blank fields only, preserves completed fields, and creates additional Director, Member
+   and Beneficial Owner records when required. It then resumes local draft autosaving.
+4. Verify against updated SSM records and the requested Annual Return date before PDF
+   generation. Corporate-member details, charges, share-capital totals, addresses in
+   multi-column registers and BO date-specific changes may require manual completion.
+   Cessation filtering is best-effort, not a replacement for statutory verification.
+
+Scanned/image-only PDFs are not supported without OCR. No automatic SSM filing is performed.
+
 ## Use
 
 1. Open **https://zenithloh1016.github.io/zhenli-unified-dms/annual-return/** or install the separate **ZHENLI Annual Return** APK from the GitHub Action artifact.
