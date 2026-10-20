@@ -284,3 +284,10 @@ body.zh-ar-fullscreen-open{overflow:hidden}
  .ml-workspace-fullscreen .ml-toolbar .btn{font-size:10px;padding:6px 8px}
  .ml-workspace-fullscreen .ml-fullscreen-help{font-size:10px}
 }
+
+
+/* Repair previously saved Excel date serials without changing non-date figures. */
+.ml-date-repair{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 14px;margin:8px 0 12px;background:#f7f9fc;border:1px solid #d4e0eb;border-radius:10px;font-size:12px;color:#354e64}
+.ml-date-repair .btn{font-size:12px;padding:7px 12px}
+.ml-date-repair p{flex-basis:100%;font-size:11px;color:#607890;margin:0}
+.ml-workspace-fullscreen>.ml-date-repair{flex:none}
