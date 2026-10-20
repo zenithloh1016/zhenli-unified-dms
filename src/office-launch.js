@@ -28,6 +28,18 @@ export function officeViewUri(name,url){
  if(parsed.protocol!=='https:')throw Error('Office files must be served over HTTPS.');
  return kind.scheme+':ofv|u|'+parsed.href;
 }
+export function makeOfficeFile(blob,filename){
+ const kind=officeType(filename);
+ if(!kind)throw Error('Only Microsoft Word and Excel formats are supported.');
+ if(!(blob instanceof Blob)||!blob.size)throw Error('The file is empty or could not be retrieved.');
+ if(typeof File==='undefined')throw Error('The browser does not support file sharing. Use the desktop Office or Download option.');
+ return new File([blob],String(filename),{type:kind.mime,lastModified:Date.now()});
+}
+export function supportsOfficeFileShare(file,navigatorObject=globalThis.navigator){
+ if(!file || typeof navigatorObject?.share!=='function')return false;
+ try{return typeof navigatorObject.canShare!=='function'||!!navigatorObject.canShare({files:[file]});}
+ catch{return false;}
+}
 async function base64Of(blob){
  return new Promise((resolve,reject)=>{
   const reader=new FileReader();
@@ -45,7 +57,7 @@ export async function openOfficeOnAndroid(blob,filename){
  const target='office-open/'+Date.now()+'-'+Math.random().toString(36).slice(2,9)+'-'+safe;
  const written=await Filesystem.writeFile({path:target,data:await base64Of(blob),directory:Directory.Cache,recursive:true});
  try {
-  await FileOpener.open({filePath:written.uri,contentType:kind.mime,openWithDefault:true});
+  await FileOpener.open({filePath:written.uri,contentType:kind.mime,openWithDefault:false});
   return {method:'opened',app:kind.kind};
  }catch(err){
   // Some Android OEMs do not expose ACTION_VIEW for Office documents;
