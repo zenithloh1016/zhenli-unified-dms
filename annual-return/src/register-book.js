@@ -7,17 +7,21 @@ const SECTION=/REGISTER OF (?:DIRECTORS|MEMBERS|ALLOTMENT|SECRETARIES|BENEFICIAL
 const label=(text,rx)=>clean(text.match(rx)?.[1]||'');
 const dedupe=rows=>[...new Map(rows.map(x=>[standard(x.nric||x.name),x])).values()];
 const usefulName=value=>{
- let s=clean(value).replace(/\b(?:DIRECTOR NAME|FULL NAME|DATE OF CESSATION|DATE OF APPOINTMENT|NRIC NO|PASSPORT NO|RECEIVED|FOLIO NO)\b/gi,' ').trim();
+ let s=clean(value).replace(/\b(?:DIRECTOR NAME|FULL NAME|DATE OF CESSATION|DATE OF APPOINTMENT|NRIC NO|PASSPORT NO|SERVICE ADDRESS|RESIDENTIAL ADDRESS|BUSINESS OCCUPATION|PASSPORT EXPIRY|RECEIVED|FOLIO NO)\b/gi,' ').trim();
  s=s.replace(/^(?:REGISTER OF [A-Z ]+|COMPANY DIRECTOR)\s*/i,'').trim();
  const tokens=s.split(/\s+/);if(tokens.length>6)s=tokens.slice(-5).join(' ');
  return /^[A-Z][A-Z'’().\/ -]{3,80}$/i.test(s)&&s.split(/\s+/).length>=2?s:'';
 };
 function section(text,kind){
- const rx=kind==='bo'?/REGISTER OF BENEFICIAL OWNERS\b/i:new RegExp('REGISTER OF '+kind+'\\b','i');
- const found=rx.exec(text);if(!found)return '';
- const tail=text.slice(found.index),rest=tail.slice(found[0].length);
- const stop=rest.search(SECTION);
- return tail.slice(0,stop<0?undefined:found[0].length+stop);
+ const heading=kind==='bo'?'BENEFICIAL OWNERS':kind;
+ const titles=[...text.matchAll(SECTION)];
+ const first=titles.findIndex(x=>new RegExp('^REGISTER OF '+heading+'\\b','i').test(x[0]));
+ if(first<0)return '';
+ let last=first;
+ // PDF exports repeat "REGISTER OF MEMBERS" at the top of every page.
+ // Treat identical repeated headings as continuations of the same register.
+ while(last+1<titles.length&&new RegExp('^REGISTER OF '+heading+'\\b','i').test(titles[last+1][0]))last++;
+ return text.slice(titles[first].index,titles[last+1]?.index);
 }
 function directors(text){
  const src=section(text,'DIRECTORS');if(!src)return [];
