@@ -6,11 +6,9 @@ import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populated
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
 import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,removeAnnualReturnDraft,draftIdOfKey} from './drafts.js';
-import {loadRegisterBook} from './register-book-file.js';
-import {applyRegisterBookImport} from './register-book.js';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let doc=cloneBlank(),generated=null,busy=false,pendingRegister=null;
+let doc=cloneBlank(),generated=null,busy=false;
 
 let arFullscreen=false;
 function setFullscreenUi(open){
@@ -413,77 +411,6 @@ async function generate(){
  }catch(error){status('PDF generation failed: '+error.message+'. Try again after closing other apps to free memory.',true);}
  finally{setBusy(false);}
 }
-function registerImportStatus(message,error=false){
- const el=$('register-import-status');
- el.textContent=message;el.style.color=error?'#b23b44':'#327284';
-}
-function clearRegisterPreview(){
- pendingRegister=null;
- $('register-preview').hidden=true;
- $('register-preview').textContent='';
- $('apply-register').hidden=true;
- $('cancel-register').hidden=true;
-}
-$('register-book-file').addEventListener('change',async event=>{
- clearRegisterPreview();
- const file=event.target.files?.[0];if(!file)return;
- if(busy)return registerImportStatus('Another operation is running. Try again.',true);
- setBusy(true);
- registerImportStatus('Reading Register Book locally; please wait…');
- try{
-  const currentName=String(doc.particulars.find(x=>x.type==='field'&&x.en==='Company Name')?.value||doc.company.name||'');
-  const result=await loadRegisterBook(file,{companyName:currentName});
-  const parsed=result.register;
-  if(!parsed.company.name)throw Error('The company identity could not be verified from the Register Book header. Please use an official text-based Register Book PDF.');
-  const copy=structuredClone(doc);
-  const expected=applyRegisterBookImport(copy,parsed);
-  if(!expected.filled)throw Error('No new particulars were found to fill. Review the current form or select a more complete Register Book.');
-  pendingRegister=result;
-  const summary=[
-   'Company: '+parsed.company.name,
-   'Registration no.: '+(parsed.company.no||'Not detected'),
-   'Directors: '+parsed.directors.length,
-   'Current members: '+parsed.members.length,
-   'Beneficial owners: '+parsed.beneficialOwners.length,
-   'Current company secretaries: '+parsed.secretaries.length,
-   'Blank fields eligible for import: '+expected.filled,
-   'Already-filled fields preserved: '+expected.skipped
-  ];
-  $('register-preview').innerHTML='<strong>Review Register Book extraction</strong><p>'+
-   summary.map(x=>esc(x)).join('<br>')+'</p>'+
-   (parsed.warnings.length?'<p class="status">'+parsed.warnings.map(x=>'• '+esc(x)).join('<br>')+'</p>':'')+
-   '<p class="status">Verify cessation status, issued shares, BO criteria, charges and the relevant Annual Return date manually. No information is sent to SSM.</p>';
-  $('register-preview').hidden=false;
-  $('apply-register').hidden=false;
-  $('cancel-register').hidden=false;
-  registerImportStatus('Preview ready from '+result.source+'. Apply to fill blank fields only.');
- }catch(error){
-  clearRegisterPreview();
-  registerImportStatus('Import preview failed: '+error.message,true);
- }finally{setBusy(false);}
-});
-$('cancel-register').addEventListener('click',()=>{
- clearRegisterPreview();$('register-book-file').value='';
- registerImportStatus('Preview cleared; current Annual Return particulars unchanged.');
-});
-$('apply-register').addEventListener('click',()=>{
- if(!pendingRegister||busy)return;
- try{
-  // Validate a fresh copy first: a later company selection may have changed the form.
-  const copy=structuredClone(doc);
-  const result=applyRegisterBookImport(copy,pendingRegister.register);
-  if(!result.filled)return registerImportStatus('No blank fields could be filled.',true);
-  const okay=confirm('Import '+result.filled+' Register Book values into this Annual Return? Existing values will be preserved. Review all imported information before generating the PDF.');
-  if(!okay)return;
-  doc=copy;generated=null;$('download-box').hidden=true;
-  resetView();queueDraftSave();
-  registerImportStatus('Imported '+result.filled+' values. Directors: '+result.directors+
-   '; members: '+result.members+'; BO: '+result.beneficialOwners+
-   '; secretary: '+result.secretaries+'. Verify all records and missing fields.');
-  status('Register Book values imported. Review the Annual Return fields before generating a PDF.');
-  clearRegisterPreview();$('register-book-file').value='';
- }catch(error){registerImportStatus('Could not apply Register Book: '+error.message,true);}
-});
 $('save-draft').addEventListener('click',()=>{if(!hasDraftData())return draftStatus('Enter some particulars before saving.',true);saveDraftNow();});
 $('resume-draft').addEventListener('click',()=>{if(flushDraft())resumeLocalDraft($('draft-picker').value);});
 $('delete-draft').addEventListener('click',()=>{
@@ -496,7 +423,7 @@ $('blank').addEventListener('click',()=>{
  if(!confirm('Start a blank Annual Return? The current unfinished form will be saved on this device.'))return;
  if(!flushDraft())return;
  selectedDmsCompanyId=null;newDraftId='new-'+Date.now().toString(36);
- doc=cloneBlank();clearRegisterPreview();$('register-book-file').value='';resetView();generated=null;$('download-box').hidden=true;
+ doc=cloneBlank();resetView();generated=null;$('download-box').hidden=true;
  draftOptions();draftStatus('New blank form. Changes will autosave on this device.');
 });
 $('incomplete').addEventListener('change',renderSections);
@@ -571,7 +498,7 @@ $('print').addEventListener('click',()=>{
 });
 window.addEventListener('afterprint',()=>{$('pdf-stage').textContent='';});
 resetView();draftOptions();
-status('V1.9 loaded — Register Book import, Save Draft and Review PDF generation available.');
+status('Annual Return PDF generator loaded — review fields, save drafts and generate PDFs.');
 void loadMSIC();
 if(window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_READY'},window.location.origin);
 window.addEventListener('pagehide',()=>{flushDraft();});
