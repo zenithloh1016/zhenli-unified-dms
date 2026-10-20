@@ -3,7 +3,7 @@
 <meta name="theme-color" content="#123b5f"/><title>ZHENLI Annual Return PDF</title>
 <meta name="description" content="Private bilingual Malaysian Annual Return particulars review PDF generator"/>
 </head><body><div id="app">
-<header class="top"><div class="logo">Z</div><div class="wordmark"><strong>ZHENLI</strong><small>ANNUAL RETURN PDF STUDIO</small></div><span class="version">V1.9 · REGISTER BOOK IMPORT</span><button id="toggle-fullscreen" class="ar-fullscreen-toggle" type="button" aria-pressed="false">⛶ Full screen</button></header>
+<header class="top"><div class="logo">Z</div><div class="wordmark"><strong>ZHENLI</strong><small>ANNUAL RETURN PDF STUDIO</small></div><span class="version">V1.9 · ANNUAL RETURN PDF</span><button id="toggle-fullscreen" class="ar-fullscreen-toggle" type="button" aria-pressed="false">⛶ Full screen</button></header>
 <main class="shell">
 <section class="hero"><p class="eyebrow">COMPANY SECRETARIAL WORKSPACE</p><h1>Annual Return Review</h1><p>Prepare, review and download bilingual English–Chinese particulars PDFs, using your bilingual Annual Return review form. Start with Company Details below; the old Company Profile panel has been removed. This app does not submit to SSM.</p>
 <div class="actions"><button id="blank" class="button outline" type="button">Start New Annual Return</button><button id="save-draft" class="button primary" type="button">Save Draft</button></div>
@@ -13,13 +13,6 @@
 <button id="delete-draft" class="button quiet" type="button">Delete Selected Draft</button></div>
 <p class="ar-draft-status" id="draft-status" role="status">Changes are automatically saved on this device. Drafts are not synced across phones or browsers.</p></section>
 <section class="workspace">
-<div class="panel register-panel" id="register-import-panel"><div class="panel-header"><div><p class="eyebrow">00 / STATUTORY REGISTER IMPORT</p><h2>Import Register Book / 导入法定登记册</h2></div></div>
-<p class="status">Choose a machine-readable Register Book PDF, or a ZIP containing a Register Book PDF. Text (.txt) extracts are also supported. Read and preview directors, members, company secretary and beneficial owners before importing. Existing Annual Return fields will not be overwritten. Images/scanned PDFs need OCR before import.</p>
-<label class="field-label" for="register-book-file">Register Book file (PDF, ZIP or TXT)</label>
-<input id="register-book-file" type="file" accept=".pdf,.zip,.txt,application/pdf,application/zip,text/plain" aria-describedby="register-import-status"/>
-<div id="register-preview" class="register-preview" hidden></div>
-<div class="actions compact"><button id="apply-register" class="button primary" type="button" hidden>Import extracted fields into Annual Return</button><button id="cancel-register" class="button outline" type="button" hidden>Clear preview</button></div>
-<p id="register-import-status" class="status" role="status">Files are read on this device. Import results must be checked against the latest statutory records.</p></div>
 <div class="panel review-panel" id="company-details"><div class="panel-header"><div><p class="eyebrow">01 / COMPANY DETAILS · V1.9</p><h2>Company Details / 公司资料</h2></div><span id="count" class="pill">0 fields</span></div>
 <p class="status">Begin with Company Details below. Enter the company name, registration number, Annual Return year and anniversary date here. The old Company Profile, TIN, review notes, appointment dates, member-entry dates, BO becoming/ceased dates, notice dates, internal due dates and Register Last Updated fields are removed.</p>
 <div class="section-tools"><label class="toggle"><input id="incomplete" type="checkbox"/> Blank fields only</label></div>
