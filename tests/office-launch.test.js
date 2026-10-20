@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {officeType,officeViewUri} from '../src/office-launch.js';
+import {officeType,officeViewUri,supportsOfficeFileShare} from '../src/office-launch.js';
 
 test('Word/Excel formats open using Microsoft Office viewing URI schemes',()=>{
  assert.deepEqual([officeType('Register Book.xlsx')?.kind,officeType('DRW.docx')?.kind],['Excel','Word']);
@@ -12,13 +12,20 @@ test('Word/Excel formats open using Microsoft Office viewing URI schemes',()=>{
  assert.equal(officeType('document.pdf'),null);
  assert.throws(()=>officeViewUri('document.xlsx','http://example.com'),/HTTPS/);
 });
+test('mobile browser shares genuine Office files and leaves fallback when unavailable',()=>{
+ const file={name:'register.xlsx'};
+ assert.equal(supportsOfficeFileShare(file,{share:()=>{},canShare:()=>true}),true);
+ assert.equal(supportsOfficeFileShare(file,{share:()=>{},canShare:()=>false}),false);
+ assert.equal(supportsOfficeFileShare(file,{canShare:()=>true}),false);
+});
 test('DMS uses Office app opening instead of in-app editing or direct download',async()=>{
  const {readFileSync}=await import('node:fs');
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  const pkg=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
  assert.match(main,/action\('Open in '\+office.kind,'open-office'/);
  assert.match(main,/officeViewUri\(d.name,data.signedUrl\)/);
- assert.match(main,/window.location.href=state.officeLaunch.uri/);
+ assert.match(main,/navigator.share\(\{files:\[f\]/);
+ assert.match(main,/office-save-copy/);
  assert.match(main,/openOfficeOnAndroid\(data,d.name\)/);
  assert.match(main,/officeType\(doc.name\)/);
  assert.doesNotMatch(main,/edit-office|save-office-replace|renderOfficeModal|startOfficeEditing/);
