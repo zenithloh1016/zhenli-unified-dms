@@ -202,10 +202,14 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   const selectable=Array.from({length:width},(_,j)=>'<option value="'+j+'">'+(j+1)+' — '+esc(String(data[state.headingRow-1]?.[j]||'Column '+(j+1)).slice(0,60))+'</option>');
   const selector=(id,value,none=false)=>'<select id="'+id+'">'+(none?'<option value="-1"'+(value<0?' selected':'')+'>Not available</option>':'')+
     selectable.map((x,j)=>x.replace('<option value="'+j+'">','<option value="'+j+'"'+(j===value?' selected':'')+'>')).join('')+'</select>';
-  const visible=model?.columns.map((col,index)=>({...col,index})).filter(col=>!isListingOrdinalColumn(model,col.index))||[];
+  // Display the imported company-name column ONCE, in the second position
+  // after No. Never repeat it among the scrolling worksheet columns.
+  const visible=model?.columns.map((col,index)=>({...col,index}))
+   .filter(col=>!isListingOrdinalColumn(model,col.index)&&col.index!==model.nameColumn&&col.index!==model.registrationColumn)||[];
   const first=state.fullScreen?0:state.columnStart,end=model?(state.fullScreen?visible.length:Math.min(visible.length,first+6)):0;
   const cols=visible.slice(first,end);
-  const previewCols=preview&&!preview.error?preview.columns.map((col,index)=>({...col,index})).filter(col=>!isListingOrdinalColumn(preview,col.index)).slice(0,10):[];
+  const previewCols=preview&&!preview.error?preview.columns.map((col,index)=>({...col,index}))
+   .filter(col=>!isListingOrdinalColumn(preview,col.index)&&col.index!==preview.nameColumn).slice(0,9):[];
   const dateCss=label=>isListingFyeColumn(label)?'ml-fye-col':isListingDateColumn(label)?'ml-date-col':'';
   const disabled=state.saving||state.loading;
   return '<section class="ml-workspace'+(state.fullScreen?' ml-workspace-fullscreen':'')+'" aria-label="Master Listing workspace">'+
@@ -223,12 +227,12 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
     '<label>First company row<input id="ml-start-row" type="number" min="2" max="'+data.length+'" value="'+state.startRow+'"></label>'+
     '<label>Company name column'+selector('ml-name-col',state.nameColumn)+'</label>'+
     '<label>Registration no. column'+selector('ml-reg-col',state.regColumn,true)+'</label></div>'+
-    '<p class="muted">FYE and other recognized dates display as DD/MM/YYYY. The original No. list numbers appear directly before Company, and blank cells show N/A.</p><p class="muted">Preview: '+(preview?.error?'<strong>'+esc(preview.error)+'</strong>':
+    '<p class="muted">FYE, Date of Registration and other recognized dates display as DD/MM/YYYY. No. appears before the single Company Name column; blank cells show N/A.</p><p class="muted">Preview: '+(preview?.error?'<strong>'+esc(preview.error)+'</strong>':
      '<strong>'+preview.rows.length+' company rows × '+preview.columns.length+' columns</strong> ('+preview.skipped.blank+' blank, '+preview.skipped.duplicate+' duplicates skipped)')+'</p>'+
     '<div class="ml-table-scroll"><table class="ml-table"><tbody>'+
     (preview&&!preview.error?
-     '<tr><th class="ml-no-col">No.</th>'+previewCols.map(c=>'<th class="'+dateCss(c.label)+'">'+esc(c.label)+'</th>').join('')+'</tr>'+
-     preview.rows.slice(0,7).map((r,i)=>'<tr><td class="ml-no-col">'+esc(listingOrdinalValue(preview,r,i))+'</td>'+previewCols.map(c=>'<td class="'+dateCss(c.label)+'">'+esc(displayedListingValue(preview,c.index,r.values[c.index]).slice(0,90))+'</td>').join('')+'</tr>').join('')
+     '<tr><th class="ml-no-col">No.</th><th>Company Name</th>'+previewCols.map(c=>'<th class="'+dateCss(c.label)+'">'+esc(c.label)+'</th>').join('')+'</tr>'+
+     preview.rows.slice(0,7).map((r,i)=>'<tr><td class="ml-no-col">'+esc(listingOrdinalValue(preview,r,i))+'</td><td>'+esc(displayedListingValue(preview,preview.nameColumn,r.values[preview.nameColumn]))+'</td>'+previewCols.map(c=>'<td class="'+dateCss(c.label)+'">'+esc(displayedListingValue(preview,c.index,r.values[c.index]).slice(0,90))+'</td>').join('')+'</tr>').join('')
      :data.slice(0,7).map(r=>'<tr>'+Array.from({length:Math.min(10,width)},(_,j)=>'<td>'+esc(safeText(r?.[j]).trim()||'N/A')+'</td>').join('')+'</tr>').join(''))+
     '</tbody></table></div>'+
     '<div class="ml-actions">'+act('Cancel import','ml-cancel','','secondary')+
@@ -242,11 +246,11 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
     '<div class="ml-columns-nav">'+act('← Columns','ml-prev-cols','','secondary')+
     '<span>Columns '+(first+1)+'–'+end+' of '+visible.length+'</span>'+
     act('Columns →','ml-next-cols','','secondary')+'</div>')+
-    '<div class="ml-table-scroll"><table class="ml-table"><thead><tr><th class="ml-no-col">No.</th><th>Company</th><th>Registration No.</th>'+
+    '<div class="ml-table-scroll"><table class="ml-table"><thead><tr><th class="ml-no-col">No.</th><th>Company Name</th><th>Registration No.</th>'+
     cols.map(c=>'<th class="'+dateCss(c.label)+'" title="'+esc(c.label)+'">'+esc(c.label)+'</th>').join('')+'<th>Actions</th></tr></thead><tbody>'+
     rows.map(({row,index})=>{
      const c=companyData(model,row),match=findCompanyMatch(model,row,getCompanies?.()||[]);
-     return '<tr><td class="ml-no-col">'+esc(listingOrdinalValue(model,row,index))+'</td><td><strong>'+esc(c.name)+'</strong></td><td>'+esc(c.registration||'N/A')+'</td>'+
+     return '<tr><td class="ml-no-col">'+esc(listingOrdinalValue(model,row,index))+'</td><td><strong>'+esc(displayedListingValue(model,model.nameColumn,row.values[model.nameColumn]))+'</strong></td><td>'+esc(c.registration||'N/A')+'</td>'+
       cols.map(col=>{const display=displayedListingValue(model,col.index,row.values[col.index]);return '<td class="'+dateCss(col.label)+'" title="'+esc(display.slice(0,350))+'">'+esc(display.slice(0,100))+'</td>';}).join('')+
       '<td><div class="ml-row-actions">'+act('Edit','ml-edit',index,'primary')+
       (match?act('Documents','ml-documents',match.id,'secondary'):'<small>Not in Documents</small>')+'</div></td></tr>';
@@ -295,7 +299,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   if(action==='ml-prev-page'){state.page=Math.max(0,state.page-1);onRender?.();return true;}
   if(action==='ml-next-page'){state.page++;onRender?.();return true;}
   if(action==='ml-prev-cols'){state.columnStart=Math.max(0,state.columnStart-6);onRender?.();return true;}
-  if(action==='ml-next-cols'){state.columnStart=clamp(state.columnStart+6,0,Math.max(0,(state.model?.columns.filter((_,i)=>!isListingOrdinalColumn(state.model,i)).length||0)-1));onRender?.();return true;}
+  if(action==='ml-next-cols'){const m=state.model;const remaining=m?.columns.filter((_,i)=>!isListingOrdinalColumn(m,i)&&i!==m.nameColumn&&i!==m.registrationColumn).length||0;state.columnStart=clamp(state.columnStart+6,0,Math.max(0,remaining-1));onRender?.();return true;}
   if(action==='ml-search-do'){state.search=document.getElementById('ml-search')?.value||'';state.page=0;onRender?.();return true;}
   if(action==='ml-search-clear'){state.search='';state.page=0;onRender?.();return true;}
   if(action==='ml-sync'){asyncRun(syncDocuments);return true;}
