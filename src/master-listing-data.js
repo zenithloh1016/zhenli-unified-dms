@@ -17,7 +17,12 @@ export function isListingFyeColumn(label){
 }
 export function isListingDateColumn(label){
  const words=normal(label).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
- if(!words||/(?:registration|reg no|company no|amount|fees?|capital|share|tax|tin|number|balance|percentage|paid|year only)/.test(words))return false;
+ if(!words)return false;
+ // "Date of Registration" is a genuine statutory date, but Registration No.
+ // is an identifier. Do not reject all "registration" fields indiscriminately.
+ const registrationDate=/\b(?:date (?:of )?registration|registration date|date (?:of )?registered|registered date)\b/.test(words);
+ if(registrationDate)return true;
+ if(/(?:registration|reg no|company no|amount|fees?|capital|share|tax|tin|number|balance|percentage|paid|year only)/.test(words))return false;
  return isListingFyeColumn(label)||/\b(?:date|fye|fy end|financial year end|year end|anniversary|deadline|due|expiry|expiration|expires|renewal date|renewal due|lodgement|lodgment|incorporation|incorporated|financial year ending)\b/.test(words);
 }
 // Worksheet numbering is not a company information field. Suppress only clear
