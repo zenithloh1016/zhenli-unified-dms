@@ -211,7 +211,7 @@ test('original No. stays before Company, with no duplicate source ordinal column
  for(const fullScreen of [false,true]){
   if(fullScreen)tab.onClick('ml-fullscreen','');
   const html=tab.render();
-  assert.match(html,/<th class="ml-no-col">No\.<\/th><th>Company<\/th>/);
+  assert.match(html,/<th class="ml-no-col">No\.<\/th><th>Company Name<\/th>/);
   assert.equal((html.match(/<th class="ml-no-col">No\.<\/th>/g)||[]).length,1);
   assert.doesNotMatch(html,/<th title="No\.">/);
   assert.match(html,/<td class="ml-no-col">17<\/td><td><strong>ALPHA SDN BHD<\/strong>/);
@@ -247,7 +247,7 @@ test('falls back to a single sequential No. when the imported sheet has no No. c
   getUser:()=>({id:'demo'}),getCompanies:()=>[],openCompany:()=>{},refreshCompanies:()=>{},notify:()=>{}});
  tab.state.model=model;
  const html=tab.render();
- assert.match(html,/<th class="ml-no-col">No\.<\/th><th>Company<\/th>/);
+ assert.match(html,/<th class="ml-no-col">No\.<\/th><th>Company Name<\/th>/);
  assert.match(html,/<td class="ml-no-col">2<\/td><td><strong>TWO SDN BHD<\/strong>/);
 });
 test('remove Task Hub V3 version labels without changing Task Hub functionality',()=>{
@@ -266,4 +266,51 @@ test('No. and FYE are center aligned through table CSS in full-screen and normal
  assert.match(css,/\.ml-table th\.ml-fye-col,\.ml-table td\.ml-fye-col/);
  assert.match(css,/text-align:center/);
  assert.match(css,/\.ml-workspace-fullscreen.*\.ml-no-col/s);
+});
+
+
+test('Master Listing retains ONLY source Company Name in second position, not duplicate in scroll columns',()=>{
+ const model=buildMasterListing([
+  ['No.','Company Name','Registration No.','Date of Registration','FYE','Remarks','Email','Other'],
+  ['07','ALPHA SDN BHD','202601234567','20.10.2026','31/12/2026','','a@example.com','N/A']
+ ]);
+ const tab=createMasterListingTab({db:{storage:{from:()=>({})}},
+  getUser:()=>({id:'demo'}),getCompanies:()=>[],openCompany:()=>{},refreshCompanies:()=>{},notify:()=>{}});
+ tab.state.model=model;
+ for(const full of [false,true]){
+  if(full)tab.onClick('ml-fullscreen','');
+  const html=tab.render();
+  assert.match(html,/<th class="ml-no-col">No\.<\/th><th>Company Name<\/th><th>Registration No\.<\/th>/);
+  assert.equal((html.match(/<th>Company Name<\/th>/g)||[]).length,1);
+  assert.doesNotMatch(html,/<th[^>]+title="Company Name"/);
+  assert.equal((html.match(/<th>Registration No\.<\/th>/g)||[]).length,1);
+  assert.doesNotMatch(html,/<th[^>]+title="Registration No\."/);
+  assert.match(html,/<td class="ml-no-col">07<\/td><td><strong>ALPHA SDN BHD<\/strong>/);
+  assert.match(html,/<th class="ml-date-col" title="Date of Registration">Date of Registration<\/th>/);
+  assert.match(html,/<td class="ml-date-col" title="20\/10\/2026">20\/10\/2026<\/td>/);
+ }
+});
+test('Date of Registration is DD/MM/YYYY for stored Excel serials, typed dates, and other registration IDs remain exact',()=>{
+ const serial=(Date.UTC(2026,9,20)-Date.UTC(1899,11,30))/86400000;
+ assert.equal(isListingDateColumn('Date of Registration'),true);
+ assert.equal(isListingDateColumn('Registration Date'),true);
+ assert.equal(isListingDateColumn('Date Registered'),true);
+ assert.equal(isListingDateColumn('Registration No.'),false);
+ assert.equal(isListingDateColumn('Company Registration Number'),false);
+ const model=buildMasterListing([
+  ['No.','Company Name','Registration No.','Date of Registration','Registration Date','Date Registered'],
+  ['001','ALPHA SDN BHD','202601234567',String(serial),'2026-10-20','20-Oct-2026']
+ ]);
+ assert.deepEqual(model.rows[0].values.slice(3),['20/10/2026','20/10/2026','20/10/2026']);
+ assert.equal(model.rows[0].values[2],'202601234567');
+ model.rows[0].values[3]=String(serial);
+ assert.equal(displayedListingValue(model,3,model.rows[0].values[3]),'20/10/2026');
+ assert.equal(countLegacyDateSerials(model),1);
+ const corrected=repairLegacyDateSerials(model);
+ assert.equal(corrected.model.rows[0].values[3],'20/10/2026');
+});
+test('All Master Listing table headers and values have center alignment',()=>{
+ const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
+ assert.match(css,/\.ml-table-scroll \.ml-table th,\s*\.ml-table-scroll \.ml-table td\{[\s\S]*?text-align:center/);
+ assert.match(css,/\.ml-workspace-fullscreen \.ml-table-scroll \.ml-table th,[\s\S]*?text-align:center/);
 });
