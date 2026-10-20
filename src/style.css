@@ -239,3 +239,48 @@ body.zh-ar-fullscreen-open{overflow:hidden}
  .tabbar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:stretch}
  .tabbar .tab{min-width:0;white-space:normal;font-size:12px;line-height:1.25;padding:6px 4px;min-height:45px;height:auto}
 }
+
+
+/* Expanded Master Listing: fill the viewport; keep all Excel columns scrollable. */
+.ml-workspace-fullscreen{
+ position:fixed;inset:0;z-index:115;background:#f6f8fc;
+ width:100vw;max-width:none;height:100dvh;overflow:hidden;
+ display:flex;flex-direction:column;gap:8px;
+ padding:16px clamp(12px,2vw,28px);
+}
+.ml-workspace-fullscreen .content-header{flex:none;align-items:center;margin:0;gap:12px}
+.ml-workspace-fullscreen .content-header h1{font-size:25px;margin:0}
+.ml-workspace-fullscreen .content-header .eyebrow,
+.ml-workspace-fullscreen .content-header .muted{display:none}
+.ml-workspace-fullscreen .content-header .header-buttons{display:flex;gap:6px;flex-wrap:wrap}
+.ml-workspace-fullscreen .content-header .btn{font-size:12px;padding:9px 12px}
+.ml-workspace-fullscreen .ml-dashboard{flex:none;margin:2px 0;gap:6px}
+.ml-workspace-fullscreen .ml-dashboard>*{padding:6px 9px}
+.ml-workspace-fullscreen .ml-toolbar{flex:none;align-items:center;margin:2px 0}
+.ml-workspace-fullscreen .ml-toolbar label{flex:1;min-width:150px}
+.ml-workspace-fullscreen .ml-toolbar .btn{min-height:34px;padding:8px 12px}
+.ml-workspace-fullscreen .ml-fullscreen-help{margin:0;color:#536d85;font-size:12px;flex:none}
+.ml-workspace-fullscreen > .ml-table-scroll{
+ flex:1;min-height:0;max-height:none;overflow:auto;
+ overscroll-behavior:contain;border:1px solid #cad9e7;
+}
+.ml-workspace-fullscreen > .ml-table-scroll .ml-table{min-width:max-content;width:max-content}
+.ml-workspace-fullscreen > .ml-table-scroll th,
+.ml-workspace-fullscreen > .ml-table-scroll td{min-width:130px;max-width:330px;white-space:pre-wrap}
+.ml-workspace-fullscreen > .ml-table-scroll thead th{position:sticky;top:0;z-index:4;box-shadow:0 1px 2px #8296a838}
+.ml-workspace-fullscreen .ml-pages{flex:none;margin:2px 0}
+.ml-workspace-fullscreen > .fineprint{flex:none;margin:0;font-size:11px}
+.ml-workspace-fullscreen ~ .modal-backdrop{z-index:130}
+@media(max-width:700px){
+ .ml-workspace-fullscreen{padding:9px;gap:5px}
+ .ml-workspace-fullscreen .content-header{align-items:flex-start;flex-wrap:wrap}
+ .ml-workspace-fullscreen .content-header h1{font-size:19px}
+ .ml-workspace-fullscreen .content-header .header-buttons{width:100%}
+ .ml-workspace-fullscreen .content-header .btn{padding:7px 8px;flex:1;min-height:34px}
+ .ml-workspace-fullscreen .ml-dashboard{gap:4px}
+ .ml-workspace-fullscreen .ml-dashboard>*{font-size:10px;padding:5px}
+ .ml-workspace-fullscreen .ml-toolbar{gap:5px}
+ .ml-workspace-fullscreen .ml-toolbar label{min-width:100%;font-size:10px}
+ .ml-workspace-fullscreen .ml-toolbar .btn{font-size:10px;padding:6px 8px}
+ .ml-workspace-fullscreen .ml-fullscreen-help{font-size:10px}
+}
