@@ -71,8 +71,8 @@ test('full screen shows every imported Master Listing column and can be exited',
   getUser:()=>({id:'demo'}),getCompanies:()=>[],openCompany:()=>{},
   refreshCompanies:()=>{},notify:()=>{}});
  const data=[
-  ['Company Name','Registration Number','AR Date','FYE','Phone','Secretary','Director','Extra notes'],
-  ['TEST COMPANY SDN BHD','202600000001','20/10/2026','20.10.2026','0121234567','ZHENLI','Director A','Notes']
+  ['Company Name','Registration Number','AR Date','FYE','Phone','Secretary','Director','Added field','Extra notes'],
+  ['TEST COMPANY SDN BHD','202600000001','20/10/2026','20.10.2026','0121234567','ZHENLI','Director A','Extra','Notes']
  ];
  tab.state.model=buildMasterListing(data);
  let html=tab.render();
