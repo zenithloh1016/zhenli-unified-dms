@@ -58,7 +58,10 @@ function members(text){
 }
 function owners(text){
  const src=section(text,'BENEFICIAL OWNERS');if(!src)return [];
- const flat=src.replace(/\s+/g,' ');
+ // Remove the statutory register title before matching the first BO row.
+ // Otherwise title fragments such as '(BO)' or 'Section 60B' attach to a person's name.
+ const firstLine=src.indexOf('\n');
+ const flat=(firstLine>=0?src.slice(firstLine+1):src.replace(/^REGISTER OF BENEFICIAL OWNERS(?: \(BO\))?/i,'')).replace(/\s+/g,' ');
  const rx=new RegExp('([A-Z][A-Z\\x27’()./ -]{3,90}?)\\s+('+ID+')\\s+('+DATE+')','g'),matches=[...flat.matchAll(rx)],out=[];
  for(let i=0;i<matches.length;i++){
   const m=matches[i],name=usefulName(m[1]);if(!name)continue;
