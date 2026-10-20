@@ -14,8 +14,63 @@ const invalidName=/^(?:company|name|total|grand total|no|bil|remarks|summary|reg
 export function isListingDateColumn(label){
  const words=normal(label).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
  if(!words||/(?:registration|reg no|company no|amount|fees?|capital|share|tax|tin|number|balance|percentage|paid|year only)/.test(words))return false;
- return /\b(?:date|fye|fy end|financial year end|year end|anniversary|deadline|due|expiry|expiration|expires|renewal date|renewal due)\b/.test(words);
+ return /\b(?:date|fye|fy end|financial year end|year end|anniversary|deadline|due|expiry|expiration|expires|renewal date|renewal due|lodgement|lodgment|incorporation|incorporated|financial year ending)\b/.test(words);
 }
+// Worksheet numbering is not a company information field. Suppress only clear
+// sequential row-list labels, never registration numbers or No. of Directors.
+export function isListingOrdinalColumn(model,columnIndex){
+ if(!model?.columns?.[columnIndex])return false;
+ if(columnIndex===model.nameColumn||columnIndex===model.registrationColumn)return false;
+ const header=normal(model.columns[columnIndex].label).toLowerCase().replace(/\s+/g,' ');
+ return /^(?:#|no\.?|no\.? list|no\.? of list|list no\.?|serial no\.?|s\/n|bil\.?|bilangan|row no\.?|row number|index)$/.test(header);
+}
+const fmtDate=(d,m,y)=>String(d).padStart(2,'0')+'/'+String(m).padStart(2,'0')+'/'+String(y).padStart(4,'0');
+function validDate(d,m,y){
+ if(!Number.isInteger(d)||!Number.isInteger(m)||!Number.isInteger(y)||y<1900||y>2199||m<1||m>12||d<1)return false;
+ return d<=new Date(Date.UTC(y,m,0)).getUTCDate();
+}
+const monthNames={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+export function normalizeListingDateText(value,{dateColumn=false,date1904=false}={}){
+ const raw=String(value??'').trim();
+ if(!raw)return null;
+ if(dateColumn){
+  const serial=excelSerialToDateString(raw,{date1904});
+  if(serial!==null)return serial;
+ }
+ let m;
+ // Standard Excel date forms, including alternate source punctuation.
+ if((m=/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:\s+00:00(?::00)?)?$/.exec(raw))){
+  const y=+m[1],month=+m[2],day=+m[3];
+  return validDate(day,month,y)?fmtDate(day,month,y):null;
+ }
+ if((m=/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/.exec(raw))){
+  let day=+m[1],month=+m[2],year=+m[3];
+  // Unambiguous U.S. m/d/yyyy Excel built-in date: second component > 12.
+  if(month>12&&day<=12){[day,month]=[month,day];}
+  return validDate(day,month,year)?fmtDate(day,month,year):null;
+ }
+ if((m=/^(\d{1,2})[./-](\d{1,2})[./-](\d{2})$/.exec(raw))&&dateColumn){
+  let day=+m[1],month=+m[2],year=+m[3]+(+m[3]>=70?1900:2000);
+  if(month>12&&day<=12){[day,month]=[month,day];}
+  return validDate(day,month,year)?fmtDate(day,month,year):null;
+ }
+ if((m=/^(\d{1,2})[\s/-]+([a-zA-Z]{3,9})[\s,/-]+(\d{4})$/.exec(raw))){
+  const day=+m[1],month=monthNames[m[2].slice(0,3).toLowerCase()],year=+m[3];
+  return validDate(day,month,year)?fmtDate(day,month,year):null;
+ }
+ if((m=/^([a-zA-Z]{3,9})[\s/-]+(\d{1,2}),?[\s/-]+(\d{4})$/.exec(raw))){
+  const day=+m[2],month=monthNames[m[1].slice(0,3).toLowerCase()],year=+m[3];
+  return validDate(day,month,year)?fmtDate(day,month,year):null;
+ }
+ return null;
+}
+export function formattedListingCell(model,columnIndex,value){
+ const raw=String(value??'');
+ if(!raw.trim())return 'N/A';
+ const dateColumn=isListingDateColumn(model?.columns?.[columnIndex]?.label);
+ return normalizeListingDateText(raw,{dateColumn,date1904:!!model?.date1904})??raw;
+}
+
 export function excelSerialToDateString(value,{date1904=false}={}){
  const raw=String(value??'').trim();
  if(!/^\d{5}(?:\.0+)?$/.test(raw))return null;
@@ -28,9 +83,7 @@ export function excelSerialToDateString(value,{date1904=false}={}){
  return String(date.getUTCDate()).padStart(2,'0')+'/'+String(date.getUTCMonth()+1).padStart(2,'0')+'/'+date.getUTCFullYear();
 }
 export function displayedListingValue(model,columnIndex,value){
- const v=String(value??'');
- if(!isListingDateColumn(model?.columns?.[columnIndex]?.label))return v;
- return excelSerialToDateString(v,{date1904:!!model?.date1904})??v;
+ return formattedListingCell(model,columnIndex,value);
 }
 export function countLegacyDateSerials(model){
  if(!model?.columns||!model?.rows)return 0;
@@ -94,11 +147,10 @@ export function buildMasterListing(rows,opts={}){
  for(let i=startIndex;i<rows.length;i++){
   const values=columns.map((column,j)=>{
    const raw=clean(rows[i]?.[j]);
-   if(!isListingDateColumn(column.label))return raw;
-   return excelSerialToDateString(raw,{date1904:!!options.date1904})??raw;
+   return formattedListingCell({columns,date1904:!!options.date1904},j,raw);
   });
   const name=normal(values[nameColumn]).split(/\r?\n/)[0];
-  if(!name||name.length<3||/^[\d\W]+$/.test(name)||invalidName.test(name)){skipped.blank++;continue;}
+  if(!name||name==='N/A'||name.length<3||/^[\d\W]+$/.test(name)||invalidName.test(name)){skipped.blank++;continue;}
   const normalized=key(name),registration=regColumn>=0?normal(values[regColumn]):'';
   const unique=registration.replace(/[^A-Z0-9]/gi,'').toLowerCase()||normalized;
   if(seen.has(unique)){skipped.duplicate++;continue;}
@@ -146,7 +198,7 @@ export function changeListingCell(model,rowIndex,columnIndex,nextValue){
  validateMasterListing(model);
  if(!Number.isInteger(rowIndex)||rowIndex<0||rowIndex>=model.rows.length)throw Error('Invalid company row.');
  if(!Number.isInteger(columnIndex)||columnIndex<0||columnIndex>=model.columns.length)throw Error('Invalid listing column.');
- const value=clean(nextValue);
+ const value=formattedListingCell(model,columnIndex,clean(nextValue));
  if(columnIndex===model.nameColumn&&normal(value).length<3)throw Error('Company name is required.');
  model.rows[rowIndex].values[columnIndex]=value;
  return model;
@@ -156,7 +208,7 @@ export function listingRowsForSearch(model,search){
  const q=normal(search).toLowerCase();
  const rows=model.rows.map((r,index)=>({row:r,index}));
  if(!q)return rows;
- return rows.filter(({row})=>row.values.some(v=>v.toLowerCase().includes(q)));
+ return rows.filter(({row})=>row.values.some((v,i)=>displayedListingValue(model,i,v).toLowerCase().includes(q)));
 }
 export function listingCSV(model){
  validateMasterListing(model);
