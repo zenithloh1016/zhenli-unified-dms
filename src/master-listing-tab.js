@@ -74,6 +74,10 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   state.loading=true;state.error='';state.status='Reading Excel workbook locally…';state.sheets=[];state.preview=null;state.selectedFile=file;onRender?.();
   try{
    const parsed=await readWorkbook(file);
+   // Compatibility reading can return JS Dates without original Excel formats.
+   // Avoid silently changing statutory due-date display values on import.
+   if(parsed.reader==='Compatibility Excel reader')
+    throw Error('This Excel file could not be read with its original date display formats. Open in Microsoft Excel, Save As an unprotected .xlsx copy and import that copy. Existing Master Listing data is unchanged.');
    const src=parsed?.sheets||[];
    if(!src.length)throw Error('Excel workbook has no worksheets.');
    state.source=parsed.reader||'Excel';
@@ -191,7 +195,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
     '<label>First company row<input id="ml-start-row" type="number" min="2" max="'+data.length+'" value="'+state.startRow+'"></label>'+
     '<label>Company name column'+selector('ml-name-col',state.nameColumn)+'</label>'+
     '<label>Registration no. column'+selector('ml-reg-col',state.regColumn,true)+'</label></div>'+
-    '<p class="muted">Preview: '+(preview?.error?'<strong>'+esc(preview.error)+'</strong>':
+    '<p class="muted">Date cells retain their Excel display format (for example DD/MM/YYYY or DD.MM.YYYY). Re-import the original .xlsx to correct dates imported previously. Excel regional built-in short-date formats may vary.</p><p class="muted">Preview: '+(preview?.error?'<strong>'+esc(preview.error)+'</strong>':
      '<strong>'+preview.rows.length+' company rows × '+preview.columns.length+' columns</strong> ('+preview.skipped.blank+' blank, '+preview.skipped.duplicate+' duplicates skipped)')+'</p>'+
     '<div class="ml-table-scroll"><table class="ml-table"><tbody>'+data.slice(0,7).map((r,i)=>'<tr><th>'+(i+1)+'</th>'+Array.from({length:Math.min(10,width)},(_,j)=>'<td>'+esc(safeText(r?.[j]).slice(0,90))+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'+
     '<div class="ml-actions">'+act('Cancel import','ml-cancel','','secondary')+
