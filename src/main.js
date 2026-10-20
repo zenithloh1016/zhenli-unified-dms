@@ -616,7 +616,7 @@ function renderOverview() {
   <section class="metrics">
     <button class="metric" data-action="tab-documents"><span>📁</span><strong>${state.companies.length}</strong><small>Companies</small></button>
     <button class="metric" data-action="tab-documents"><span>📄</span><strong>${state.totalDocs}</strong><small>Uploaded documents</small></button>
-    <button class="metric" data-action="tab-tasks"><span>✓</span><strong>Task Hub V3</strong><small>Open existing tasks</small></button>
+    <button class="metric" data-action="tab-tasks"><span>✓</span><strong>Task Hub</strong><small>Open existing tasks</small></button>
     <button class="metric" data-action="tab-annual-return"><span>📑</span><strong>Annual Return</strong><small>Generate bilingual PDF</small></button>
     <button class="metric" data-action="tab-signing"><span>✍️</span><strong>Signing</strong><small>EdgeOne workspace</small></button>
   </section>
@@ -661,10 +661,10 @@ function setAnnualReturnFullscreen(open){
 }
 function renderTasks(){
   const active = getTaskHubUrl(); const external = active !== TASK_HUB_BUNDLED;
-  return `<div class="integration-heading"><div><p class="eyebrow">SECRETARIAL TASK MANAGER</p><h1>Task Hub V3</h1><p class="muted">Your original Task Hub source is included directly in this app. ${external ? 'Using your configured hosted site.' : 'Using the bundled local edition.'}</p></div>
+  return `<div class="integration-heading"><div><p class="eyebrow">SECRETARIAL TASK MANAGER</p><h1>Task Hub</h1><p class="muted">Your original Task Hub source is included directly in this app. ${external ? 'Using your configured hosted site.' : 'Using the bundled local edition.'}</p></div>
     <div class="header-buttons">${action('Full-screen view','open-tasks','','secondary')}${external?action('Open hosted site','launch-hosted-task','','secondary'):''}${action('Connection settings','task-settings','','primary')}</div></div>
     <div class="integration-info">${external ? 'Hosted Task Hub data is managed by its original site.' : 'The bundled Task Hub syncs with your private DMS Supabase account after applying task_hub_sync.sql. Import your old EdgeOne Task Hub JSON backup once to migrate existing tasks.'}</div>
-    <div class="frame-shell ${state.taskFullscreen?'task-expanded':''}">${state.taskFullscreen?'<div class="frame-toolbar"><strong>Task Hub V3</strong><button type="button" class="btn secondary" data-action="exit-tasks">Exit full screen ✕</button></div>':''}<iframe id="zh-task-frame" class="integration-frame" title="ZHENLI Secretarial Task Hub V3" src="${esc(active)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
+    <div class="frame-shell ${state.taskFullscreen?'task-expanded':''}">${state.taskFullscreen?'<div class="frame-toolbar"><strong>Task Hub</strong><button type="button" class="btn secondary" data-action="exit-tasks">Exit full screen ✕</button></div>':''}<iframe id="zh-task-frame" class="integration-frame" title="ZHENLI Secretarial Task Hub" src="${esc(active)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
 }
 // ZHENLI_SIGNING_COOKIE_SAFE_LAUNCH_V1_2
 // ZHENLI_SIGNING_DIRECT_LAUNCH_V1_3
@@ -695,7 +695,7 @@ function setSigningFullscreen(open){
 
 function renderLinkModal() {
   return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="Task Hub connection settings"><div class="modal-heading"><h3>Task Hub connection</h3>${action('✕','close-modal')}</div>
-    <p class="muted">The original Task Hub V3 is included in this package. To use your separate live EdgeOne deployment instead, paste its actual HTTPS address.</p>
+    <p class="muted">The original Task Hub is included in this package. To use your separate live EdgeOne deployment instead, paste its actual HTTPS address.</p>
     <form id="task-link-form"><label class="input-label">Task Hub website URL<input name="taskLink" type="url" value="${esc(localStorage.getItem('zhenli:taskhub:external') || '')}" placeholder="https://your-task-hub.edgeone.cool/"></label><div class="modal-actions">${action('Use bundled Task Hub','reset-task-link','','secondary')}<button class="btn primary" type="submit">Save URL</button></div></form>
     <p class="fineprint">Existing tasks from a different EdgeOne origin do not automatically transfer. Use the Task Hub Export/Import function before switching.</p></section></div>`;
 }
