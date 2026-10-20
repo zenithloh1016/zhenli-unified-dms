@@ -5,7 +5,7 @@
  * service-role credentials are required. Company folders remain untouched
  * until the user explicitly requests synchronization.
  */
-import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV} from './master-listing-data.js';
+import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials} from './master-listing-data.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeText=value=>String(value??'').slice(0,15000);
@@ -20,7 +20,7 @@ const isMissing=error=>/object not found|not found|404|no such key/i.test(String
 export function createMasterListingTab({db,bucket='dms-private',getUser,getCompanies,openCompany,refreshCompanies,notify}){
  const state={userId:'',loaded:false,loading:false,saving:false,
   model:null,error:'',status:'',search:'',page:0,columnStart:0,fullScreen:false,editIndex:null,
-  source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,preview:null,
+  source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,date1904:false,legacyDateCount:0,preview:null,
   selectedFile:null};
  const storage=db?.storage?.from(bucket);
  const path=()=>getUser()?.id+'/master-listing/current.json';
@@ -29,7 +29,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
  let onRender=null;
  const afterRender=cb=>{onRender=cb;};
 
- const reset=()=>{Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,model:null,error:'',status:'',search:'',page:0,columnStart:0,fullScreen:false,editIndex:null,source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,preview:null,selectedFile:null});};
+ const reset=()=>{Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,model:null,error:'',status:'',search:'',page:0,columnStart:0,fullScreen:false,editIndex:null,source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,date1904:false,legacyDateCount:0,preview:null,selectedFile:null});};
  async function load(force=false){
   const user=getUser?.();
   if(!user?.id){reset();return;}
@@ -47,7 +47,8 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
     catch{throw Error('Saved Master Listing JSON is damaged. The stored file has not been changed.');}
     state.model=validateMasterListing(json);
    }
-   state.loaded=true;state.status=state.model?'Saved Master Listing loaded.':'No Master Listing has been imported yet.';
+   state.loaded=true;state.legacyDateCount=countLegacyDateSerials(state.model);
+   state.status=state.model?'Saved Master Listing loaded.':'No Master Listing has been imported yet.';
   }catch(error){state.error=error.message||String(error);}
   finally{state.loading=false;onRender?.();}
  }
@@ -65,7 +66,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   try{
    return buildMasterListing(source.rows,{headerRow:state.headingRow,startRow:state.startRow,
     nameColumn:state.nameColumn,registrationColumn:state.regColumn,
-    filename:state.selectedFile?.name||'Master Listing.xlsx',worksheet:source.name});
+    filename:state.selectedFile?.name||'Master Listing.xlsx',worksheet:source.name,date1904:state.date1904});
   }catch(error){return {error:error.message||String(error)};}
  }
  async function readFile(file,readWorkbook){
@@ -80,7 +81,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
     throw Error('This Excel file could not be read with its original date display formats. Open in Microsoft Excel, Save As an unprotected .xlsx copy and import that copy. Existing Master Listing data is unchanged.');
    const src=parsed?.sheets||[];
    if(!src.length)throw Error('Excel workbook has no worksheets.');
-   state.source=parsed.reader||'Excel';
+   state.source=parsed.reader||'Excel';state.date1904=!!parsed.book?.date1904;
    state.sheets=src.map(x=>({name:x.sheet,rows:x.data||null,read:parsed.book?.readSheet||null}));
    state.sheetIndex=parsed.selected||0;
    await switchSheet(state.sheetIndex);
@@ -114,6 +115,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   if(result.error)throw Error('Private cloud save failed: '+result.error.message+'. Your previous listing was not intentionally deleted.');
   state.model={...model,updatedAt:new Date().toISOString()};
   state.loaded=true;state.userId=user.id;
+  state.legacyDateCount=countLegacyDateSerials(state.model);
  }
  async function importSelected(){
   const preview=importPreview();
@@ -214,7 +216,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
     rows.map(({row,index})=>{
      const c=companyData(model,row),match=findCompanyMatch(model,row,getCompanies?.()||[]);
      return '<tr><td>'+(index+1)+'</td><td><strong>'+esc(c.name)+'</strong></td><td>'+esc(c.registration)+'</td>'+
-      row.values.slice(first,end).map(v=>'<td title="'+esc(v.slice(0,350))+'">'+esc(v.slice(0,100))+'</td>').join('')+
+      row.values.slice(first,end).map((v,offset)=>{const display=displayedListingValue(model,first+offset,v);return '<td title="'+esc(display.slice(0,350))+'">'+esc(display.slice(0,100))+'</td>';}).join('')+
       '<td><div class="ml-row-actions">'+act('Edit','ml-edit',index,'primary')+
       (match?act('Documents','ml-documents',match.id,'secondary'):'<small>Not in Documents</small>')+'</div></td></tr>';
     }).join('')+'</tbody></table>'+(rows.length?'':'<div class="empty-line">No companies match your search.</div>')+'</div>'+
