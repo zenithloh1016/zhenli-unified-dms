@@ -4,6 +4,7 @@
  * the real Master Listing. Read-only; returns cells for user confirmation.
  */
 import {unzipSync,strFromU8} from 'fflate';
+import SSF from 'ssf';
 
 const MAX_FILE=20*1024*1024,MAX_XML=32*1024*1024,MAX_TOTAL=48*1024*1024;
 const MAX_SHEETS=100,MAX_ROWS=12000,MAX_CELLS=250000;
@@ -41,7 +42,7 @@ function validateZip(bytes){
     if(flags&1)throw Error('This Excel workbook appears password-protected. Save an unprotected .xlsx copy for import.');
     if(size===0xffffffff)throw Error('Large ZIP64 Excel files are not supported.');
     const name=decoder.decode(bytes.subarray(pos+46,pos+46+len));
-    if(name==='xl/workbook.xml'||name==='xl/_rels/workbook.xml.rels'||name==='xl/sharedStrings.xml'||/^xl\/worksheets\/[^/]+\.xml$/.test(name)){
+    if(name==='xl/workbook.xml'||name==='xl/_rels/workbook.xml.rels'||name==='xl/sharedStrings.xml'||name==='xl/styles.xml'||/^xl\/worksheets\/[^/]+\.xml$/.test(name)){
       if(size>MAX_XML)throw Error('Excel worksheet is too large to import safely.');
       uncompressed+=size;
     }
@@ -56,6 +57,62 @@ function safeSheetTarget(target){
   if(!/^xl\/worksheets\/[^/]+\.xml$/.test(t))throw Error('Excel worksheet path is unsupported.');
   return t;
 }
+/**
+ * Excel stores most dates as serial numbers: the cell's s= style points to a
+ * number format in xl/styles.xml. Retain the source number format (including
+ * DD/MM/YYYY vs DD.MM.YYYY, 2- vs 4-digit years, and 1904 workbooks) when
+ * importing. Do NOT parse preformatted dates through new Date() or locale
+ * formatting, which would silently change the displayed text.
+ */
+function dateStyles(bytes,workbook){
+ const workbookPr=first(workbook,'workbookPr');
+ const date1904=/^(1|true)$/i.test(attr(workbookPr,'date1904'));
+ if(!bytes)return {formats:[],date1904};
+ const doc=xml(bytes,'styles.xml');
+ const formats=new Map();
+ const numFmts=first(doc,'numFmts');
+ for(const item of numFmts?els(numFmts,'numFmt'):[]){
+  const id=Number(attr(item,'numFmtId'));
+  if(Number.isInteger(id)&&id>=0)formats.set(id,attr(item,'formatCode'));
+ }
+ const xfs=first(doc,'cellXfs');
+ const builtins=SSF.get_table();
+ const entries=xfs?els(xfs,'xf'):[];
+ return {date1904,formats:entries.map(xf=>{
+  const id=Number(attr(xf,'numFmtId')||0);
+  const format=formats.get(id)??builtins[id]??null;
+  if(!format||!SSF.is_date(format))return null;
+  return format;
+ })};
+}
+function excelISOToSerial(iso,date1904){
+ // OOXML t=d values use a calendar date rather than a serial. No timezone
+ // conversion is applied, matching Excel's timezone-free cell date model.
+ const m=/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?/.exec(iso);
+ if(!m)return null;
+ const y=+m[1],mo=+m[2],d=+m[3],h=+(m[4]||0),min=+(m[5]||0),sec=+(m[6]||0);
+ const millis=Date.UTC(y,mo-1,d,h,min,sec,+((m[7]||'').padEnd(3,'0').slice(0,3)));
+ if(!Number.isFinite(millis))return null;
+ // Serial 1 is 1900-01-01; Excel intentionally contains a fake 1900-02-29.
+ const epoch=date1904?Date.UTC(1904,0,1):Date.UTC(1899,11,31);
+ const serial=(millis-epoch)/86400000;
+ return !date1904 && serial>=60?serial+1:serial;
+}
+export function excelCellDisplay({type='',raw='',styleIndex=0,formatInfo=null}={}){
+ if(type==='e')return '';
+ if(type==='b')return raw==='1'?'TRUE':'FALSE';
+ if(type==='s'||type==='inlineStr'||type==='str')return raw;
+ const format=formatInfo?.formats?.[Number(styleIndex)]||null;
+ if(!format)return raw;
+ const value=type==='d'?excelISOToSerial(raw,!!formatInfo?.date1904):Number(raw);
+ if(value===null||!Number.isFinite(value)||raw==='')return raw;
+ try{
+  return SSF.format(format,value,{date1904:!!formatInfo?.date1904});
+ }catch{
+  return raw;
+ }
+}
+
 export async function openMasterListingWorkbook(file){
   if(!file||typeof file.arrayBuffer!=='function')throw Error('Select an Excel file from Android Files or Downloads.');
   if(file.size<50)throw Error('Selected Excel file is empty or could not be accessed by the file picker.');
@@ -64,9 +121,10 @@ export async function openMasterListingWorkbook(file){
   validateZip(bytes);
   // Filter out images, embeddings, external links and other unnecessary files.
   const zip=unzipSync(bytes,{filter:f=>f.name==='xl/workbook.xml'||f.name==='xl/_rels/workbook.xml.rels'||
-    f.name==='xl/sharedStrings.xml'||/^xl\/worksheets\/[^/]+\.xml$/.test(f.name)});
+    f.name==='xl/sharedStrings.xml'||f.name==='xl/styles.xml'||/^xl\/worksheets\/[^/]+\.xml$/.test(f.name)});
   const workbook=xml(zip['xl/workbook.xml'],'workbook.xml');
   const rels=xml(zip['xl/_rels/workbook.xml.rels'],'workbook relationships');
+  const formatInfo=dateStyles(zip['xl/styles.xml'],workbook);
   const relations=new Map(els(rels,'Relationship').map(n=>[attr(n,'Id'),attr(n,'Target')]));
   let sheets=els(workbook,'sheet').map(n=>{
     const id=attr(n,'r:id')||n.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id');
@@ -96,10 +154,9 @@ export async function openMasterListingWorkbook(file){
         const col=columnNo(attr(c,'r'));
         if(col<0||col>249)continue;
         const type=attr(c,'t'),raw=first(c,'v')?.textContent??'';
-        row[col]=type==='s'?(strings[Number(raw)]??'')
-          :type==='inlineStr'?textNodes(c)
-          :type==='b'?(raw==='1'?'TRUE':'FALSE')
-          :type==='e'?'':raw;
+        const value=type==='s'?(strings[Number(raw)]??'')
+          :type==='inlineStr'?textNodes(c):raw;
+        row[col]=excelCellDisplay({type,raw:value,styleIndex:attr(c,'s')||0,formatInfo});
       }
       rows[number-1]=row;
     }
