@@ -1,3 +1,24 @@
+## Master Listing clean table (20 October 2026)
+
+The Master Listing table and import preview no longer show the additional
+`#` row number or Excel's ordinal `No.`, `Bil.` or `S/N` list-number columns.
+The original imported numbering data is retained for recordkeeping and CSV
+exports, while all company-information columns remain editable.
+
+Dates that can be reliably recognized (including formatted Excel serials and
+text dates in DD.MM.YYYY, YYYY-MM-DD, DD-MMM-YYYY or DD/MM/YYYY) are now
+displayed as **DD/MM/YYYY** in the table, editor and CSV export. Actual
+imported dates are stored using this format. Non-date figures, company
+registration numbers, paid-up capital and share quantities are unaffected.
+
+Empty company-information cells display **N/A** in old saved listings and
+exports. New imports, and individual edited fields, store **N/A** in place
+of blanks. The DMS does not silently overwrite previously saved listings;
+existing records can be re-imported or saved through the normal editor.
+
+Existing company folders, uploaded statutory documents and the rest of the
+DMS modules are unaffected.
+
 ## Repairing previously imported Excel date serials (20 October 2026)
 
 Older Master Listing data in DMS may contain Excel serials even if the workbook
