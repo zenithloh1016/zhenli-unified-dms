@@ -203,7 +203,7 @@ body.zh-ar-fullscreen-open{overflow:hidden}
 .ml-table{border-collapse:separate;border-spacing:0;min-width:800px;white-space:normal;font-size:12px;width:100%}
 .ml-table th,.ml-table td{border-bottom:1px solid #edf0f5;border-right:1px solid #edf0f5;padding:9px 12px;min-width:110px;max-width:280px;vertical-align:top;overflow-wrap:anywhere}
 .ml-table thead th{position:sticky;top:0;z-index:2;background:#eaf2f8;color:#254461}
-.ml-table th:first-child,.ml-table td:first-child{min-width:50px;width:50px}
+.ml-table th:first-child,.ml-table td:first-child{min-width:185px;width:auto}
 .ml-table tbody tr:nth-child(2n){background:#f9fbfe}
 .ml-table strong{color:#1c4060}
 .ml-row-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;white-space:nowrap}
