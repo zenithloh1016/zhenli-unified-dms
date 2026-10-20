@@ -54,3 +54,65 @@ test('rejects empty/corrupt and password-protected workbooks',async()=>{
   const blank=new Blob(['invalid']);blank.name='Master Listing.xlsx';
   await assert.rejects(openMasterListingWorkbook(blank),/empty|could not be accessed|valid/i);
 });
+
+
+function styledDatesFixture(date1904=false){
+ const serial1900=(Date.UTC(2026,9,20)-Date.UTC(1899,11,30))/86400000;
+ const serial1904=(Date.UTC(2026,9,20)-Date.UTC(1904,0,1))/86400000;
+ const serial=date1904?serial1904:serial1900;
+ const dateSheet=[
+ '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>',
+ '<row r="1"><c r="A1" t="inlineStr"><is><t>Company Name</t></is></c>',
+ '<c r="B1" t="inlineStr"><is><t>AR Due Date</t></is></c>',
+ '<c r="C1" t="inlineStr"><is><t>FYE</t></is></c>',
+ '<c r="D1" t="inlineStr"><is><t>Company number</t></is></c>',
+ '<c r="E1" t="inlineStr"><is><t>Custom long date</t></is></c>',
+ '<c r="F1" t="inlineStr"><is><t>Built-in date</t></is></c>',
+ '<c r="G1" t="inlineStr"><is><t>Excel date type</t></is></c></row>',
+ '<row r="2"><c r="A2" t="inlineStr"><is><t>TEST COMPANY SDN BHD</t></is></c>',
+ '<c r="B2" s="1"><v>'+serial+'</v></c>',
+ '<c r="C2" s="2"><v>'+serial+'</v></c>',
+ '<c r="D2"><v>123456789012</v></c>',
+ '<c r="E2" s="3"><v>'+serial+'</v></c>',
+ '<c r="F2" s="4"><v>'+serial+'</v></c>',
+ '<c r="G2" s="1" t="d"><v>2026-10-20T00:00:00</v></c>',
+ '</row></sheetData></worksheet>'
+ ].join('');
+ const styles=[
+ '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+ '<numFmts count="3">',
+ '<numFmt numFmtId="164" formatCode="dd/mm/yyyy"/>',
+ '<numFmt numFmtId="165" formatCode="dd.mm.yyyy"/>',
+ '<numFmt numFmtId="166" formatCode="dd-mmm-yyyy"/>',
+ '</numFmts>',
+ '<cellXfs count="5"><xf numFmtId="0"/><xf numFmtId="164" applyNumberFormat="1"/>',
+ '<xf numFmtId="165" applyNumberFormat="1"/><xf numFmtId="166" applyNumberFormat="1"/>',
+ '<xf numFmtId="14" applyNumberFormat="1"/></cellXfs></styleSheet>'
+ ].join('');
+ const wb='<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
+  '<workbookPr date1904="'+(date1904?'1':'0')+'"/><sheets><sheet name="Master Listing" sheetId="1" r:id="rId1"/></sheets></workbook>';
+ const bytes=zipSync({
+  'xl/workbook.xml':strToU8(wb),
+  'xl/_rels/workbook.xml.rels':strToU8(relsXml),
+  'xl/styles.xml':strToU8(styles),
+  'xl/worksheets/sheet1.xml':strToU8(dateSheet)
+ });
+ const file=new Blob([bytes]);file.name='Styled Master Listing.xlsx';return file;
+}
+test('keeps Excel displayed DD/MM/YYYY, DD.MM.YYYY, month text and built-in date style',async()=>{
+ const book=await openMasterListingWorkbook(styledDatesFixture());
+ const values=book.readSheet(book.preferred)[1];
+ assert.equal(values[1],'20/10/2026');
+ assert.equal(values[2],'20.10.2026');
+ assert.equal(values[3],'123456789012');
+ assert.equal(values[4],'20-Oct-2026');
+ assert.equal(values[5],'10/20/26');
+ assert.equal(values[6],'20/10/2026');
+});
+test('converts styled Excel dates correctly for the 1904 calendar system',async()=>{
+ const book=await openMasterListingWorkbook(styledDatesFixture(true));
+ const values=book.readSheet(book.preferred)[1];
+ assert.equal(values[1],'20/10/2026');
+ assert.equal(values[2],'20.10.2026');
+ assert.equal(values[6],'20/10/2026');
+});
