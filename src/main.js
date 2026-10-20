@@ -14,6 +14,7 @@ import {CHARGES_FOLDER_NAME,CHARGES_FOLDER_SORT_ORDER,missingChargesFolders} fro
 import {REGISTER_BOOK_FOLDER_NAME,REGISTER_BOOK_FOLDER_SORT_ORDER,STANDARD_FOLDER_COUNT,missingRegisterBookFolders} from './register-book-folders.js';
 import {previewRegisterZip} from './register-book-zip.js';
 import {openOfficeDocument,officeCellValue,officeEditCell,officeEditParagraph,exportOfficeDocument,makePreviousVersionName} from './office-editor.js';
+import {renderOfficeEditor} from './office-editor-ui.js';
 import './style.css';
 import {installHubBridge} from './integrated-modules.js';
 
@@ -334,6 +335,85 @@ function folderTrail() {
   return trail;
 }
 
+
+function renderOfficeModal(){
+ return renderOfficeEditor(state,getDocument(state.officeDocumentId),{esc,action});
+}
+function resetOfficeEditor(){
+ state.officeEditor=null;state.officeDocumentId=null;state.officeRowStart=1;
+ state.officeColStart=0;state.officeWordPage=0;state.officeStatus='';
+}
+async function startOfficeEditing(id){
+ const d=getDocument(id);
+ if(!d)throw Error('The selected document is no longer in this folder.');
+ if(!/\.(xlsx|docx)$/i.test(d.name))throw Error('Edit supports modern .xlsx and .docx files. Convert legacy .xls/.doc files before editing.');
+ if(d.size_bytes>24*1024*1024)throw Error('Office file exceeds the 24 MB in-app editing limit. Download and edit it in Microsoft Office.');
+ const {data,error}=await db.storage.from(BUCKET).download(d.storage_path);
+ check(error);
+ const editor=await openOfficeDocument(data,d.name);
+ resetOfficeEditor();
+ state.officeEditor=editor;state.officeDocumentId=d.id;state.officeStatus='Opened securely from '+d.name+'. Make changes and save in this folder.';
+ state.modal={kind:'office'};
+ render();
+}
+function officeEdited(){
+ const count=state.officeEditor?.editedCount||0;
+ const el=ROOT.querySelector('#office-edit-count');
+ if(el)el.textContent=count+' unsaved change(s)';
+ const status=ROOT.querySelector('#office-status');
+ if(status)status.textContent='Edits in memory: '+count+'. Save to store in this company folder.';
+}
+async function saveOfficeDocument(mode){
+ const current=state.officeEditor,original=getDocument(state.officeDocumentId);
+ if(!current||!original)throw Error('Open a company document first.');
+ if(!current.dirty){state.officeStatus='There are no unsaved edits.';render();return;}
+ if(mode==='replace'&&!window.confirm('Save changes to '+original.name+'? The original version will be retained as a separately named previous version in the same folder.'))return;
+ const blob=exportOfficeDocument(current);
+ const path=state.user.id+'/'+original.company_id+'/'+crypto.randomUUID();
+ const stamp=new Date();
+ const previousName=makePreviousVersionName(original.name,stamp);
+ const editedName=original.name.replace(/(\.[^.]+)$/, ' (edited '+stamp.toISOString().slice(0,19).replace(/[:T]/g,'-')+')$1');
+ const {error:storageError}=await db.storage.from(BUCKET).upload(path,blob,{upsert:false,contentType:blob.type});check(storageError);
+ let committed=false;
+ try{
+  if(mode==='copy'){
+   const {error}=await db.from('documents').insert({
+    user_id:state.user.id,company_id:original.company_id,folder_id:original.folder_id,
+    name:editedName,storage_path:path,size_bytes:blob.size,mime_type:blob.type
+   });
+   check(error);committed=true;
+  }else{
+   const {data,error}=await db.from('documents').update({
+    storage_path:path,size_bytes:blob.size,mime_type:blob.type
+   }).eq('id',original.id).eq('user_id',state.user.id).eq('storage_path',original.storage_path).select('id');
+   check(error);
+   if(data?.length!==1)throw Error('This document was changed in another session. No files have been replaced. Refresh the folder and reopen it.');
+   committed=true;
+   const {error:backupError}=await db.from('documents').insert({
+    user_id:state.user.id,company_id:original.company_id,folder_id:original.folder_id,
+    name:previousName,storage_path:original.storage_path,size_bytes:original.size_bytes,
+    mime_type:original.mime_type
+   });
+   if(backupError){
+    // Attempt a safe rollback: never delete the old or newly edited Office object.
+    const {error:rollbackError}=await db.from('documents').update({
+     storage_path:original.storage_path,size_bytes:original.size_bytes,mime_type:original.mime_type
+    }).eq('id',original.id).eq('storage_path',path);
+    if(!rollbackError){
+     committed=false;
+     throw Error('Cannot save the previous-version record: '+backupError.message+'. The original entry has been restored.');
+    }
+    throw Error('Edited document was saved, but automatic backup filing failed. Both original and edited file content remain in storage. Please contact the administrator: '+backupError.message);
+   }
+  }
+ }catch(e){
+  if(!committed){await db.storage.from(BUCKET).remove([path]).catch(()=>{});}
+  throw e;
+ }
+ resetOfficeEditor();state.modal=null;await reloadContent();
+ toast(mode==='copy'?'Saved an edited copy beside the original in this company folder.':
+  'Changes saved. Previous version retained in the same company folder as '+previousName+'.');
+}
 
 function renderRegisterZipModal(){
  const p=state.registerZipPreview;
