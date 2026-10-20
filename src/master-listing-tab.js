@@ -5,7 +5,7 @@
  * service-role credentials are required. Company folders remain untouched
  * until the user explicitly requests synchronization.
  */
-import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials} from './master-listing-data.js';
+import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,isListingOrdinalColumn} from './master-listing-data.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeText=value=>String(value??'').slice(0,15000);
@@ -202,8 +202,10 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   const selectable=Array.from({length:width},(_,j)=>'<option value="'+j+'">'+(j+1)+' — '+esc(String(data[state.headingRow-1]?.[j]||'Column '+(j+1)).slice(0,60))+'</option>');
   const selector=(id,value,none=false)=>'<select id="'+id+'">'+(none?'<option value="-1"'+(value<0?' selected':'')+'>Not available</option>':'')+
     selectable.map((x,j)=>x.replace('<option value="'+j+'">','<option value="'+j+'"'+(j===value?' selected':'')+'>')).join('')+'</select>';
-  const first=state.fullScreen?0:state.columnStart,end=model?(state.fullScreen?model.columns.length:Math.min(model.columns.length,first+6)):0;
-  const cols=model?.columns.slice(first,end)||[];
+  const visible=model?.columns.map((col,index)=>({...col,index})).filter(col=>!isListingOrdinalColumn(model,col.index))||[];
+  const first=state.fullScreen?0:state.columnStart,end=model?(state.fullScreen?visible.length:Math.min(visible.length,first+6)):0;
+  const cols=visible.slice(first,end);
+  const previewCols=preview&&!preview.error?preview.columns.map((col,index)=>({...col,index})).filter(col=>!isListingOrdinalColumn(preview,col.index)).slice(0,10):[];
   const disabled=state.saving||state.loading;
   return '<section class="ml-workspace'+(state.fullScreen?' ml-workspace-fullscreen':'')+'" aria-label="Master Listing workspace">'+
    '<div class="content-header"><div><p class="eyebrow">STATUTORY COMPANY INFORMATION</p><h1>Master Listing</h1>'+
@@ -220,13 +222,13 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
     '<label>First company row<input id="ml-start-row" type="number" min="2" max="'+data.length+'" value="'+state.startRow+'"></label>'+
     '<label>Company name column'+selector('ml-name-col',state.nameColumn)+'</label>'+
     '<label>Registration no. column'+selector('ml-reg-col',state.regColumn,true)+'</label></div>'+
-    '<p class="muted">Date cells retain their Excel display format (for example DD/MM/YYYY or DD.MM.YYYY). Re-import the original .xlsx to correct dates imported previously. Excel regional built-in short-date formats may vary.</p><p class="muted">Preview: '+(preview?.error?'<strong>'+esc(preview.error)+'</strong>':
+    '<p class="muted">Dates are displayed as DD/MM/YYYY and blank company-information cells as N/A. List numbering is hidden, not deleted from the imported data.</p><p class="muted">Preview: '+(preview?.error?'<strong>'+esc(preview.error)+'</strong>':
      '<strong>'+preview.rows.length+' company rows × '+preview.columns.length+' columns</strong> ('+preview.skipped.blank+' blank, '+preview.skipped.duplicate+' duplicates skipped)')+'</p>'+
     '<div class="ml-table-scroll"><table class="ml-table"><tbody>'+
     (preview&&!preview.error?
-     '<tr><th>#</th>'+preview.columns.slice(0,10).map(c=>'<th>'+esc(c.label)+'</th>').join('')+'</tr>'+
-     preview.rows.slice(0,7).map((r,i)=>'<tr><th>'+(i+1)+'</th>'+r.values.slice(0,10).map(v=>'<td>'+esc(v.slice(0,90))+'</td>').join('')+'</tr>').join('')
-     :data.slice(0,7).map((r,i)=>'<tr><th>'+(i+1)+'</th>'+Array.from({length:Math.min(10,width)},(_,j)=>'<td>'+esc(safeText(r?.[j]).slice(0,90))+'</td>').join('')+'</tr>').join(''))+
+     '<tr>'+previewCols.map(c=>'<th>'+esc(c.label)+'</th>').join('')+'</tr>'+
+     preview.rows.slice(0,7).map(r=>'<tr>'+previewCols.map(c=>'<td>'+esc(displayedListingValue(preview,c.index,r.values[c.index]).slice(0,90))+'</td>').join('')+'</tr>').join('')
+     :data.slice(0,7).map(r=>'<tr>'+Array.from({length:Math.min(10,width)},(_,j)=>'<td>'+esc(safeText(r?.[j]).trim()||'N/A')+'</td>').join('')+'</tr>').join(''))+
     '</tbody></table></div>'+
     '<div class="ml-actions">'+act('Cancel import','ml-cancel','','secondary')+
     (!preview?.error?act('Import '+preview.rows.length+' companies','ml-confirm','','primary'):'')+'</div></section>':'')+
@@ -235,16 +237,16 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
     '<div class="ml-toolbar"><label>Search company or any field <input id="ml-search" type="search" value="'+esc(state.search)+'" placeholder="Search company name, number or details"></label>'+
     act('Search','ml-search-do','','secondary')+act('Clear','ml-search-clear','','secondary')+
     act('Sync missing company folders','ml-sync','','secondary')+'</div>'+
-    (state.fullScreen?'<p class="ml-fullscreen-help">Full-screen table · all '+model.columns.length+' columns · scroll right or down to browse.</p>':
+    (state.fullScreen?'<p class="ml-fullscreen-help">Full-screen table · all '+visible.length+' information columns · scroll right or down to browse.</p>':
     '<div class="ml-columns-nav">'+act('← Columns','ml-prev-cols','','secondary')+
-    '<span>Columns '+(first+1)+'–'+end+' of '+model.columns.length+'</span>'+
+    '<span>Columns '+(first+1)+'–'+end+' of '+visible.length+'</span>'+
     act('Columns →','ml-next-cols','','secondary')+'</div>')+
-    '<div class="ml-table-scroll"><table class="ml-table"><thead><tr><th>#</th><th>Company</th><th>Registration No.</th>'+
+    '<div class="ml-table-scroll"><table class="ml-table"><thead><tr><th>Company</th><th>Registration No.</th>'+
     cols.map(c=>'<th title="'+esc(c.label)+'">'+esc(c.label)+'</th>').join('')+'<th>Actions</th></tr></thead><tbody>'+
     rows.map(({row,index})=>{
      const c=companyData(model,row),match=findCompanyMatch(model,row,getCompanies?.()||[]);
-     return '<tr><td>'+(index+1)+'</td><td><strong>'+esc(c.name)+'</strong></td><td>'+esc(c.registration)+'</td>'+
-      row.values.slice(first,end).map((v,offset)=>{const display=displayedListingValue(model,first+offset,v);return '<td title="'+esc(display.slice(0,350))+'">'+esc(display.slice(0,100))+'</td>';}).join('')+
+     return '<tr><td><strong>'+esc(c.name)+'</strong></td><td>'+esc(c.registration||'N/A')+'</td>'+
+      cols.map(col=>{const display=displayedListingValue(model,col.index,row.values[col.index]);return '<td title="'+esc(display.slice(0,350))+'">'+esc(display.slice(0,100))+'</td>';}).join('')+
       '<td><div class="ml-row-actions">'+act('Edit','ml-edit',index,'primary')+
       (match?act('Documents','ml-documents',match.id,'secondary'):'<small>Not in Documents</small>')+'</div></td></tr>';
     }).join('')+'</tbody></table>'+(rows.length?'':'<div class="empty-line">No companies match your search.</div>')+'</div>'+
@@ -263,7 +265,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
    '<div class="modal-heading"><h3>Edit '+esc(company.name)+'</h3>'+act('✕','ml-close-edit')+'</div>'+
    '<p class="muted">Edit any imported column. Save updates your private Master Listing without changing uploaded statutory documents.</p>'+
    '<form id="ml-edit-form"><div class="ml-edit-fields">'+model.columns.map((col,i)=>{
-    const value=row.values[i];return '<label><span>'+esc(col.label)+' <small>('+String(i+1)+')</small></span>'+
+    const value=displayedListingValue(model,i,row.values[i]);return '<label><span>'+esc(col.label)+' <small>('+String(i+1)+')</small></span>'+
      '<textarea name="ml-col-'+i+'" rows="'+clamp(Math.ceil(value.length/100),2,6)+'" maxlength="15000">'+esc(value)+'</textarea></label>';
    }).join('')+'</div><div class="ml-actions">'+act('Cancel','ml-close-edit')+
    '<button class="btn primary" type="submit"'+(state.saving?' disabled':'')+'>Save company information</button></div></form></section></div>';
@@ -292,7 +294,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   if(action==='ml-prev-page'){state.page=Math.max(0,state.page-1);onRender?.();return true;}
   if(action==='ml-next-page'){state.page++;onRender?.();return true;}
   if(action==='ml-prev-cols'){state.columnStart=Math.max(0,state.columnStart-6);onRender?.();return true;}
-  if(action==='ml-next-cols'){state.columnStart=clamp(state.columnStart+6,0,Math.max(0,(state.model?.columns.length||0)-1));onRender?.();return true;}
+  if(action==='ml-next-cols'){state.columnStart=clamp(state.columnStart+6,0,Math.max(0,(state.model?.columns.filter((_,i)=>!isListingOrdinalColumn(state.model,i)).length||0)-1));onRender?.();return true;}
   if(action==='ml-search-do'){state.search=document.getElementById('ml-search')?.value||'';state.page=0;onRender?.();return true;}
   if(action==='ml-search-clear'){state.search='';state.page=0;onRender?.();return true;}
   if(action==='ml-sync'){asyncRun(syncDocuments);return true;}
