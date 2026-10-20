@@ -83,7 +83,8 @@ test('Company Profile panel removed and Director Confirmation retained without s
  const pdf=readFileSync(new URL('../src/pdf.js',import.meta.url),'utf8');
  assert.ok(html.includes('01 / COMPANY DETAILS'));
  assert.ok(html.includes('V1.9'));
- assert.ok(html.includes('id="register-book-file"'));
+ assert.ok(!html.includes('id="register-book-file"'));
+ assert.ok(!html.includes('id="apply-register"'));
  assert.ok(html.includes('id="apply-register"'));
  assert.ok(!html.includes('company-panel'));
  assert.ok(!html.includes('id="company-fields"'));
