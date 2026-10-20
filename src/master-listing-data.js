@@ -152,7 +152,7 @@ export function buildMasterListing(rows,opts={}){
   const name=normal(values[nameColumn]).split(/\r?\n/)[0];
   if(!name||name==='N/A'||name.length<3||/^[\d\W]+$/.test(name)||invalidName.test(name)){skipped.blank++;continue;}
   const normalized=key(name),registration=regColumn>=0?normal(values[regColumn]):'';
-  const unique=registration.replace(/[^A-Z0-9]/gi,'').toLowerCase()||normalized;
+  const unique=(registration.toUpperCase()==='N/A'?'':registration.replace(/[^A-Z0-9]/gi,'').toLowerCase())||normalized;
   if(seen.has(unique)){skipped.duplicate++;continue;}
   seen.add(unique);
   importRows.push({id:'r'+importRows.length,values});
@@ -182,8 +182,9 @@ export function validateMasterListing(value){
 }
 export function companyData(model,row){
  if(!model||!row)return null;
+ const reg=model.registrationColumn>=0?normal(row.values[model.registrationColumn]):'';
  return {name:normal(row.values[model.nameColumn]).split(/\r?\n/)[0],
-  registration:model.registrationColumn>=0?normal(row.values[model.registrationColumn]):''};
+  registration:reg.toUpperCase()==='N/A'?'':reg};
 }
 export function findCompanyMatch(model,row,companies){
  const info=companyData(model,row);if(!info)return null;
