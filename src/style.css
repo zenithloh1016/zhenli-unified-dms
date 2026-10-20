@@ -233,3 +233,9 @@ body.zh-ar-fullscreen-open{overflow:hidden}
  .ml-editor-modal{padding:13px;max-height:95dvh}
  .ml-toolbar .btn{min-height:35px}
 }
+
+/* Keep all six main tabs accessible on phones, including Master Listing. */
+@media(max-width:850px){
+ .tabbar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:stretch}
+ .tabbar .tab{min-width:0;white-space:normal;font-size:12px;line-height:1.25;padding:6px 4px;min-height:45px;height:auto}
+}
