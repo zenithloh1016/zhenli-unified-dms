@@ -13,6 +13,7 @@ import {WORKING_RESOLUTION_FOLDER_NAME,WORKING_RESOLUTION_FOLDER_SORT_ORDER,miss
 import {CHARGES_FOLDER_NAME,CHARGES_FOLDER_SORT_ORDER,missingChargesFolders} from './charges-folders.js';
 import {REGISTER_BOOK_FOLDER_NAME,REGISTER_BOOK_FOLDER_SORT_ORDER,STANDARD_FOLDER_COUNT,missingRegisterBookFolders} from './register-book-folders.js';
 import {previewRegisterZip} from './register-book-zip.js';
+import {openOfficeDocument,officeCellValue,officeEditCell,officeEditParagraph,exportOfficeDocument,makePreviousVersionName} from './office-editor.js';
 import './style.css';
 import {installHubBridge} from './integrated-modules.js';
 
@@ -51,7 +52,8 @@ const state = {
   modal: null, authMode: 'login', importData: null, importWorkbook: null, importReader: '',
   importSheet: 0, importNameCol: 0, importRegCol: -1, importStartRow: 2,
   importProgress: null, importFileName: '', importError: '',
-  registerZipPreview: null, registerZipStatus: '', registerZipFilename: ''
+  registerZipPreview: null, registerZipStatus: '', registerZipFilename: '',
+  officeEditor: null, officeDocumentId: null, officeRowStart: 1, officeColStart: 0, officeWordPage: 0, officeStatus: ''
 };
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, m => ({
@@ -431,6 +433,7 @@ function modalHTML() {
   if (!m) return '';
   if (m.kind === 'import') return renderImportModal();
    if (m.kind === 'registerZip') return renderRegisterZipModal();
+   if (m.kind === 'office') return renderOfficeModal();
   const title = m.kind === 'company' ? 'Add company' : m.kind === 'folder' ? 'Create subfolder' : m.kind === 'rename' ? 'Rename' : 'Confirm permanent deletion';
   let body = '';
   if (['company','folder','rename'].includes(m.kind)) {
