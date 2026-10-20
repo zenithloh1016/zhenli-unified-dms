@@ -84,7 +84,10 @@ test('full screen shows every imported Master Listing column and can be exited',
  assert.match(html,/Exit full screen/);
  assert.ok(html.includes('<th title="Extra notes">'));
  assert.ok(html.includes('20/10/2026'));
- assert.ok(html.includes('20.10.2026'));
+ assert.ok(!html.includes('20.10.2026'));
+ assert.ok(html.includes('20/10/2026'));
+ assert.ok(!html.includes('<th>#</th>'));
+ assert.ok(!html.includes('>1</td><td><strong>TEST COMPANY'));
  assert.equal(tab.exitFullscreen(),true);
  assert.equal(tab.exitFullscreen(),false);
  assert.ok(!tab.render().includes('ml-workspace-fullscreen'));
@@ -139,4 +142,42 @@ test('legacy date serials display correctly in the full-screen saved listing',()
  assert.match(html,/20\/10\/2026/);
  assert.match(html,/Save corrected dates/);
  assert.match(html,/saved date serial/);
+});
+
+test('legacy numbering is hidden, blank cells are N/A, and ALL dates show DD/MM/YYYY',()=>{
+ const rows=[
+ ['No.','Company Name','Company Registration No.','AR Lodgement','AFS FYE','Date of Incorporation','Note','Share Capital','Other Date'],
+ ['1','ALPHA SDN BHD','202601234567','20.10.2026','2026-10-20','20-Oct-2026','','45000','10/20/2026'],
+ ['2','BETA SDN BHD','','20/10/2026','20/10/2026','','','46000','']
+ ];
+ const model=buildMasterListing(rows);
+ assert.deepEqual(model.rows[0].values.slice(3,6),['20/10/2026','20/10/2026','20/10/2026']);
+ assert.equal(model.rows[0].values[6],'N/A');
+ assert.equal(model.rows[0].values[7],'45000');
+ assert.equal(model.rows[0].values[8],'20/10/2026');
+ assert.equal(model.rows[1].values[2],'N/A');
+ assert.equal(model.rows[1].values[5],'N/A');
+ assert.ok(listingCSV(model).includes('"N/A"'));
+ const tab=createMasterListingTab({db:{storage:{from:()=>({})}},
+  getUser:()=>({id:'demo'}),getCompanies:()=>[],openCompany:()=>{},
+  refreshCompanies:()=>{},notify:()=>{}});
+ tab.state.model=model;
+ tab.onClick('ml-fullscreen','');
+ const html=tab.render();
+ assert.ok(!html.includes('<th>#</th>'));
+ assert.ok(!html.includes('<th title="No.">'));
+ assert.ok(html.includes('<th title="AR Lodgement">'));
+ assert.ok(!html.includes('20.10.2026'));
+ assert.ok(html.includes('20/10/2026'));
+ assert.ok(html.includes('N/A'));
+ assert.ok(html.includes('<th title="Other Date">'));
+ assert.ok(!html.includes('<tr><td>1</td><td><strong>ALPHA'));
+});
+test('editing blank Master Listing cells saves N/A and leaves existing nondate IDs unchanged',()=>{
+ const model=buildMasterListing([['Company Name','Registration No.','Remarks','FYE'],['ALPHA SDN BHD','202601234567','','20.10.2026']]);
+ changeListingCell(model,0,2,'   ');
+ assert.equal(model.rows[0].values[2],'N/A');
+ changeListingCell(model,0,3,'2026/10/20');
+ assert.equal(model.rows[0].values[3],'20/10/2026');
+ assert.equal(model.rows[0].values[1],'202601234567');
 });
