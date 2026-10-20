@@ -64,3 +64,28 @@ test('Master Listing tab uses private user storage and confirmed Documents synch
   getUser:()=>({id:'demo'}),getCompanies:()=>[],openCompany:()=>{},refreshCompanies:()=>{},notify:()=>{}});
  assert.match(tab.render(),/No Master Listing imported yet/);
 });
+
+
+test('full screen shows every imported Master Listing column and can be exited',()=>{
+ const tab=createMasterListingTab({db:{storage:{from:()=>({})}},
+  getUser:()=>({id:'demo'}),getCompanies:()=>[],openCompany:()=>{},
+  refreshCompanies:()=>{},notify:()=>{}});
+ const data=[
+  ['Company Name','Registration Number','AR Date','FYE','Phone','Secretary','Director','Extra notes'],
+  ['TEST COMPANY SDN BHD','202600000001','20/10/2026','20.10.2026','0121234567','ZHENLI','Director A','Notes']
+ ];
+ tab.state.model=buildMasterListing(data);
+ let html=tab.render();
+ assert.match(html,/Full screen/);
+ assert.ok(!html.includes('<th title="Extra notes">'));
+ assert.equal(tab.onClick('ml-fullscreen',''),true);
+ html=tab.render();
+ assert.match(html,/ml-workspace-fullscreen/);
+ assert.match(html,/Exit full screen/);
+ assert.ok(html.includes('<th title="Extra notes">'));
+ assert.ok(html.includes('20/10/2026'));
+ assert.ok(html.includes('20.10.2026'));
+ assert.equal(tab.exitFullscreen(),true);
+ assert.equal(tab.exitFullscreen(),false);
+ assert.ok(!tab.render().includes('ml-workspace-fullscreen'));
+});
