@@ -916,6 +916,10 @@ ROOT.addEventListener('click', event=>{
   if(a==='modal-bg' && event.target===button){state.modal=null;render();return;}
   if(a==='dismiss'){state.notice='';render();return;}
   if(a==='close-modal' && !state.busy){state.modal=null;state.importData=null;state.importWorkbook=null;resetRegisterZip();render();return;}
+  if(a==='close-office'){
+   if(state.officeEditor?.dirty&&!window.confirm('Close the Office editor without saving your changes?'))return;
+   resetOfficeEditor();state.modal=null;render();return;
+  }
   if(state.busy) return;
   if(a.startsWith('tab-')){
     const nextTab=a.slice(4);
@@ -1021,6 +1025,36 @@ ROOT.addEventListener('click', event=>{
   if(a==='rename-file'){const f=getDocument(id);if(f){state.modal={kind:'rename',target:'file',id,name:f.name};render();}return;}
   if(a.startsWith('delete-')){const target=a.slice(7), record=target==='company'?state.companies.find(x=>x.id===id):target==='folder'?getFolder(id):getDocument(id);if(record){state.modal={kind:'delete',target,id,name:record.name};render();}return;}
   if(a==='upload-trigger'){document.getElementById('document-upload').click();return;}
+  if(a==='edit-office'){busyDo(()=>startOfficeEditing(id));return;}
+  if(a==='save-office-copy'||a==='save-office-replace'){
+    busyDo(()=>saveOfficeDocument(a==='save-office-copy'?'copy':'replace'));return;
+  }
+  if(a==='office-prev-rows'||a==='office-next-rows'){
+    state.officeRowStart=Math.max(1,Math.min(1048537,(state.officeRowStart||1)+(a==='office-next-rows'?40:-40)));
+    render();return;
+  }
+  if(a==='office-prev-cols'||a==='office-next-cols'){
+    state.officeColStart=Math.max(0,Math.min(16372,(state.officeColStart||0)+(a==='office-next-cols'?12:-12)));
+    render();return;
+  }
+  if(a==='office-go-row-action'){
+    const raw=Number(ROOT.querySelector('#office-go-row')?.value);
+    if(!Number.isSafeInteger(raw)||raw<1||raw>1048537){toast('Enter a worksheet row between 1 and 1048537.');return;}
+    state.officeRowStart=raw;render();return;
+  }
+  if(a==='office-go-col-action'){
+    const label=String(ROOT.querySelector('#office-go-col')?.value||'').trim().toUpperCase();
+    if(!/^[A-Z]{1,3}$/.test(label)){toast('Enter a column such as A, M or AB.');return;}
+    const n=label.split('').reduce((sum,ch)=>sum*26+ch.charCodeAt(0)-64,0)-1;
+    if(n<0||n>16372){toast('The largest starting column is XEM.');return;}
+    state.officeColStart=n;render();return;
+  }
+  if(a==='office-prev-word'||a==='office-next-word'){
+    const count=state.officeEditor?.word?.paragraphs.length||0;
+    const last=Math.max(0,Math.ceil(count/30)-1);
+    state.officeWordPage=Math.max(0,Math.min(last,state.officeWordPage+(a==='office-next-word'?1:-1)));
+    render();return;
+  }
   if(a==='view-file'||a==='download-file'){
     const blankTab = !Capacitor.isNativePlatform() ? window.open('about:blank','_blank') : null;
     if(blankTab) blankTab.opener=null;
@@ -1094,9 +1128,22 @@ document.addEventListener('keydown',event=>{
    else if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
 });
 ROOT.addEventListener('input',e=>{
-
+  if(e.target.dataset.officeCellRow!==undefined&&state.officeEditor?.type==='xlsx'){
+    try{officeEditCell(state.officeEditor,Number(e.target.dataset.officeCellRow),Number(e.target.dataset.officeCellCol),e.target.value);officeEdited();}
+    catch(err){const el=ROOT.querySelector('#office-status');if(el)el.textContent=err.message;}
+    return;
+  }
+  if(e.target.dataset.officeParagraph!==undefined&&state.officeEditor?.type==='docx'){
+    try{officeEditParagraph(state.officeEditor,Number(e.target.dataset.officeParagraph),e.target.value);officeEdited();}
+    catch(err){const el=ROOT.querySelector('#office-status');if(el)el.textContent=err.message;}
+    return;
+  }
  signingUI.input(e.target);if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
 ROOT.addEventListener('change',e=>{
+  if(e.target.id==='office-sheet-choice'&&state.officeEditor?.type==='xlsx'){
+    state.officeEditor.activeSheet=Number(e.target.value)||0;
+    state.officeRowStart=1;state.officeColStart=0;render();return;
+  }
   if(signingUI.changed(e.target))return;
   if(e.target.id==='document-upload'){const files=[...e.target.files];e.target.value='';if(files.length)busyDo(()=>uploadFiles(files));}
   if(e.target.id==='register-zip-input'){
