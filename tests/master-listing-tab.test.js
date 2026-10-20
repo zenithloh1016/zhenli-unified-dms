@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildMasterListing,detectListingColumns,changeListingCell,findCompanyMatch,listingRowsForSearch,validateMasterListing,listingCSV} from '../src/master-listing-data.js';
+import {buildMasterListing,detectListingColumns,changeListingCell,findCompanyMatch,listingRowsForSearch,validateMasterListing,listingCSV,isListingDateColumn,excelSerialToDateString,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials} from '../src/master-listing-data.js';
 import {createMasterListingTab} from '../src/master-listing-tab.js';
 import {readFileSync} from 'node:fs';
 
@@ -88,4 +88,55 @@ test('full screen shows every imported Master Listing column and can be exited',
  assert.equal(tab.exitFullscreen(),true);
  assert.equal(tab.exitFullscreen(),false);
  assert.ok(!tab.render().includes('ml-workspace-fullscreen'));
+});
+
+
+test('numeric date cells are shown and imported as dates, leaving company registration and shares untouched',()=>{
+ const excelSerial=(Date.UTC(2026,9,20)-Date.UTC(1899,11,30))/86400000;
+ const source=[
+ ['Company Name','Registration No.','Date of Incorporation','FYE','AR Due Date','Issued Share Capital','Amount','Phone'],
+ ['TEST SDN BHD','202601234567',String(excelSerial),String(excelSerial),String(excelSerial),'46000','46000','0161234567']
+ ];
+ const model=buildMasterListing(source);
+ assert.equal(isListingDateColumn('AR Due Date'),true);
+ assert.equal(isListingDateColumn('Registration No.'),false);
+ assert.equal(isListingDateColumn('Share Capital'),false);
+ assert.equal(excelSerialToDateString(String(excelSerial)),'20/10/2026');
+ assert.deepEqual(model.rows[0].values.slice(2,5),['20/10/2026','20/10/2026','20/10/2026']);
+ assert.equal(model.rows[0].values[1],'202601234567');
+ assert.equal(model.rows[0].values[5],'46000');
+ assert.equal(model.rows[0].values[6],'46000');
+});
+test('previously saved date serials display as dates and can be safely repaired with a backup',()=>{
+ const serial=(Date.UTC(2026,9,20)-Date.UTC(1899,11,30))/86400000;
+ const model=buildMasterListing([
+ ['Company Name','Date of Incorporation','Company Reg No.','Share Capital','AFS FYE'],
+ ['MY COMPANY SDN BHD','20/10/2026','202612345678','46000','20/10/2026']
+ ]);
+ model.rows[0].values[1]=String(serial);
+ model.rows[0].values[4]=String(serial);
+ assert.equal(countLegacyDateSerials(model),2);
+ assert.equal(displayedListingValue(model,1,model.rows[0].values[1]),'20/10/2026');
+ assert.equal(displayedListingValue(model,2,model.rows[0].values[2]),'202612345678');
+ const {model:fixed,count}=repairLegacyDateSerials(model);
+ assert.equal(count,2);
+ assert.equal(model.rows[0].values[1],String(serial),'original state retained for backup');
+ assert.equal(fixed.rows[0].values[1],'20/10/2026');
+ assert.equal(fixed.rows[0].values[4],'20/10/2026');
+ assert.equal(fixed.rows[0].values[3],'46000');
+ assert.equal(countLegacyDateSerials(fixed),0);
+});
+test('legacy date serials display correctly in the full-screen saved listing',()=>{
+ const serial=(Date.UTC(2026,9,20)-Date.UTC(1899,11,30))/86400000;
+ const tab=createMasterListingTab({db:{storage:{from:()=>({})}},
+  getUser:()=>({id:'demo'}),getCompanies:()=>[],openCompany:()=>{},
+  refreshCompanies:()=>{},notify:()=>{}});
+ tab.state.model=buildMasterListing([['Company Name','AR Date'],['MY COMPANY SDN BHD','20/10/2026']]);
+ tab.state.model.rows[0].values[1]=String(serial);
+ tab.state.legacyDateCount=countLegacyDateSerials(tab.state.model);
+ tab.onClick('ml-fullscreen','');
+ const html=tab.render();
+ assert.match(html,/20\/10\/2026/);
+ assert.match(html,/Save corrected dates/);
+ assert.match(html,/saved date serial/);
 });
