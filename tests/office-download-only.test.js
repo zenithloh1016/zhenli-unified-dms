@@ -6,7 +6,7 @@ const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
 const pkg=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
 
 test('Office file rows use existing download workflow only',()=>{
- assert.match(main,/const office=\/\\.\(\?:doc\|docx\|docm\|xls\|xlsx\|xlsm\)\$\/i\.test\(doc\.name\)/);
+ assert.ok(main.includes('const office=/\\.(?:doc|docx|docm|xls|xlsx|xlsm)$/i.test(doc.name)'));
  assert.match(main,/data-action="\$\{office\?'download-file':'view-file'\}"/);
  assert.match(main,/action\('Download','download-file',doc\.id\)/);
  assert.match(main,/action\('Rename','rename-file',doc\.id\)/);
