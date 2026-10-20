@@ -1,3 +1,36 @@
+## Register Book folders and bulk ZIP filing (20 October 2026)
+
+**Register Book** is standard root category **16** under Documents for every company.
+The authenticated DMS checks the company portfolio during refresh and adds only
+missing Register Book folders. New companies also receive this folder from the
+updated `create_company_with_folders` SQL function, or from the DMS client when
+the database still has the older function. Existing PDFs, folders, and company
+records are never moved, renamed, replaced or deleted.
+
+**Bulk import:** Documents → Companies → **Import Register Books ZIP**.
+Select a ZIP (up to 80 MB compressed, max 500 supported files, max 350 MB expanded)
+containing company-named PDF, XLS/XLSX or DOCX Register Books, such as:
+- `FENG YUAN AGRICULTURE (M) SDN BHD/Register Book.pdf`
+- `Register Book_SILVERSPOONS SDN BHD.pdf`
+- `202401051906_Register Book.pdf`
+
+The preview associates each archive file with an existing company by verified
+name or registration number (and may inspect page 1 of text-based PDFs when
+filenames are generic). It never silently assigns an ambiguous match or creates
+a new company. **Review the match list before confirming.** Only matched
+documents are uploaded to each company's private `Register Book` folder.
+Unmatched/unsupported files are reported and skipped; matching name and file
+size in the destination are treated as duplicates and not re-uploaded.
+
+ZIP files are read locally in the browser/WebView; only selected matched files
+are uploaded to the signed-in user's private Supabase document storage.
+Scanned PDFs with generic names may need a company-named ZIP path. The feature
+does not change Annual Return particulars, and there is **no Register Book import
+inside Annual Return**. Company registries and BO data must still be verified
+against current statutory records. If an account encounters folder permission
+issues, select **Ensure Register Book folders** in Documents and check the
+database RLS setup.
+
 # ZHENLI Unified Document Management System V1.0
 
 Please read **[START_HERE.md](START_HERE.md)** for the new combined web and Android build, Supabase setup, Task Hub V3 cloud sync migration, and Sequential Signing EdgeOne access.
