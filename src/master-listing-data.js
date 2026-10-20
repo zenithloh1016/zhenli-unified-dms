@@ -6,7 +6,7 @@ export const listingLimits={rows:LIMIT_ROWS,columns:LIMIT_COLUMNS};
 const normal=s=>String(s??'').normalize('NFKC').trim().replace(/\s+/g,' ');
 const key=s=>normal(s).toLowerCase().replace(/[^a-z0-9]/g,'');
 const nameHeader=/^(?:company(?:name|names)?|nameofcompan(?:y|ies)|companysname|clientsname|clientname|namasyarikat|namapelanggan|syarikat)$/;
-const regHeader=/(?:reg(?:istration)?|company|ssm|roc)(?:no|number)|registrationnumber/;
+const regHeader=/(?:reg(?:istration)?|company|ssm|roc).*?(?:no|number)$|registrationnumber/;
 const invalidName=/^(?:company|name|total|grand total|no|bil|remarks|summary|registration|number|client|sheet\d+)$/i;
 function clean(value){
  if(value===null||value===undefined)return '';
