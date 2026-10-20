@@ -1,3 +1,16 @@
+## Master Listing unique Company Name and centered registration dates
+
+The table uses the original imported **Company Name** data as its single
+second column immediately after **No.**. The duplicate derived Company
+column is removed; Registration No. is similarly shown only once. This
+is display-only: no saved company details, documents or folders are deleted.
+
+The **Date of Registration**, **Registration Date** and **Date Registered**
+headers are recognized as date fields, so numeric Excel serials and supported
+text dates display as **DD/MM/YYYY**. Registration numbers remain unchanged.
+Every Master Listing header and table value is center-aligned, including
+normal and full-screen views. Existing blank cells continue to show **N/A**.
+
 ## Master Listing clean table (20 October 2026)
 
 The Master Listing table and import preview show exactly one **No.**
