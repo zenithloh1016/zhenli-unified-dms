@@ -1021,6 +1021,7 @@ ROOT.addEventListener('submit',event=>{
   });
 });
 document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&state.tab==='master-listing'&&masterListingUI.exitFullscreen()){event.preventDefault();return;}
   if(event.key==='Escape'&&state.arFullscreen){event.preventDefault();setAnnualReturnFullscreen(false);}
    else if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
 });
