@@ -1,0 +1,284 @@
+/**
+ * Master Listing tab for ZHENLI DMS.
+ * Imports Excel using the existing local reader; stores all fields in private
+ * Supabase Storage under the user's own prefix. No new database table or
+ * service-role credentials are required. Company folders remain untouched
+ * until the user explicitly requests synchronization.
+ */
+import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV} from './master-listing-data.js';
+
+const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeText=value=>String(value??'').slice(0,15000);
+const act=(title,action,id='',style='secondary')=>'<button type="button" class="btn '+style+'" data-action="'+action+'" data-id="'+esc(id)+'">'+esc(title)+'</button>';
+const fileSize=bytes=>bytes<1048576?(bytes/1024).toFixed(1)+' KB':(bytes/1048576).toFixed(1)+' MB';
+const PER_PAGE=20,MAX_JSON_BYTES=20*1024*1024;
+const encode=model=>new Blob([JSON.stringify(model)],{type:'application/json'});
+const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
+const nowStamp=()=>new Date().toISOString().replace(/[^0-9]/g,'').slice(0,14);
+const isMissing=error=>/object not found|not found|404|no such key/i.test(String(error?.message||error?.statusCode||error?.error||''));
+
+export function createMasterListingTab({db,bucket='dms-private',getUser,getCompanies,openCompany,refreshCompanies,notify}){
+ const state={userId:'',loaded:false,loading:false,saving:false,
+  model:null,error:'',status:'',search:'',page:0,columnStart:0,editIndex:null,
+  source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,preview:null,
+  selectedFile:null};
+ const storage=db?.storage?.from(bucket);
+ const path=()=>getUser()?.id+'/master-listing/current.json';
+ const fail=error=>{state.error=String(error?.message||error);state.status='';notify?.('Master Listing: '+state.error);renderUI();};
+ const renderUI=()=>{if(typeof document!=='undefined'&&document.querySelector('[data-action="ml-upload"]'))notify?.('');onRender?.();};
+ let onRender=null;
+ const afterRender=cb=>{onRender=cb;};
+
+ const reset=()=>{Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,model:null,error:'',status:'',search:'',page:0,columnStart:0,editIndex:null,source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,preview:null,selectedFile:null});};
+ async function load(force=false){
+  const user=getUser?.();
+  if(!user?.id){reset();return;}
+  if(!force&&state.loaded&&state.userId===user.id)return;
+  if(state.loading)return;
+  if(state.userId!==user.id)reset();
+  state.userId=user.id;state.loading=true;state.error='';state.status='Loading your saved Master Listing…';onRender?.();
+  try{
+   const {data,error}=await storage.download(path());
+   if(error){
+    if(!isMissing(error))throw Error('Cannot read private Master Listing: '+error.message);
+    state.model=null;
+   }else{
+    let json;try{json=JSON.parse(await data.text());}
+    catch{throw Error('Saved Master Listing JSON is damaged. The stored file has not been changed.');}
+    state.model=validateMasterListing(json);
+   }
+   state.loaded=true;state.status=state.model?'Saved Master Listing loaded.':'No Master Listing has been imported yet.';
+  }catch(error){state.error=error.message||String(error);}
+  finally{state.loading=false;onRender?.();}
+ }
+ function selectedRows(){
+  const model=state.model;
+  return model?listingRowsForSearch(model,state.search):[];
+ }
+ function companyRows(){
+  const rows=selectedRows();const pages=Math.max(1,Math.ceil(rows.length/PER_PAGE));
+  state.page=clamp(state.page,0,pages-1);
+  return {rows:rows.slice(state.page*PER_PAGE,(state.page+1)*PER_PAGE),total:rows.length,pages};
+ }
+ function importPreview(){
+  const source=state.sheets[state.sheetIndex];if(!source?.rows)return null;
+  try{
+   return buildMasterListing(source.rows,{headerRow:state.headingRow,startRow:state.startRow,
+    nameColumn:state.nameColumn,registrationColumn:state.regColumn,
+    filename:state.selectedFile?.name||'Master Listing.xlsx',worksheet:source.name});
+  }catch(error){return {error:error.message||String(error)};}
+ }
+ async function readFile(file,readWorkbook){
+  if(!file||!/\.xlsx$/i.test(file.name))throw Error('Select a Master Listing .xlsx Excel workbook.');
+  if(file.size<=0||file.size>20*1024*1024)throw Error('Excel workbook must be nonempty and at most 20 MB.');
+  state.loading=true;state.error='';state.status='Reading Excel workbook locally…';state.sheets=[];state.preview=null;state.selectedFile=file;onRender?.();
+  try{
+   const parsed=await readWorkbook(file);
+   const src=parsed?.sheets||[];
+   if(!src.length)throw Error('Excel workbook has no worksheets.');
+   state.source=parsed.reader||'Excel';
+   state.sheets=src.map(x=>({name:x.sheet,rows:x.data||null,read:parsed.book?.readSheet||null}));
+   state.sheetIndex=parsed.selected||0;
+   await switchSheet(state.sheetIndex);
+   state.status='Select columns and review the import preview. Nothing has been overwritten.';
+  }catch(error){state.error=error.message||String(error);state.sheets=[];}
+  finally{state.loading=false;onRender?.();}
+ }
+ async function switchSheet(index){
+  const entry=state.sheets[index];
+  if(!entry)throw Error('Worksheet not found.');
+  if(!entry.rows)entry.rows=await entry.read(entry.name);
+  if(!entry.rows?.length)throw Error('This worksheet contains no rows.');
+  state.sheetIndex=index;
+  const detected=detectListingColumns(entry.rows);
+  state.headingRow=detected.headerRow;state.startRow=detected.startRow;
+  state.nameColumn=detected.nameColumn;state.regColumn=detected.registrationColumn;
+  state.preview=importPreview();onRender?.();
+ }
+ async function saveModel(model,{backup=false}={}){
+  validateMasterListing(model);
+  const file=encode({...model,updatedAt:new Date().toISOString()});
+  if(file.size>MAX_JSON_BYTES)throw Error('Master Listing exceeds 20 MB after extraction; split the listing.');
+  const user=getUser?.();if(!user?.id||user.id!==state.userId)throw Error('Your DMS login changed. Sign in and try again.');
+  if(backup&&state.model){
+   const backupBlob=encode(state.model);
+   const backupPath=user.id+'/master-listing/history/'+nowStamp()+'-'+crypto.randomUUID()+'.json';
+   const backed=await storage.upload(backupPath,backupBlob,{upsert:false,contentType:'application/json'});
+   if(backed.error)throw Error('Could not preserve the old listing before import: '+backed.error.message);
+  }
+  const result=await storage.upload(path(),file,{upsert:true,contentType:'application/json',cacheControl:'0'});
+  if(result.error)throw Error('Private cloud save failed: '+result.error.message+'. Your previous listing was not intentionally deleted.');
+  state.model={...model,updatedAt:new Date().toISOString()};
+  state.loaded=true;state.userId=user.id;
+ }
+ async function importSelected(){
+  const preview=importPreview();
+  if(!preview||preview.error)throw Error(preview?.error||'Select and preview a worksheet first.');
+  if(!window.confirm('Import '+preview.rows.length+' companies and '+preview.columns.length+' columns into the Master Listing tab? '+(state.model?'This replaces the prior tab data, which will be backed up privately.':'This creates a new private listing.')+' Existing Documents folders and company details will not be changed.'))return;
+  state.saving=true;state.error='';state.status='Saving all company fields privately…';onRender?.();
+  try{
+   await saveModel(preview,{backup:true});
+   state.sheets=[];state.preview=null;state.selectedFile=null;
+   state.page=0;state.search='';
+   state.status='Imported '+preview.rows.length+' companies with '+preview.columns.length+' editable columns into private DMS storage.';
+  }finally{state.saving=false;onRender?.();}
+ }
+ async function saveEdit(form){
+  const model=state.model,index=state.editIndex;
+  if(!model||index===null||!model.rows[index])throw Error('Select a company first.');
+  const updated={...model,rows:model.rows.slice()};
+  updated.rows[index]={...model.rows[index],values:model.rows[index].values.slice()};
+  for(let col=0;col<updated.columns.length;col++){
+   const field=form.elements.namedItem('ml-col-'+col);
+   if(field)changeListingCell(updated,index,col,field.value);
+  }
+  if(updated.rows[index].values.every((v,j)=>v===model.rows[index].values[j])){
+   state.editIndex=null;onRender?.();return;
+  }
+  state.saving=true;state.error='';state.status='Saving company changes to private DMS…';onRender?.();
+  try{
+   await saveModel(updated);
+   state.editIndex=null;state.status='Company information saved to DMS.';
+  }finally{state.saving=false;onRender?.();}
+ }
+ async function syncDocuments(){
+  const model=state.model;if(!model)throw Error('Import Master Listing first.');
+  const existing=getCompanies?.()||[];
+  const missing=model.rows.filter(row=>!findCompanyMatch(model,row,existing))
+    .map(row=>companyData(model,row)).filter(c=>c?.name);
+  if(!missing.length){state.status='Every imported company is already matched to a Documents company.';onRender?.();return;}
+  if(!window.confirm('Create missing Documents company records and default folders for '+missing.length+' companies? Existing company folders and documents will not be replaced.'))return;
+  state.saving=true;state.error='';state.status='Creating missing Documents company folders…';onRender?.();
+  const problems=[];let created=0;
+  try{
+   for(let i=0;i<missing.length;i+=6){
+    const group=missing.slice(i,i+6);
+    const results=await Promise.all(group.map(async c=>{
+     const {error}=await db.rpc('create_company_with_folders',{p_name:c.name,p_registration_no:c.registration});
+     return error?c.name+': '+error.message:null;
+    }));
+    for(const err of results)err?problems.push(err):created++;
+    state.status='Processed '+Math.min(i+6,missing.length)+' of '+missing.length+' company folders…';onRender?.();
+   }
+   await refreshCompanies?.();
+   state.status='Documents sync: '+created+' companies processed; '+problems.length+' failed.';
+   if(problems.length)state.error=problems.slice(0,3).join(' | ');
+  }finally{state.saving=false;onRender?.();}
+ }
+ function render(){
+  const model=state.model;
+  const {rows,total,pages}=companyRows();
+  const selected=state.sheets[state.sheetIndex],data=selected?.rows||[];
+  const preview=state.sheets.length?importPreview():null;
+  const width=Math.min(Math.max(...data.slice(0,20).map(x=>x?.length||0),1),100);
+  const selectable=Array.from({length:width},(_,j)=>'<option value="'+j+'">'+(j+1)+' — '+esc(String(data[state.headingRow-1]?.[j]||'Column '+(j+1)).slice(0,60))+'</option>');
+  const selector=(id,value,none=false)=>'<select id="'+id+'">'+(none?'<option value="-1"'+(value<0?' selected':'')+'>Not available</option>':'')+
+    selectable.map((x,j)=>x.replace('<option value="'+j+'">','<option value="'+j+'"'+(j===value?' selected':'')+'>')).join('')+'</select>';
+  const first=state.columnStart,end=model?Math.min(model.columns.length,first+6):0;
+  const cols=model?.columns.slice(first,end)||[];
+  const disabled=state.saving||state.loading;
+  return '<div class="content-header"><div><p class="eyebrow">STATUTORY COMPANY INFORMATION</p><h1>Master Listing</h1>'+
+   '<p class="muted">Import an Excel workbook, keep all company-information columns, and edit each company inside this private DMS tab.</p></div>'+
+   '<div class="header-buttons">'+(model?act('Export CSV','ml-export','','secondary'):'')+act('Import Excel','ml-upload','','primary')+'</div></div>'+
+   '<input id="ml-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>'+
+   (state.error?'<div class="alert" role="alert">'+esc(state.error)+'</div>':'')+
+   (state.status?'<div class="info-strip" role="status">'+esc(state.status)+'</div>':'')+
+   (state.sheets.length?'<section class="ml-import-panel"><h3>Review workbook before importing</h3>'+
+    '<div class="ml-import-controls"><label>Worksheet<select id="ml-sheet">'+state.sheets.map((x,i)=>'<option value="'+i+'"'+(i===state.sheetIndex?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></label>'+
+    '<label>Header row<input id="ml-header-row" type="number" min="1" max="'+data.length+'" value="'+state.headingRow+'"></label>'+
+    '<label>First company row<input id="ml-start-row" type="number" min="2" max="'+data.length+'" value="'+state.startRow+'"></label>'+
+    '<label>Company name column'+selector('ml-name-col',state.nameColumn)+'</label>'+
+    '<label>Registration no. column'+selector('ml-reg-col',state.regColumn,true)+'</label></div>'+
+    '<p class="muted">Preview: '+(preview?.error?'<strong>'+esc(preview.error)+'</strong>':
+     '<strong>'+preview.rows.length+' company rows × '+preview.columns.length+' columns</strong> ('+preview.skipped.blank+' blank, '+preview.skipped.duplicate+' duplicates skipped)')+'</p>'+
+    '<div class="ml-table-scroll"><table class="ml-table"><tbody>'+data.slice(0,7).map((r,i)=>'<tr><th>'+(i+1)+'</th>'+Array.from({length:Math.min(10,width)},(_,j)=>'<td>'+esc(safeText(r?.[j]).slice(0,90))+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'+
+    '<div class="ml-actions">'+act('Cancel import','ml-cancel','','secondary')+
+    (!preview?.error?act('Import '+preview.rows.length+' companies','ml-confirm','','primary'):'')+'</div></section>':'')+
+   (model?'<div class="ml-dashboard"><strong>'+model.rows.length+' companies</strong><span>'+model.columns.length+' editable fields</span>'+
+    '<span>Source: '+esc(model.filename)+' / '+esc(model.worksheet)+'</span></div>'+
+    '<div class="ml-toolbar"><label>Search company or any field <input id="ml-search" type="search" value="'+esc(state.search)+'" placeholder="Search company name, number or details"></label>'+
+    act('Search','ml-search-do','','secondary')+act('Clear','ml-search-clear','','secondary')+
+    act('Sync missing company folders','ml-sync','','secondary')+'</div>'+
+    '<div class="ml-columns-nav">'+act('← Columns','ml-prev-cols','','secondary')+
+    '<span>Columns '+(first+1)+'–'+end+' of '+model.columns.length+'</span>'+
+    act('Columns →','ml-next-cols','','secondary')+'</div>'+
+    '<div class="ml-table-scroll"><table class="ml-table"><thead><tr><th>#</th><th>Company</th><th>Registration No.</th>'+
+    cols.map(c=>'<th title="'+esc(c.label)+'">'+esc(c.label)+'</th>').join('')+'<th>Actions</th></tr></thead><tbody>'+
+    rows.map(({row,index})=>{
+     const c=companyData(model,row),match=findCompanyMatch(model,row,getCompanies?.()||[]);
+     return '<tr><td>'+(index+1)+'</td><td><strong>'+esc(c.name)+'</strong></td><td>'+esc(c.registration)+'</td>'+
+      row.values.slice(first,end).map(v=>'<td title="'+esc(v.slice(0,350))+'">'+esc(v.slice(0,100))+'</td>').join('')+
+      '<td><div class="ml-row-actions">'+act('Edit','ml-edit',index,'primary')+
+      (match?act('Documents','ml-documents',match.id,'secondary'):'<small>Not in Documents</small>')+'</div></td></tr>';
+    }).join('')+'</tbody></table>'+(rows.length?'':'<div class="empty-line">No companies match your search.</div>')+'</div>'+
+    '<div class="ml-pages">'+act('← Previous','ml-prev-page','','secondary')+
+    '<span>Page '+(state.page+1)+' / '+pages+' · '+total+' matching companies</span>'+
+    act('Next →','ml-next-page','','secondary')+'</div>'+
+    '<p class="fineprint">Changes are saved to private DMS cloud storage using your signed-in account. Editing Master Listing fields does not automatically alter the Companies register or existing statutory documents.</p>'
+   :(!state.loading&&!state.sheets.length?'<div class="empty-state"><div>📊</div><h3>No Master Listing imported yet</h3>'+
+    '<p>Use Import Excel to load your company data, including deadlines, directors, filing details, fees and other worksheet columns.</p>'+
+    act('Import Master Listing Excel','ml-upload','','primary')+'</div>':''))+
+   (state.editIndex!==null&&model?.rows[state.editIndex]?renderEditor(): '');
+ }
+ function renderEditor(){
+  const model=state.model,index=state.editIndex,row=model.rows[index],company=companyData(model,row);
+  return '<div class="modal-backdrop"><section class="modal ml-editor-modal" role="dialog" aria-modal="true" aria-label="Edit Master Listing company">'+
+   '<div class="modal-heading"><h3>Edit '+esc(company.name)+'</h3>'+act('✕','ml-close-edit')+'</div>'+
+   '<p class="muted">Edit any imported column. Save updates your private Master Listing without changing uploaded statutory documents.</p>'+
+   '<form id="ml-edit-form"><div class="ml-edit-fields">'+model.columns.map((col,i)=>{
+    const value=row.values[i];return '<label><span>'+esc(col.label)+' <small>('+String(i+1)+')</small></span>'+
+     '<textarea name="ml-col-'+i+'" rows="'+clamp(Math.ceil(value.length/100),2,6)+'" maxlength="15000">'+esc(value)+'</textarea></label>';
+   }).join('')+'</div><div class="ml-actions">'+act('Cancel','ml-close-edit')+
+   '<button class="btn primary" type="submit"'+(state.saving?' disabled':'')+'>Save company information</button></div></form></section></div>';
+ }
+ function onClick(action,id,readWorkbook){
+  if(!action?.startsWith('ml-'))return false;
+  const asyncRun=fn=>{if(state.loading||state.saving)return;Promise.resolve().then(fn).catch(fail);};
+  if(action==='ml-upload'){document.getElementById('ml-file')?.click();return true;}
+  if(action==='ml-cancel'){state.sheets=[];state.preview=null;state.selectedFile=null;state.error='';onRender?.();return true;}
+  if(action==='ml-confirm'){asyncRun(importSelected);return true;}
+  if(action==='ml-edit'){state.editIndex=Number(id);onRender?.();return true;}
+  if(action==='ml-close-edit'){state.editIndex=null;onRender?.();return true;}
+  if(action==='ml-export'){
+   if(!state.model)return true;
+   const csv=listingCSV(state.model),blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+   const url=URL.createObjectURL(blob),link=document.createElement('a');
+   link.href=url;link.download='ZHENLI_Master_Listing.csv';link.hidden=true;
+   document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+   return true;
+  }
+  if(action==='ml-prev-page'){state.page=Math.max(0,state.page-1);onRender?.();return true;}
+  if(action==='ml-next-page'){state.page++;onRender?.();return true;}
+  if(action==='ml-prev-cols'){state.columnStart=Math.max(0,state.columnStart-6);onRender?.();return true;}
+  if(action==='ml-next-cols'){state.columnStart=clamp(state.columnStart+6,0,Math.max(0,(state.model?.columns.length||0)-1));onRender?.();return true;}
+  if(action==='ml-search-do'){state.search=document.getElementById('ml-search')?.value||'';state.page=0;onRender?.();return true;}
+  if(action==='ml-search-clear'){state.search='';state.page=0;onRender?.();return true;}
+  if(action==='ml-sync'){asyncRun(syncDocuments);return true;}
+  if(action==='ml-documents'){openCompany?.(id);return true;}
+  return false;
+ }
+ function onChange(target,readWorkbook){
+  if(target?.id==='ml-file'){
+   const file=target.files?.[0];target.value='';
+   if(file)readFile(file,readWorkbook).catch(fail);return true;
+  }
+  if(!target?.id?.startsWith('ml-'))return false;
+  if(target.id==='ml-sheet'){
+   state.loading=true;state.status='Reading the selected worksheet…';onRender?.();
+   Promise.resolve().then(()=>switchSheet(Number(target.value))).catch(fail).finally(()=>{state.loading=false;onRender?.();});
+   return true;
+  }
+  if(target.id==='ml-header-row'){state.headingRow=Number(target.value)||1;state.startRow=Math.max(state.startRow,state.headingRow+1);}
+  else if(target.id==='ml-start-row')state.startRow=Number(target.value)||2;
+  else if(target.id==='ml-name-col')state.nameColumn=Number(target.value);
+  else if(target.id==='ml-reg-col')state.regColumn=Number(target.value);
+  else return false;
+  state.preview=importPreview();onRender?.();return true;
+ }
+ function onSubmit(form){
+  if(form?.id!=='ml-edit-form')return false;
+  Promise.resolve().then(()=>saveEdit(form)).catch(fail);
+  return true;
+ }
+ return {render,load,reset,onClick,onChange,onSubmit,afterRender,get model(){return state.model;},get state(){return state;}};
+}
