@@ -13,8 +13,7 @@ import {WORKING_RESOLUTION_FOLDER_NAME,WORKING_RESOLUTION_FOLDER_SORT_ORDER,miss
 import {CHARGES_FOLDER_NAME,CHARGES_FOLDER_SORT_ORDER,missingChargesFolders} from './charges-folders.js';
 import {REGISTER_BOOK_FOLDER_NAME,REGISTER_BOOK_FOLDER_SORT_ORDER,STANDARD_FOLDER_COUNT,missingRegisterBookFolders} from './register-book-folders.js';
 import {previewRegisterZip} from './register-book-zip.js';
-import {openOfficeDocument,officeCellValue,officeEditCell,officeEditParagraph,exportOfficeDocument,makePreviousVersionName} from './office-editor.js';
-import {renderOfficeEditor} from './office-editor-ui.js';
+import {officeType,officeViewUri,openOfficeOnAndroid} from './office-launch.js';
 import './style.css';
 import {installHubBridge} from './integrated-modules.js';
 
@@ -54,7 +53,7 @@ const state = {
   importSheet: 0, importNameCol: 0, importRegCol: -1, importStartRow: 2,
   importProgress: null, importFileName: '', importError: '',
   registerZipPreview: null, registerZipStatus: '', registerZipFilename: '',
-  officeEditor: null, officeDocumentId: null, officeRowStart: 1, officeColStart: 0, officeWordPage: 0, officeStatus: ''
+  officeLaunch: null
 };
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, m => ({
@@ -336,85 +335,36 @@ function folderTrail() {
 }
 
 
-function renderOfficeModal(){
- return renderOfficeEditor(state,getDocument(state.officeDocumentId),{esc,action});
+function renderOfficeLaunchModal(){
+ const office=state.officeLaunch;
+ if(!office)return '';
+ return '<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="Open Microsoft Office">'+
+  '<div class="modal-heading"><h3>Open in Microsoft '+esc(office.kind)+'</h3>'+action('✕','close-modal')+'</div>'+
+  '<p><strong>'+esc(office.filename)+'</strong></p>'+
+  '<p class="muted">Choose Open in '+esc(office.kind)+' to hand this private file to the installed Microsoft Office application. Your browser may ask permission to launch it.</p>'+
+  '<p class="muted">The file opens for viewing. Changes made in Office are not automatically saved back to the DMS company folder; upload a revised document separately if needed.</p>'+
+  '<div class="modal-actions">'+action('Cancel','close-modal','','secondary')+
+  action('Open in '+esc(office.kind),'launch-office-app','','primary')+'</div>'+
+  '<p class="fineprint">Requires installed Microsoft '+esc(office.kind)+'. If it does not open, use the separate Download option. The temporary access link expires automatically.</p>'+
+  '</section></div>';
 }
-function resetOfficeEditor(){
- state.officeEditor=null;state.officeDocumentId=null;state.officeRowStart=1;
- state.officeColStart=0;state.officeWordPage=0;state.officeStatus='';
-}
-async function startOfficeEditing(id){
- const d=getDocument(id);
- if(!d)throw Error('The selected document is no longer in this folder.');
- if(!/\.(xlsx|docx)$/i.test(d.name))throw Error('Edit supports modern .xlsx and .docx files. Convert legacy .xls/.doc files before editing.');
- if(d.size_bytes>24*1024*1024)throw Error('Office file exceeds the 24 MB in-app editing limit. Download and edit it in Microsoft Office.');
- const {data,error}=await db.storage.from(BUCKET).download(d.storage_path);
- check(error);
- const editor=await openOfficeDocument(data,d.name);
- resetOfficeEditor();
- state.officeEditor=editor;state.officeDocumentId=d.id;state.officeStatus='Opened securely from '+d.name+'. Make changes and save in this folder.';
- state.modal={kind:'office'};
- render();
-}
-function officeEdited(){
- const count=state.officeEditor?.editedCount||0;
- const el=ROOT.querySelector('#office-edit-count');
- if(el)el.textContent=count+' unsaved change(s)';
- const status=ROOT.querySelector('#office-status');
- if(status)status.textContent='Edits in memory: '+count+'. Save to store in this company folder.';
-}
-async function saveOfficeDocument(mode){
- const current=state.officeEditor,original=getDocument(state.officeDocumentId);
- if(!current||!original)throw Error('Open a company document first.');
- if(!current.dirty){state.officeStatus='There are no unsaved edits.';render();return;}
- if(mode==='replace'&&!window.confirm('Save changes to '+original.name+'? The original version will be retained as a separately named previous version in the same folder.'))return;
- const blob=exportOfficeDocument(current);
- const path=state.user.id+'/'+original.company_id+'/'+crypto.randomUUID();
- const stamp=new Date();
- const previousName=makePreviousVersionName(original.name,stamp);
- const editedName=original.name.replace(/(\.[^.]+)$/, ' (edited '+stamp.toISOString().slice(0,19).replace(/[:T]/g,'-')+')$1');
- const {error:storageError}=await db.storage.from(BUCKET).upload(path,blob,{upsert:false,contentType:blob.type});check(storageError);
- let committed=false;
- try{
-  if(mode==='copy'){
-   const {error}=await db.from('documents').insert({
-    user_id:state.user.id,company_id:original.company_id,folder_id:original.folder_id,
-    name:editedName,storage_path:path,size_bytes:blob.size,mime_type:blob.type
-   });
-   check(error);committed=true;
-  }else{
-   const {data,error}=await db.from('documents').update({
-    storage_path:path,size_bytes:blob.size,mime_type:blob.type
-   }).eq('id',original.id).eq('user_id',state.user.id).eq('storage_path',original.storage_path).select('id');
-   check(error);
-   if(data?.length!==1)throw Error('This document was changed in another session. No files have been replaced. Refresh the folder and reopen it.');
-   committed=true;
-   const {error:backupError}=await db.from('documents').insert({
-    user_id:state.user.id,company_id:original.company_id,folder_id:original.folder_id,
-    name:previousName,storage_path:original.storage_path,size_bytes:original.size_bytes,
-    mime_type:original.mime_type
-   });
-   if(backupError){
-    // Attempt a safe rollback: never delete the old or newly edited Office object.
-    const {error:rollbackError}=await db.from('documents').update({
-     storage_path:original.storage_path,size_bytes:original.size_bytes,mime_type:original.mime_type
-    }).eq('id',original.id).eq('storage_path',path);
-    if(!rollbackError){
-     committed=false;
-     throw Error('Cannot save the previous-version record: '+backupError.message+'. The original entry has been restored.');
-    }
-    throw Error('Edited document was saved, but automatic backup filing failed. Both original and edited file content remain in storage. Please contact the administrator: '+backupError.message);
-   }
-  }
- }catch(e){
-  if(!committed){await db.storage.from(BUCKET).remove([path]).catch(()=>{});}
-  throw e;
+async function openInOfficeApplication(id){
+ const d=getDocument(id);if(!d)throw Error('The selected file no longer exists.');
+ const kind=officeType(d.name);
+ if(!kind)throw Error('Only Word and Excel files can open in Microsoft Office.');
+ if(Capacitor.isNativePlatform()){
+  if(d.size_bytes>25*1024*1024)throw Error('This file exceeds the 25 MB Office opener limit; choose Download instead.');
+  const {data,error}=await db.storage.from(BUCKET).download(d.storage_path);check(error);
+  const result=await openOfficeOnAndroid(data,d.name);
+  if(result.method==='cancelled')toast('Office app selection cancelled; the DMS document is unchanged.');
+  else toast('Opening with '+kind.kind+' or your chosen Office-compatible app. The DMS file remains unchanged.');
+  return;
  }
- resetOfficeEditor();state.modal=null;await reloadContent();
- toast(mode==='copy'?'Saved an edited copy beside the original in this company folder.':
-  'Changes saved. Previous version retained in the same company folder as '+previousName+'.');
+ const {data,error}=await db.storage.from(BUCKET).createSignedUrl(d.storage_path,600);
+ check(error);
+ state.officeLaunch={filename:d.name,kind:kind.kind,uri:officeViewUri(d.name,data.signedUrl)};
+ state.modal={kind:'officeLaunch'};render();
 }
-
 function renderRegisterZipModal(){
  const p=state.registerZipPreview;
  const files=p?.rows||[];
@@ -513,7 +463,7 @@ function modalHTML() {
   if (!m) return '';
   if (m.kind === 'import') return renderImportModal();
    if (m.kind === 'registerZip') return renderRegisterZipModal();
-   if (m.kind === 'office') return renderOfficeModal();
+   if (m.kind === 'officeLaunch') return renderOfficeLaunchModal();
   const title = m.kind === 'company' ? 'Add company' : m.kind === 'folder' ? 'Create subfolder' : m.kind === 'rename' ? 'Rename' : 'Confirm permanent deletion';
   let body = '';
   if (['company','folder','rename'].includes(m.kind)) {
@@ -550,8 +500,8 @@ function folderCard(folder) {
   return `<div class="item-row"><button class="item-main" type="button" data-action="open-folder" data-id="${folder.id}"><span class="item-icon folder-icon">📁</span><span class="item-details"><strong>${esc(folder.name)}</strong><small>${nFolders} folders • ${nFiles} documents</small></span><span class="item-chevron">›</span></button><div class="item-tools">${action('Rename','rename-folder',folder.id)}${action('Delete','delete-folder',folder.id)}</div></div>`;
 }
 function documentCard(doc) {
-  const office=/\.(xlsx|docx)$/i.test(doc.name);
-  return `<div class="item-row"><button class="item-main" type="button" data-action="${office?'edit-office':'view-file'}" data-id="${doc.id}"><span class="item-icon file-icon">${/\.pdf$/i.test(doc.name)?'📕':'📄'}</span><span class="item-details"><strong>${esc(doc.name)}</strong><small>${fileSize(doc.size_bytes || 0)} • ${new Date(doc.created_at).toLocaleDateString()}</small></span><span class="item-chevron">↗</span></button><div class="item-tools">${office?action('Open / Edit','edit-office',doc.id,'secondary'):''}${action('Download','download-file',doc.id)}${action('Rename','rename-file',doc.id)}${action('Delete','delete-file',doc.id)}</div></div>`;
+  const office=officeType(doc.name);
+  return `<div class="item-row"><button class="item-main" type="button" data-action="${office?'open-office':'view-file'}" data-id="${doc.id}"><span class="item-icon file-icon">${/\.pdf$/i.test(doc.name)?'📕':'📄'}</span><span class="item-details"><strong>${esc(doc.name)}</strong><small>${fileSize(doc.size_bytes || 0)} • ${new Date(doc.created_at).toLocaleDateString()}</small></span><span class="item-chevron">↗</span></button><div class="item-tools">${office?action('Open in '+office.kind,'open-office',doc.id,'secondary'):''}${action('Download','download-file',doc.id)}${action('Rename','rename-file',doc.id)}${action('Delete','delete-file',doc.id)}</div></div>`;
 }
 function renderFolder() {
   const company=currentCompany(); if (!company) return renderCompanies();
@@ -915,12 +865,7 @@ ROOT.addEventListener('click', event=>{
   if(signingUI.onClick(a,id,event))return;
   if(a==='modal-bg' && event.target===button){state.modal=null;render();return;}
   if(a==='dismiss'){state.notice='';render();return;}
-  if(a==='close-modal' && !state.busy){state.modal=null;state.importData=null;state.importWorkbook=null;resetRegisterZip();render();return;}
-  if(a==='close-office'){
-   if(state.busy)return;
-   if(state.officeEditor?.dirty&&!window.confirm('Close the Office editor without saving your changes?'))return;
-   resetOfficeEditor();state.modal=null;render();return;
-  }
+  if(a==='close-modal' && !state.busy){state.modal=null;state.officeLaunch=null;state.importData=null;state.importWorkbook=null;resetRegisterZip();render();return;}
   if(state.busy) return;
   if(a.startsWith('tab-')){
     const nextTab=a.slice(4);
@@ -1026,35 +971,12 @@ ROOT.addEventListener('click', event=>{
   if(a==='rename-file'){const f=getDocument(id);if(f){state.modal={kind:'rename',target:'file',id,name:f.name};render();}return;}
   if(a.startsWith('delete-')){const target=a.slice(7), record=target==='company'?state.companies.find(x=>x.id===id):target==='folder'?getFolder(id):getDocument(id);if(record){state.modal={kind:'delete',target,id,name:record.name};render();}return;}
   if(a==='upload-trigger'){document.getElementById('document-upload').click();return;}
-  if(a==='edit-office'){busyDo(()=>startOfficeEditing(id));return;}
-  if(a==='save-office-copy'||a==='save-office-replace'){
-    busyDo(()=>saveOfficeDocument(a==='save-office-copy'?'copy':'replace'));return;
-  }
-  if(a==='office-prev-rows'||a==='office-next-rows'){
-    state.officeRowStart=Math.max(1,Math.min(1048537,(state.officeRowStart||1)+(a==='office-next-rows'?40:-40)));
-    render();return;
-  }
-  if(a==='office-prev-cols'||a==='office-next-cols'){
-    state.officeColStart=Math.max(0,Math.min(16372,(state.officeColStart||0)+(a==='office-next-cols'?12:-12)));
-    render();return;
-  }
-  if(a==='office-go-row-action'){
-    const raw=Number(ROOT.querySelector('#office-go-row')?.value);
-    if(!Number.isSafeInteger(raw)||raw<1||raw>1048537){toast('Enter a worksheet row between 1 and 1048537.');return;}
-    state.officeRowStart=raw;render();return;
-  }
-  if(a==='office-go-col-action'){
-    const label=String(ROOT.querySelector('#office-go-col')?.value||'').trim().toUpperCase();
-    if(!/^[A-Z]{1,3}$/.test(label)){toast('Enter a column such as A, M or AB.');return;}
-    const n=label.split('').reduce((sum,ch)=>sum*26+ch.charCodeAt(0)-64,0)-1;
-    if(n<0||n>16372){toast('The largest starting column is XEM.');return;}
-    state.officeColStart=n;render();return;
-  }
-  if(a==='office-prev-word'||a==='office-next-word'){
-    const count=state.officeEditor?.word?.paragraphs.length||0;
-    const last=Math.max(0,Math.ceil(count/30)-1);
-    state.officeWordPage=Math.max(0,Math.min(last,state.officeWordPage+(a==='office-next-word'?1:-1)));
-    render();return;
+  if(a==='open-office'){busyDo(()=>openInOfficeApplication(id));return;}
+  if(a==='launch-office-app'){
+    if(!state.officeLaunch)return;
+    // Launch from the actual user click so the browser can hand the link to Office.
+    window.location.href=state.officeLaunch.uri;
+    return;
   }
   if(a==='view-file'||a==='download-file'){
     const blankTab = !Capacitor.isNativePlatform() ? window.open('about:blank','_blank') : null;
@@ -1129,22 +1051,8 @@ document.addEventListener('keydown',event=>{
    else if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
 });
 ROOT.addEventListener('input',e=>{
-  if(e.target.dataset.officeCellRow!==undefined&&state.officeEditor?.type==='xlsx'){
-    try{officeEditCell(state.officeEditor,Number(e.target.dataset.officeCellRow),Number(e.target.dataset.officeCellCol),e.target.value);officeEdited();}
-    catch(err){const el=ROOT.querySelector('#office-status');if(el)el.textContent=err.message;}
-    return;
-  }
-  if(e.target.dataset.officeParagraph!==undefined&&state.officeEditor?.type==='docx'){
-    try{officeEditParagraph(state.officeEditor,Number(e.target.dataset.officeParagraph),e.target.value);officeEdited();}
-    catch(err){const el=ROOT.querySelector('#office-status');if(el)el.textContent=err.message;}
-    return;
-  }
  signingUI.input(e.target);if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
 ROOT.addEventListener('change',e=>{
-  if(e.target.id==='office-sheet-choice'&&state.officeEditor?.type==='xlsx'){
-    state.officeEditor.activeSheet=Number(e.target.value)||0;
-    state.officeRowStart=1;state.officeColStart=0;render();return;
-  }
   if(signingUI.changed(e.target))return;
   if(e.target.id==='document-upload'){const files=[...e.target.files];e.target.value='';if(files.length)busyDo(()=>uploadFiles(files));}
   if(e.target.id==='register-zip-input'){
