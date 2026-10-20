@@ -1,24 +1,26 @@
-## Open documents in Microsoft Word and Excel (20 October 2026)
+## In-website Excel and Word editing with DMS autosave (20 October 2026)
 
-Within Documents → company → folder, click an uploaded Word or Excel filename,
-or choose **Open in Word / Open in Excel**. This replaces the embedded editor;
-the DMS no longer tries to rebuild or alter the original Office file.
+In **Documents → Company → Folder**, click an `.xlsx` or `.docx` file, or
+select **Edit in DMS**. Edit Excel cells or Word body/table paragraphs in
+the private in-browser editor. The app saves edits automatically after a short
+pause in typing and on field exit. **Save now** forces an immediate save.
+**Close editor** waits for pending saves; errors leave the editor open.
 
-**Website on Windows:** the DMS creates a temporary private signed link and
-offers **Open in Word / Excel** using Microsoft Office's documented
-ms-word:ofv|u| / ms-excel:ofv|u| URL schemes. Allow the browser's app-open
-prompt. Requires desktop Office installed and URL-scheme support enabled.
+On the **first successful save**, DMS keeps the earlier uploaded file as an
+independent **(previous YYYYMMDD-HHMMSS)** document in the SAME company folder.
+Subsequent autosaves update the same current document. An optimistic storage
+path check prevents overwriting an update made from another session.
+All data is saved to the signed-in user's existing private Supabase storage.
 
-**Android APK:** the app puts a temporary Office-compatible copy in its private
-cache and asks Android to open it in the installed Word or Excel app, or another
-Office-compatible application via the system chooser (max 25 MB). A share
-chooser fallback is available if no file-viewing handler responds. This is
-not a normal download into the user's Downloads folder.
-
-Supports .doc/.docx/.docm and .xls/.xlsx/.xlsm. The DMS originals remain
-unchanged. Changes made in external Office apps do not automatically upload
-back to DMS; upload a revised file to the company folder separately.
-A distinct **Download** action remains available as a fallback.
+The in-website editor is a basic editor, **not full Microsoft Office**.
+Excel cell values and formulas are supported, and untouched workbook sections
+are preserved. Word text edits can alter per-run formatting within the edited
+paragraph, so verify all company resolutions, letterheads, tables and other
+statutory documents in Office before release. It supports `.xlsx` and `.docx`
+files up to 24 MB. For older `.doc`/`.xls` or complex Office features,
+**Open in Word / Excel** remains available alongside the **Download** option.
+Opening in an external Office app does not sync its edits automatically;
+the **Edit in DMS** route is required for DMS autosaving.
 
 ## Register Book folders and bulk ZIP filing (20 October 2026)
 
