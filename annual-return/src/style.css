@@ -90,11 +90,3 @@ html.ar-immersive .footer{display:none}
  html.ar-immersive .shell{padding:8px 7px 18px}
  html.ar-immersive .panel{padding:12px 10px}
 }
-
-/* Register Book source stays on-device; extracted field summary is displayed before import. */
-.register-panel{border:1px solid #d2e4eb}
-.register-panel input[type=file]{display:block;width:100%;max-width:600px;margin:10px 0 14px;padding:12px;border:1px solid #b6cbd9;border-radius:10px;background:#fff;color:#193147}
-.register-preview{padding:16px 18px;margin:12px 0 15px;background:#f1f8fb;border:1px solid #cce0e9;border-radius:12px;color:#183d57;line-height:1.65;overflow-wrap:anywhere}
-.register-preview strong{display:block;margin-bottom:8px}
-.register-preview p{margin-bottom:9px}
-.register-preview .status{font-size:12px;color:#566f81}
