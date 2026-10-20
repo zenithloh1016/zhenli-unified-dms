@@ -14,6 +14,9 @@ import {CHARGES_FOLDER_NAME,CHARGES_FOLDER_SORT_ORDER,missingChargesFolders} fro
 import {REGISTER_BOOK_FOLDER_NAME,REGISTER_BOOK_FOLDER_SORT_ORDER,STANDARD_FOLDER_COUNT,missingRegisterBookFolders} from './register-book-folders.js';
 import {previewRegisterZip} from './register-book-zip.js';
 import {officeType,officeViewUri,openOfficeOnAndroid,makeOfficeFile,supportsOfficeFileShare} from './office-launch.js';
+import {openOfficeDocument,officeEditCell,officeEditParagraph,exportOfficeDocument} from './office-editor.js';
+import {renderOfficeEditor} from './office-editor-ui.js';
+import {createOfficeAutoSaver} from './office-autosave.js';
 import './style.css';
 import {installHubBridge} from './integrated-modules.js';
 
@@ -53,7 +56,8 @@ const state = {
   importSheet: 0, importNameCol: 0, importRegCol: -1, importStartRow: 2,
   importProgress: null, importFileName: '', importError: '',
   registerZipPreview: null, registerZipStatus: '', registerZipFilename: '',
-  officeLaunch: null
+  officeLaunch: null, officeEditor: null, officeDocumentId: null,
+  officeRowStart: 1, officeColStart: 0, officeWordPage: 0, officeStatus: ''
 };
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, m => ({
@@ -335,6 +339,61 @@ function folderTrail() {
 }
 
 
+let officeSaver=null;
+function officeStatus(value){
+ state.officeStatus=value;
+ const el=ROOT.querySelector('#office-status');
+ if(el)el.textContent=value;
+ const count=ROOT.querySelector('#office-edit-count');
+ if(count)count.textContent=officeSaver?.pending?'Changes pending autosave':'Saved to DMS';
+}
+function renderOfficeModal(){
+ return renderOfficeEditor(state,getDocument(state.officeDocumentId),{esc,action});
+}
+function clearOfficeSession(){
+ officeSaver?.close();officeSaver=null;
+ state.officeEditor=null;state.officeDocumentId=null;
+ state.officeRowStart=1;state.officeColStart=0;state.officeWordPage=0;state.officeStatus='';
+}
+async function beginOfficeEditing(id){
+ if(officeSaver?.pending)throw Error('Finish saving the previous document before opening another.');
+ const d=getDocument(id);
+ if(!d)throw Error('Document no longer exists in the company folder.');
+ if(!/\.(xlsx|docx)$/i.test(d.name))throw Error('In-website editing supports .xlsx and .docx only. Open legacy .xls or .doc in Office, then convert it.');
+ if((d.size_bytes||0)>24*1024*1024)throw Error('This Office file exceeds the 24 MB browser editing limit. Use Microsoft Office for large documents.');
+ const {data,error}=await db.storage.from(BUCKET).download(d.storage_path);check(error);
+ const model=await openOfficeDocument(data,d.name);
+ clearOfficeSession();
+ state.officeEditor=model;state.officeDocumentId=d.id;
+ state.officeStatus='Ready — changes are autosaved to DMS after you stop typing.';
+ officeSaver=createOfficeAutoSaver({
+  db,bucket:BUCKET,userId:state.user.id,document:{...d},
+  makeBlob:()=>exportOfficeDocument(model,{allowUnchanged:true}),
+  onStatus:officeStatus,
+  onSaved:info=>{
+   const record=getDocument(id);
+   if(record){record.storage_path=info.storage_path;record.size_bytes=info.size_bytes;record.mime_type=info.mime_type;}
+  }
+ });
+ state.modal={kind:'office'};render();
+}
+function markOfficeChanged(){
+ if(!officeSaver)return;
+ officeSaver.schedule();
+ officeStatus('Unsaved changes — automatic save in progress shortly…');
+}
+async function closeOfficeEditor(){
+ if(!officeSaver){clearOfficeSession();state.modal=null;render();return;}
+ try{
+  await officeSaver.flush();
+ }catch(err){
+  toast('Unable to close while changes remain unsaved: '+(err?.message||String(err)));
+  return;
+ }
+ clearOfficeSession();state.modal=null;
+ await reloadContent();render();
+ toast('All Office changes saved to this company folder.');
+}
 function renderOfficeLaunchModal(){
  const office=state.officeLaunch;
  if(!office)return '';
@@ -478,6 +537,7 @@ function modalHTML() {
   if (m.kind === 'import') return renderImportModal();
    if (m.kind === 'registerZip') return renderRegisterZipModal();
    if (m.kind === 'officeLaunch') return renderOfficeLaunchModal();
+    if (m.kind === 'office') return renderOfficeModal();
   const title = m.kind === 'company' ? 'Add company' : m.kind === 'folder' ? 'Create subfolder' : m.kind === 'rename' ? 'Rename' : 'Confirm permanent deletion';
   let body = '';
   if (['company','folder','rename'].includes(m.kind)) {
@@ -514,8 +574,8 @@ function folderCard(folder) {
   return `<div class="item-row"><button class="item-main" type="button" data-action="open-folder" data-id="${folder.id}"><span class="item-icon folder-icon">📁</span><span class="item-details"><strong>${esc(folder.name)}</strong><small>${nFolders} folders • ${nFiles} documents</small></span><span class="item-chevron">›</span></button><div class="item-tools">${action('Rename','rename-folder',folder.id)}${action('Delete','delete-folder',folder.id)}</div></div>`;
 }
 function documentCard(doc) {
-  const office=officeType(doc.name);
-  return `<div class="item-row"><button class="item-main" type="button" data-action="${office?'open-office':'view-file'}" data-id="${doc.id}"><span class="item-icon file-icon">${/\.pdf$/i.test(doc.name)?'📕':'📄'}</span><span class="item-details"><strong>${esc(doc.name)}</strong><small>${fileSize(doc.size_bytes || 0)} • ${new Date(doc.created_at).toLocaleDateString()}</small></span><span class="item-chevron">↗</span></button><div class="item-tools">${office?action('Open in '+office.kind,'open-office',doc.id,'secondary'):''}${action('Download','download-file',doc.id)}${action('Rename','rename-file',doc.id)}${action('Delete','delete-file',doc.id)}</div></div>`;
+  const office=officeType(doc.name),inWebsite=/\.(xlsx|docx)$/i.test(doc.name);
+  return `<div class="item-row"><button class="item-main" type="button" data-action="${inWebsite?'edit-office':office?'open-office':'view-file'}" data-id="${doc.id}"><span class="item-icon file-icon">${/\.pdf$/i.test(doc.name)?'📕':'📄'}</span><span class="item-details"><strong>${esc(doc.name)}</strong><small>${fileSize(doc.size_bytes || 0)} • ${new Date(doc.created_at).toLocaleDateString()}</small></span><span class="item-chevron">↗</span></button><div class="item-tools">${inWebsite?action('Edit in DMS','edit-office',doc.id,'primary'):''}${office?action('Open in '+office.kind,'open-office',doc.id,'secondary'):''}${action('Download','download-file',doc.id)}${action('Rename','rename-file',doc.id)}${action('Delete','delete-file',doc.id)}</div></div>`;
 }
 function renderFolder() {
   const company=currentCompany(); if (!company) return renderCompanies();
@@ -879,6 +939,7 @@ ROOT.addEventListener('click', event=>{
   if(signingUI.onClick(a,id,event))return;
   if(a==='modal-bg' && event.target===button){state.modal=null;render();return;}
   if(a==='dismiss'){state.notice='';render();return;}
+  if(state.modal?.kind==='office' && !['close-office','save-office-now','office-prev-rows','office-next-rows','office-prev-cols','office-next-cols','office-go-row-action','office-go-col-action','office-prev-word','office-next-word'].includes(a))return;
   if(a==='close-modal' && !state.busy){state.modal=null;state.officeLaunch=null;state.importData=null;state.importWorkbook=null;resetRegisterZip();render();return;}
   if(state.busy) return;
   if(a.startsWith('tab-')){
@@ -985,6 +1046,40 @@ ROOT.addEventListener('click', event=>{
   if(a==='rename-file'){const f=getDocument(id);if(f){state.modal={kind:'rename',target:'file',id,name:f.name};render();}return;}
   if(a.startsWith('delete-')){const target=a.slice(7), record=target==='company'?state.companies.find(x=>x.id===id):target==='folder'?getFolder(id):getDocument(id);if(record){state.modal={kind:'delete',target,id,name:record.name};render();}return;}
   if(a==='upload-trigger'){document.getElementById('document-upload').click();return;}
+  if(a==='edit-office'){busyDo(()=>beginOfficeEditing(id));return;}
+  if(a==='close-office'){
+    if(state.busy)return;
+    busyDo(closeOfficeEditor);return;
+  }
+  if(a==='save-office-now'){
+    if(!officeSaver)return;
+    busyDo(()=>officeSaver.flush());return;
+  }
+  if(a==='office-prev-rows'||a==='office-next-rows'){
+    state.officeRowStart=Math.max(1,Math.min(1048537,(state.officeRowStart||1)+(a==='office-next-rows'?40:-40)));
+    render();return;
+  }
+  if(a==='office-prev-cols'||a==='office-next-cols'){
+    state.officeColStart=Math.max(0,Math.min(16372,(state.officeColStart||0)+(a==='office-next-cols'?12:-12)));
+    render();return;
+  }
+  if(a==='office-go-row-action'){
+    const v=Number(ROOT.querySelector('#office-go-row')?.value);
+    if(!Number.isSafeInteger(v)||v<1||v>1048537){toast('Enter a valid row number.');return;}
+    state.officeRowStart=v;render();return;
+  }
+  if(a==='office-go-col-action'){
+    const label=String(ROOT.querySelector('#office-go-col')?.value||'').trim().toUpperCase();
+    if(!/^[A-Z]{1,3}$/.test(label)){toast('Enter column A to XEM.');return;}
+    const c=label.split('').reduce((n,x)=>n*26+x.charCodeAt(0)-64,0)-1;
+    if(c<0||c>16372){toast('Column beyond editable view range.');return;}
+    state.officeColStart=c;render();return;
+  }
+  if(a==='office-prev-word'||a==='office-next-word'){
+    const last=Math.max(0,Math.ceil((state.officeEditor?.word?.paragraphs?.length||0)/30)-1);
+    state.officeWordPage=Math.max(0,Math.min(last,state.officeWordPage+(a==='office-next-word'?1:-1)));
+    render();return;
+  }
   if(a==='open-office'){busyDo(()=>openInOfficeApplication(id));return;}
   if(a==='share-office-file'){
     const f=state.officeLaunch?.file;
@@ -1085,8 +1180,21 @@ document.addEventListener('keydown',event=>{
    else if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
 });
 ROOT.addEventListener('input',e=>{
+ if(e.target.dataset.officeCellRow!==undefined&&state.officeEditor?.type==='xlsx'){
+   try{officeEditCell(state.officeEditor,Number(e.target.dataset.officeCellRow),Number(e.target.dataset.officeCellCol),e.target.value);markOfficeChanged();}
+   catch(err){officeStatus('Edit failed: '+(err?.message||String(err)));}
+   return;
+ }
+ if(e.target.dataset.officeParagraph!==undefined&&state.officeEditor?.type==='docx'){
+   try{officeEditParagraph(state.officeEditor,Number(e.target.dataset.officeParagraph),e.target.value);markOfficeChanged();}
+   catch(err){officeStatus('Edit failed: '+(err?.message||String(err)));}
+   return;
+ }
  signingUI.input(e.target);if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
 ROOT.addEventListener('change',e=>{
+  if(e.target.id==='office-sheet-choice'&&state.officeEditor?.type==='xlsx'){
+    state.officeEditor.activeSheet=Number(e.target.value)||0;state.officeRowStart=1;state.officeColStart=0;render();return;
+  }
   if(signingUI.changed(e.target))return;
   if(e.target.id==='document-upload'){const files=[...e.target.files];e.target.value='';if(files.length)busyDo(()=>uploadFiles(files));}
   if(e.target.id==='register-zip-input'){
