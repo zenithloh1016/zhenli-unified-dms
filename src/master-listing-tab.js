@@ -25,7 +25,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
  const storage=db?.storage?.from(bucket);
  const path=()=>getUser()?.id+'/master-listing/current.json';
  const fail=error=>{state.error=String(error?.message||error);state.status='';notify?.('Master Listing: '+state.error);renderUI();};
- const renderUI=()=>{if(typeof document!=='undefined'&&document.querySelector('[data-action="ml-upload"]'))notify?.('');onRender?.();};
+ const renderUI=()=>{onRender?.();};
  let onRender=null;
  const afterRender=cb=>{onRender=cb;};
 
@@ -170,7 +170,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   const {rows,total,pages}=companyRows();
   const selected=state.sheets[state.sheetIndex],data=selected?.rows||[];
   const preview=state.sheets.length?importPreview():null;
-  const width=Math.min(Math.max(...data.slice(0,20).map(x=>x?.length||0),1),100);
+  const width=Math.min(Math.max(...data.slice(0,40).map(x=>x?.length||0),1),200);
   const selectable=Array.from({length:width},(_,j)=>'<option value="'+j+'">'+(j+1)+' — '+esc(String(data[state.headingRow-1]?.[j]||'Column '+(j+1)).slice(0,60))+'</option>');
   const selector=(id,value,none=false)=>'<select id="'+id+'">'+(none?'<option value="-1"'+(value<0?' selected':'')+'>Not available</option>':'')+
     selectable.map((x,j)=>x.replace('<option value="'+j+'">','<option value="'+j+'"'+(j===value?' selected':'')+'>')).join('')+'</select>';
