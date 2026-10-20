@@ -1,23 +1,24 @@
-## Excel and Word opening/editing in Documents (20 October 2026)
+## Open documents in Microsoft Word and Excel (20 October 2026)
 
-Uploaded **.xlsx** and **.docx** files show **Open / Edit** in Documents →
-company → folder. Open in the DMS web interface or Android app (24 MB maximum
-for the local editor). Excel supports worksheet selection, cell editing, row/column
-navigation, numeric values and formulas. Word supports editing body paragraphs
-and table-cell text.
+Within Documents → company → folder, click an uploaded Word or Excel filename,
+or choose **Open in Word / Open in Excel**. This replaces the embedded editor;
+the DMS no longer tries to rebuild or alter the original Office file.
 
-**Save edited copy** adds a new document beside the original. **Save changes
-(keep previous version)** updates the current document and keeps the original
-as a separately named previous-version file in the same company folder.
-Storage is private to the authenticated account; editing never sends the
-content to an external document-editing service.
+**Website on Windows:** the DMS creates a temporary private signed link and
+offers **Open in Word / Excel** using Microsoft Office's documented
+ms-word:ofv|u| / ms-excel:ofv|u| URL schemes. Allow the browser's app-open
+prompt. Requires desktop Office installed and URL-scheme support enabled.
 
-This is a basic targeted editor, not full Microsoft Office. Other workbook
-parts, images and untouched content remain in the OOXML package. Editing a
-Word paragraph can simplify the character-level styles in that paragraph.
-Legacy .xls/.doc, encrypted files, macros and complex embedded objects are
-not supported. For those, download and edit in Microsoft Office, or convert
-to .xlsx or .docx first. Verify statutory document formatting before release.
+**Android APK:** the app puts a temporary Office-compatible copy in its private
+cache and asks Android to open it in the installed Word or Excel app, or another
+Office-compatible application via the system chooser (max 25 MB). A share
+chooser fallback is available if no file-viewing handler responds. This is
+not a normal download into the user's Downloads folder.
+
+Supports .doc/.docx/.docm and .xls/.xlsx/.xlsm. The DMS originals remain
+unchanged. Changes made in external Office apps do not automatically upload
+back to DMS; upload a revised file to the company folder separately.
+A distinct **Download** action remains available as a fallback.
 
 ## Register Book folders and bulk ZIP filing (20 October 2026)
 
