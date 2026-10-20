@@ -11,10 +11,14 @@ const invalidName=/^(?:company|name|total|grand total|no|bil|remarks|summary|reg
 // Old uploads could contain Excel serials rather than formatted date strings.
 // Infer dates ONLY in clearly date-specific columns. Never convert company
 // numbers, incorporation IDs, share quantities, fees, capital or tax data.
+export function isListingFyeColumn(label){
+ const words=normal(label).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+ return /\b(?:fye|f y e|financial (?:year|yr) (?:end|ending|ended)|(?:accounts|accounting|financial) year end|fy end|year end(?:ed|ing)?)\b/.test(words);
+}
 export function isListingDateColumn(label){
  const words=normal(label).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
  if(!words||/(?:registration|reg no|company no|amount|fees?|capital|share|tax|tin|number|balance|percentage|paid|year only)/.test(words))return false;
- return /\b(?:date|fye|fy end|financial year end|year end|anniversary|deadline|due|expiry|expiration|expires|renewal date|renewal due|lodgement|lodgment|incorporation|incorporated|financial year ending)\b/.test(words);
+ return isListingFyeColumn(label)||/\b(?:date|fye|fy end|financial year end|year end|anniversary|deadline|due|expiry|expiration|expires|renewal date|renewal due|lodgement|lodgment|incorporation|incorporated|financial year ending)\b/.test(words);
 }
 // Worksheet numbering is not a company information field. Suppress only clear
 // sequential row-list labels, never registration numbers or No. of Directors.
@@ -23,6 +27,11 @@ export function isListingOrdinalColumn(model,columnIndex){
  if(columnIndex===model.nameColumn||columnIndex===model.registrationColumn)return false;
  const header=normal(model.columns[columnIndex].label).toLowerCase().replace(/\s+/g,' ');
  return /^(?:#|no\.?|no\.? list|no\.? of list|list no\.?|serial no\.?|s\/n|bil\.?|bilangan|row no\.?|row number|index)$/.test(header);
+}
+export function listingOrdinalValue(model,row,rowIndex){
+ const sourceColumn=model?.columns?.findIndex((_,i)=>isListingOrdinalColumn(model,i))??-1;
+ const source=sourceColumn>=0?String(row?.values?.[sourceColumn]??'').trim():'';
+ return source&&source.toUpperCase()!=='N/A'?source:String(rowIndex+1);
 }
 const fmtDate=(d,m,y)=>String(d).padStart(2,'0')+'/'+String(m).padStart(2,'0')+'/'+String(y).padStart(4,'0');
 function validDate(d,m,y){
