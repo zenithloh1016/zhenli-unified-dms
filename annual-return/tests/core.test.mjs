@@ -85,7 +85,6 @@ test('Company Profile panel removed and Director Confirmation retained without s
  assert.ok(html.includes('V1.9'));
  assert.ok(!html.includes('id="register-book-file"'));
  assert.ok(!html.includes('id="apply-register"'));
- assert.ok(html.includes('id="apply-register"'));
  assert.ok(!html.includes('company-panel'));
  assert.ok(!html.includes('id="company-fields"'));
  assert.ok(html.indexOf('id="company-details"')<html.indexOf('id="signature-fields"'));
