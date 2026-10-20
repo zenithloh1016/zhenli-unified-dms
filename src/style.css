@@ -291,3 +291,22 @@ body.zh-ar-fullscreen-open{overflow:hidden}
 .ml-date-repair .btn{font-size:12px;padding:7px 12px}
 .ml-date-repair p{flex-basis:100%;font-size:11px;color:#607890;margin:0}
 .ml-workspace-fullscreen>.ml-date-repair{flex:none}
+
+
+/* Master Listing: original No. before Company; all dates including FYE centered. */
+.ml-table th.ml-no-col,.ml-table td.ml-no-col{
+  min-width:64px;width:64px;max-width:78px;text-align:center;
+  vertical-align:middle;font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.ml-table th.ml-date-col,.ml-table td.ml-date-col,
+.ml-table th.ml-fye-col,.ml-table td.ml-fye-col{
+  text-align:center;vertical-align:middle;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.ml-table th:nth-child(2),.ml-table td:nth-child(2){
+  min-width:185px;
+}
+.ml-workspace-fullscreen>.ml-table-scroll .ml-table th.ml-no-col,
+.ml-workspace-fullscreen>.ml-table-scroll .ml-table td.ml-no-col{
+  min-width:64px;width:64px;max-width:78px;
+}
