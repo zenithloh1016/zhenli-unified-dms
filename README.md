@@ -1,3 +1,25 @@
+## Master Listing full-screen table and Excel date display (20 October 2026)
+
+Use **Master Listing → Full screen ⛶** to expand the editable company table
+to the whole browser viewport. Unlike the compact view (six data columns at
+a time), the full-screen view displays every imported worksheet column and
+up to 40 companies per page. Scroll horizontally/vertically, navigate pages,
+and select **Edit** to change a company's fields. Select **Exit full screen ✕**
+or press Escape to restore the normal navigation.
+
+The local `.xlsx` reader now loads Excel cell styles and number formats from
+`xl/styles.xml` before converting date serials into displayed text. It handles
+explicit date formats such as `dd/mm/yyyy`, `dd.mm.yyyy`, and `dd-mmm-yyyy`,
+including the Excel 1900 and 1904 date systems. Text dates stay as entered.
+Dates are saved to the Master Listing as these formatted strings and shown
+unchanged after reopening. Older listings imported as serial numbers need to
+be **re-imported from the original Excel workbook** (after confirming the
+backup prompt). Excel's built-in locale-dependent short dates cannot always
+be determined exactly from the file alone; check these in the preview.
+If only the compatibility Excel reader can open a workbook, the Master Listing
+tab will stop instead of silently changing date formats; resave the file as
+an unprotected `.xlsx` workbook in Microsoft Excel and import again.
+
 ## Master Listing tab: editable full company data (20 October 2026)
 
 **Master Listing** is a dedicated DMS tab next to Documents. It preserves
