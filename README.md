@@ -1,13 +1,18 @@
 ## Master Listing clean table (20 October 2026)
 
-The Master Listing table and import preview no longer show the additional
-`#` row number or Excel's ordinal `No.`, `Bil.` or `S/N` list-number columns.
-The original imported numbering data is retained for recordkeeping and CSV
-exports, while all company-information columns remain editable.
+The Master Listing table and import preview show exactly one **No.**
+column directly before **Company**. The displayed numbers come from the
+original Excel `No.`, `Bil.` or `S/N` column when present, otherwise
+fall back to the original row's sequential position. The redundant `#` column
+and duplicate list-number fields are hidden without deleting source data.
+All company-information columns remain editable.
 
 Dates that can be reliably recognized (including formatted Excel serials and
 text dates in DD.MM.YYYY, YYYY-MM-DD, DD-MMM-YYYY or DD/MM/YYYY) are now
-displayed as **DD/MM/YYYY** in the table, editor and CSV export. Actual
+displayed as **DD/MM/YYYY** in the table, editor and CSV export. **Financial
+Year End (FYE)** is explicitly recognized, including `F.Y.E.` and
+`Financial Year End`, and is center-aligned in normal and full-screen tables.
+The **No.** column and other recognized date columns are centered as well. Actual
 imported dates are stored using this format. Non-date figures, company
 registration numbers, paid-up capital and share quantities are unaffected.
 
@@ -143,7 +148,7 @@ database RLS setup.
 
 # ZHENLI Unified Document Management System V1.0
 
-Please read **[START_HERE.md](START_HERE.md)** for the new combined web and Android build, Supabase setup, Task Hub V3 cloud sync migration, and Sequential Signing EdgeOne access.
+Please read **[START_HERE.md](START_HERE.md)** for the new combined web and Android build, Supabase setup, Task Hub cloud sync migration, and Sequential Signing EdgeOne access.
 
 Includes revised Documents, Tasks, Signing and Overview tabs inspired by the provided screenshot. The previous DMS guide is preserved at `README_ORIGINAL_DMS_REFERENCE.md` for reference.
 
