@@ -22,7 +22,7 @@ test('detects the workbook header and every company information field',()=>{
  assert.equal(model.rows[0].values[7],'Pending director signatures');
  assert.equal(findCompanyMatch(model,model.rows[0],companies).id,'one');
  assert.equal(findCompanyMatch(model,model.rows[1],companies),null);
- assert.equal(validateMasterListing(JSON.parse(JSON.stringify(model))),model.version?model:null);
+ assert.deepEqual(validateMasterListing(JSON.parse(JSON.stringify(model))),model);
 });
 test('changes arbitrary company fields and filters across all columns',()=>{
  const d=detectListingColumns(rows),model=buildMasterListing(rows,d);
