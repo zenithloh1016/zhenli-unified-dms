@@ -147,6 +147,28 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
    state.editIndex=null;state.status='Company information saved to DMS.';
   }finally{state.saving=false;onRender?.();}
  }
+ async function saveRepairedDates(){
+  if(!state.model)throw Error('Import a Master Listing first.');
+  const {model,count}=repairLegacyDateSerials(state.model);
+  if(!count){state.legacyDateCount=0;onRender?.();return;}
+  const examples=[];
+  for(let col=0;col<model.columns.length&&examples.length<3;col++){
+   for(let row=0;row<model.rows.length&&examples.length<3;row++){
+    const before=state.model.rows[row].values[col];
+    const after=model.rows[row].values[col];
+    if(before!==after){examples.push(model.columns[col].label+': '+before+' → '+after);break;}
+   }
+  }
+  const confirmed=window.confirm('Convert '+count+' saved Excel date serial(s) in identified date columns to DD/MM/YYYY?\n\n'+
+   examples.join('\n')+
+   '\n\nThe current listing will be backed up before saving. Registration numbers, fees and shares will not change. The conversion assumes the 1900 Excel system if the original workbook date system was not saved. For exact source formatting, re-import the original .xlsx instead.');
+  if(!confirmed)return;
+  state.saving=true;state.status='Backing up and saving corrected date values…';state.error='';onRender?.();
+  try{
+   await saveModel(model,{backup:true});
+   state.status=count+' date serial(s) corrected and saved to DMS. Previous listing retained as a private backup.';
+  }finally{state.saving=false;onRender?.();}
+ }
  async function syncDocuments(){
   const model=state.model;if(!model)throw Error('Import Master Listing first.');
   const existing=getCompanies?.()||[];
@@ -191,6 +213,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
    '<input id="ml-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>'+
    (state.error?'<div class="alert" role="alert">'+esc(state.error)+'</div>':'')+
    (state.status?'<div class="info-strip" role="status">'+esc(state.status)+'</div>':'')+
+   (model&&state.legacyDateCount?'<div class="ml-date-repair" role="status"><strong>'+state.legacyDateCount+' saved date serial(s) detected.</strong> They are shown as DD/MM/YYYY in date columns. '+act('Save corrected dates','ml-repair-dates','','primary')+'<p>Save a corrected copy with backup, or re-import the original Excel workbook to retain its precise date styles.</p></div>':'')+
    (state.sheets.length?'<section class="ml-import-panel"><h3>Review workbook before importing</h3>'+
     '<div class="ml-import-controls"><label>Worksheet<select id="ml-sheet">'+state.sheets.map((x,i)=>'<option value="'+i+'"'+(i===state.sheetIndex?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></label>'+
     '<label>Header row<input id="ml-header-row" type="number" min="1" max="'+data.length+'" value="'+state.headingRow+'"></label>'+
@@ -252,6 +275,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
    state.fullScreen=!state.fullScreen;state.page=0;
    onRender?.();return true;
   }
+  if(action==='ml-repair-dates'){asyncRun(saveRepairedDates);return true;}
   if(action==='ml-export'){
    if(!state.model)return true;
    const csv=listingCSV(state.model),blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
