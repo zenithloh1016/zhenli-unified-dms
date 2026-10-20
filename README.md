@@ -1,3 +1,35 @@
+## Master Listing tab: editable full company data (20 October 2026)
+
+**Master Listing** is a dedicated DMS tab next to Documents. It preserves
+all imported columns instead of only names and company registration numbers.
+Select **Import Excel**, choose an .xlsx workbook, select the worksheet,
+heading row, first company row and name/registration columns, then review the
+row/column preview before confirming. The parser prefers a worksheet named
+Master Listing and falls back to the existing compatibility Excel reader.
+Imports are limited to 5,000 companies, 200 fields and 20 MB input/JSON.
+
+Company names, incorporation data, FYE, AR/AFS deadlines, contacts, secretarial
+notes, amounts and every other worksheet field are kept as editable text.
+Search across all fields, paginate companies, scroll through columns and
+choose **Edit** to modify any company field. **Save company information**
+writes the updated listing back to private Supabase Storage. Use **Export CSV**
+to make a spreadsheet-readable copy of the current listing.
+
+No database migration is needed: the file is saved under
+`<signed-in-user-id>/master-listing/current.json` in the existing
+`dms-private` private Supabase bucket. Before replacing an imported listing,
+the previous listing is backed up under the same account prefix in
+`master-listing/history/`. Re-import only after confirming; a normal edit
+changes the private listing without moving/renaming company documents.
+
+Matching existing company records show a **Documents** button. The optional
+**Sync missing company folders** operation requires confirmation and uses the
+existing `create_company_with_folders` function for companies not already
+matched. Importing/editing the listing alone does not modify company/folder
+metadata, statutory documents, Task Hub or Annual Return details. A separate
+active account/session may overwrite edits to the listing; avoid simultaneous
+updates from multiple devices until per-row concurrency control is added.
+
 ## Word and Excel document handling (20 October 2026)
 
 Uploaded Word and Excel files remain in the same company document folders.
