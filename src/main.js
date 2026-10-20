@@ -1175,6 +1175,14 @@ ROOT.addEventListener('submit',event=>{
     state.modal=null;await refresh();toast('Saved successfully.');
   });
 });
+window.addEventListener('beforeunload',event=>{
+ if(officeSaver?.pending){event.preventDefault();event.returnValue='';}
+});
+ROOT.addEventListener('focusout',event=>{
+ if(officeSaver?.pending&&(event.target.dataset.officeCellRow!==undefined||event.target.dataset.officeParagraph!==undefined)){
+   officeSaver.flush().catch(console.error);
+ }
+});
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&state.arFullscreen){event.preventDefault();setAnnualReturnFullscreen(false);}
    else if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
