@@ -46,6 +46,6 @@ test('Charges added safely for existing and new companies via DMS and optional S
   assert.doesNotMatch(backfill,/\b(delete|update|truncate)\s+(public\.)?(?:folders|documents)\b/i);
   assert.match(main,/ensureChargesFolders/);
   assert.match(main,/ensure-charges-folders/);
-  assert.match(main,/15 standard folders per company/);
+  assert.match(main,/STANDARD_FOLDER_COUNT/);
   assert.match(main,/including Beneficial Owners, Constitution, Working Resolution and Charges/);
 });
