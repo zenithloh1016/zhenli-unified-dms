@@ -62,5 +62,5 @@ test('Master Listing tab uses private user storage and confirmed Documents synch
  assert.match(moduleSource,/create_company_with_folders/);
  const tab=createMasterListingTab({db:{storage:{from:()=>({download:async()=>({error:{message:'Object not found'}})})}},
   getUser:()=>({id:'demo'}),getCompanies:()=>[],openCompany:()=>{},refreshCompanies:()=>{},notify:()=>{}});
- assert.match(tab.render(),/No Master Listing has been imported yet/);
+ assert.match(tab.render(),/No Master Listing imported yet/);
 });
