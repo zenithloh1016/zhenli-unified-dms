@@ -190,3 +190,46 @@ body.zh-ar-fullscreen-open{overflow:hidden}
 .rb-file-line:last-child{border-bottom:0}
 .rb-file-line span:last-child{color:#456b80}
 @media(max-width:600px){.rb-file-line{grid-template-columns:1fr;gap:5px}.rb-modal{padding:16px}.rb-summary{flex-direction:column}}
+
+
+/* Editable Master Listing portfolio - responsive and touch friendly */
+.ml-import-panel{background:#fff;border:1px solid #dbe5ef;border-radius:14px;padding:18px;margin:16px 0}
+.ml-import-panel h3{margin:0 0 10px}
+.ml-import-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 14px;margin:10px 0}
+.ml-import-controls label,.ml-toolbar label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:650;color:#48617c}
+.ml-import-controls input,.ml-import-controls select,.ml-toolbar input{background:#fff;border:1px solid #d4e1ec;border-radius:8px;min-height:40px;padding:7px 10px;max-width:100%;font-size:13px}
+.ml-import-panel .muted{margin:12px 0}
+.ml-table-scroll{width:100%;max-width:100%;overflow:auto;border:1px solid #dce5ef;border-radius:11px;background:#fff}
+.ml-table{border-collapse:separate;border-spacing:0;min-width:800px;white-space:normal;font-size:12px;width:100%}
+.ml-table th,.ml-table td{border-bottom:1px solid #edf0f5;border-right:1px solid #edf0f5;padding:9px 12px;min-width:110px;max-width:280px;vertical-align:top;overflow-wrap:anywhere}
+.ml-table thead th{position:sticky;top:0;z-index:2;background:#eaf2f8;color:#254461}
+.ml-table th:first-child,.ml-table td:first-child{min-width:50px;width:50px}
+.ml-table tbody tr:nth-child(2n){background:#f9fbfe}
+.ml-table strong{color:#1c4060}
+.ml-row-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;white-space:nowrap}
+.ml-row-actions .btn{font-size:11px;min-height:30px;padding:5px 8px}
+.ml-row-actions small{font-size:10px;color:#71869b}
+.ml-dashboard{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0;color:#36536d;font-size:12px}
+.ml-dashboard>*{border:1px solid #e0e8ef;border-radius:9px;padding:9px 12px;background:#fff}
+.ml-dashboard strong{color:#193d59;font-size:15px}
+.ml-toolbar,.ml-columns-nav,.ml-pages,.ml-actions{display:flex;flex-wrap:wrap;gap:9px;align-items:end;margin:12px 0}
+.ml-toolbar label{min-width:185px;flex:1}
+.ml-toolbar .btn{min-height:40px}
+.ml-columns-nav,.ml-pages{align-items:center;justify-content:space-between;font-size:12px;color:#5a7085}
+.ml-columns-nav span,.ml-pages span{margin:auto}
+.ml-editor-modal{width:min(900px,96vw);max-height:90dvh;display:flex;flex-direction:column;gap:9px}
+.ml-editor-modal .modal-heading{flex:none}
+.ml-editor-modal form{min-height:0;display:flex;flex-direction:column;flex:1}
+.ml-edit-fields{flex:1;min-height:110px;overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;align-content:start;padding:8px 4px}
+.ml-edit-fields label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:#415c75;min-width:0}
+.ml-edit-fields small{font-size:10px;color:#8192a3}
+.ml-edit-fields textarea{font:13px/1.55 inherit;color:#172e46;width:100%;min-height:54px;background:white;border:1px solid #d1dce7;border-radius:8px;padding:8px 10px;resize:vertical}
+.ml-edit-fields textarea:focus{outline:2px solid #4b8fd0;outline-offset:0}
+.ml-editor-modal .ml-actions{flex:none;justify-content:end;padding-top:9px;border-top:1px solid #e5edf4}
+@media(max-width:640px){
+ .ml-import-panel{padding:12px}
+ .ml-table{font-size:11px}
+ .ml-edit-fields{grid-template-columns:1fr}
+ .ml-editor-modal{padding:13px;max-height:95dvh}
+ .ml-toolbar .btn{min-height:35px}
+}
