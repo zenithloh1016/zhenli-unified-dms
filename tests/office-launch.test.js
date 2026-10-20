@@ -18,7 +18,7 @@ test('mobile browser shares genuine Office files and leaves fallback when unavai
  assert.equal(supportsOfficeFileShare(file,{share:()=>{},canShare:()=>false}),false);
  assert.equal(supportsOfficeFileShare(file,{canShare:()=>true}),false);
 });
-test('DMS uses Office app opening instead of in-app editing or direct download',async()=>{
+test('DMS keeps external Office handoff as an alternative to in-website editing',async()=>{
  const {readFileSync}=await import('node:fs');
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  const pkg=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
@@ -28,7 +28,9 @@ test('DMS uses Office app opening instead of in-app editing or direct download',
  assert.match(main,/office-save-copy/);
  assert.match(main,/openOfficeOnAndroid\(data,d.name\)/);
  assert.match(main,/officeType\(doc.name\)/);
- assert.doesNotMatch(main,/edit-office|save-office-replace|renderOfficeModal|startOfficeEditing/);
+ assert.match(main,/edit-office/);
+ assert.match(main,/createOfficeAutoSaver/);
+ assert.doesNotMatch(main,/save-office-replace|startOfficeEditing/);
  assert.match(main,/action\('Download','download-file'/);
  assert.equal(pkg.dependencies['@capacitor-community/file-opener'],'^8.0.1');
 });
