@@ -43,5 +43,5 @@ test('New company RPC and optional SQL backfill are additive and idempotent',asy
   assert.doesNotMatch(backfill,/\b(delete|update|truncate)\s+(public\.)?(?:folders|documents)\b/i);
   assert.match(main,/ensureWorkingResolutionFolders/);
   assert.match(main,/ensure-working-resolution-folders/);
-  assert.match(main,/14 standard folders per company/);
+  assert.match(main,/15 standard folders per company/);
 });
