@@ -1,3 +1,24 @@
+## Excel and Word opening/editing in Documents (20 October 2026)
+
+Uploaded **.xlsx** and **.docx** files show **Open / Edit** in Documents →
+company → folder. Open in the DMS web interface or Android app (24 MB maximum
+for the local editor). Excel supports worksheet selection, cell editing, row/column
+navigation, numeric values and formulas. Word supports editing body paragraphs
+and table-cell text.
+
+**Save edited copy** adds a new document beside the original. **Save changes
+(keep previous version)** updates the current document and keeps the original
+as a separately named previous-version file in the same company folder.
+Storage is private to the authenticated account; editing never sends the
+content to an external document-editing service.
+
+This is a basic targeted editor, not full Microsoft Office. Other workbook
+parts, images and untouched content remain in the OOXML package. Editing a
+Word paragraph can simplify the character-level styles in that paragraph.
+Legacy .xls/.doc, encrypted files, macros and complex embedded objects are
+not supported. For those, download and edit in Microsoft Office, or convert
+to .xlsx or .docx first. Verify statutory document formatting before release.
+
 ## Register Book folders and bulk ZIP filing (20 October 2026)
 
 **Register Book** is standard root category **16** under Documents for every company.
