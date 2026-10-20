@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildMasterListing,detectListingColumns,changeListingCell,findCompanyMatch,listingRowsForSearch,validateMasterListing,listingCSV,isListingDateColumn,excelSerialToDateString,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials} from '../src/master-listing-data.js';
+import {buildMasterListing,detectListingColumns,changeListingCell,findCompanyMatch,listingRowsForSearch,validateMasterListing,listingCSV,isListingDateColumn,isListingFyeColumn,listingOrdinalValue,excelSerialToDateString,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials} from '../src/master-listing-data.js';
 import {createMasterListingTab} from '../src/master-listing-tab.js';
 import {readFileSync} from 'node:fs';
 
@@ -194,4 +194,76 @@ test('N/A placeholder for missing registration never merges different companies'
  assert.equal(model.rows[0].values[2],'N/A');
  assert.equal(model.rows[1].values[2],'N/A');
  assert.equal(findCompanyMatch(model,model.rows[0],[]),null);
+});
+
+
+test('original No. stays before Company, with no duplicate source ordinal column, in both table modes',()=>{
+ const listing=buildMasterListing([
+  ['No.','Company Name','Registration No.','FYE','Remarks'],
+  ['17','ALPHA SDN BHD','202611111111','31.12.2026',''],
+  ['29','BETA SDN BHD','202622222222','2026-06-30','Follow up']
+ ]);
+ assert.equal(listingOrdinalValue(listing,listing.rows[0],0),'17');
+ assert.equal(listingOrdinalValue(listing,listing.rows[1],1),'29');
+ const tab=createMasterListingTab({db:{storage:{from:()=>({})}},
+  getUser:()=>({id:'demo'}),getCompanies:()=>[],openCompany:()=>{},refreshCompanies:()=>{},notify:()=>{}});
+ tab.state.model=listing;
+ for(const fullScreen of [false,true]){
+  if(fullScreen)tab.onClick('ml-fullscreen','');
+  const html=tab.render();
+  assert.match(html,/<th class="ml-no-col">No\.<\/th><th>Company<\/th>/);
+  assert.equal((html.match(/<th class="ml-no-col">No\.<\/th>/g)||[]).length,1);
+  assert.doesNotMatch(html,/<th title="No\.">/);
+  assert.match(html,/<td class="ml-no-col">17<\/td><td><strong>ALPHA SDN BHD<\/strong>/);
+  assert.match(html,/<td class="ml-no-col">29<\/td><td><strong>BETA SDN BHD<\/strong>/);
+  assert.match(html,/<th class="ml-fye-col" title="FYE">FYE<\/th>/);
+  assert.match(html,/<td class="ml-fye-col" title="31\/12\/2026">31\/12\/2026<\/td>/);
+  assert.match(html,/<td class="ml-fye-col" title="30\/06\/2026">30\/06\/2026<\/td>/);
+ }
+});
+test('Financial Year End and F.Y.E. formats are recognized and standardized',()=>{
+ assert.equal(isListingFyeColumn('Financial Year End'),true);
+ assert.equal(isListingFyeColumn('FINANCIAL YEAR ENDING'),true);
+ assert.equal(isListingFyeColumn('F.Y.E.'),true);
+ assert.equal(isListingFyeColumn('Accounting Year End'),true);
+ const serial=(Date.UTC(2026,11,31)-Date.UTC(1899,11,30))/86400000;
+ const model=buildMasterListing([
+  ['No.','Company Name','Financial Year End','F.Y.E.'],
+  ['03','YEAR END SDN BHD',String(serial),'31.12.2026']
+ ]);
+ assert.equal(model.rows[0].values[2],'31/12/2026');
+ assert.equal(model.rows[0].values[3],'31/12/2026');
+ assert.equal(displayedListingValue(model,2,String(serial)),'31/12/2026');
+ assert.equal(listingOrdinalValue(model,model.rows[0],0),'03');
+});
+test('falls back to a single sequential No. when the imported sheet has no No. column',()=>{
+ const model=buildMasterListing([
+  ['Company Name','FYE'],
+  ['ONE SDN BHD','31/12/2026'],
+  ['TWO SDN BHD','30/06/2026']
+ ]);
+ assert.equal(listingOrdinalValue(model,model.rows[1],1),'2');
+ const tab=createMasterListingTab({db:{storage:{from:()=>({})}},
+  getUser:()=>({id:'demo'}),getCompanies:()=>[],openCompany:()=>{},refreshCompanies:()=>{},notify:()=>{}});
+ tab.state.model=model;
+ const html=tab.render();
+ assert.match(html,/<th class="ml-no-col">No\.<\/th><th>Company<\/th>/);
+ assert.match(html,/<td class="ml-no-col">2<\/td><td><strong>TWO SDN BHD<\/strong>/);
+});
+test('remove Task Hub V3 version labels without changing Task Hub functionality',()=>{
+ const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ const hub=readFileSync(new URL('../public/task-hub/index.html',import.meta.url),'utf8');
+ assert.doesNotMatch(main,/Task Hub V3/);
+ assert.doesNotMatch(hub,/>v3\.0</);
+ assert.match(main,/Task Hub/);
+ assert.match(main,/TASK_HUB_BUNDLED/);
+ assert.match(main,/tab-tasks/);
+ assert.match(hub,/ZHENLI.*TASK HUB/i);
+});
+test('No. and FYE are center aligned through table CSS in full-screen and normal views',()=>{
+ const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
+ assert.match(css,/\.ml-table th\.ml-no-col,\.ml-table td\.ml-no-col/);
+ assert.match(css,/\.ml-table th\.ml-fye-col,\.ml-table td\.ml-fye-col/);
+ assert.match(css,/text-align:center/);
+ assert.match(css,/\.ml-workspace-fullscreen.*\.ml-no-col/s);
 });
