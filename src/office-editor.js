@@ -147,7 +147,11 @@ function makeCellValue(xml,cell,value){
  }
  // Use inline strings to avoid modifying sharedStrings, preserving all other entries.
  const numeric=/^-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/.test(value)&&value.length<16&&!/^0\d/.test(value);
- if(numeric){
+ if(value.startsWith('=')&&value.length>1){
+  cell.removeAttribute('t');
+  const formula=xml.createElementNS(SS,'f');formula.textContent=value.slice(1);cell.appendChild(formula);
+  const cached=xml.createElementNS(SS,'v');cached.textContent='';cell.appendChild(cached);
+ }else if(numeric){
   cell.removeAttribute('t');
   const el=xml.createElementNS(SS,'v');el.textContent=value;cell.appendChild(el);
  }else{
