@@ -2,8 +2,7 @@
  * Master Listing tab for ZHENLI DMS.
  * Imports Excel using the existing local reader; stores all fields in private
  * Supabase Storage under the user's own prefix. No new database table or
- * service-role credentials are required. Company folders remain untouched
- * until the user explicitly requests synchronization.
+ * service-role credentials are required. Documents folders change only when the user requests synchronization on add or through Sync.
  */
 import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn} from './master-listing-data.js';
 
@@ -19,7 +18,7 @@ const isMissing=error=>/object not found|not found|404|no such key/i.test(String
 
 export function createMasterListingTab({db,bucket='dms-private',getUser,getCompanies,openCompany,refreshCompanies,notify}){
  const state={userId:'',loaded:false,loading:false,saving:false,
-  model:null,error:'',status:'',search:'',page:0,columnStart:0,fullScreen:false,editIndex:null,
+  model:null,error:'',status:'',search:'',page:0,columnStart:0,fullScreen:false,editIndex:null,addOpen:false,addDraft:null,addCreateFolders:true,
   source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,date1904:false,legacyDateCount:0,preview:null,
   selectedFile:null};
  const storage=db?.storage?.from(bucket);
@@ -29,7 +28,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
  let onRender=null;
  const afterRender=cb=>{onRender=cb;};
 
- const reset=()=>{Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,model:null,error:'',status:'',search:'',page:0,columnStart:0,fullScreen:false,editIndex:null,source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,date1904:false,legacyDateCount:0,preview:null,selectedFile:null});};
+ const reset=()=>{Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,model:null,error:'',status:'',search:'',page:0,columnStart:0,fullScreen:false,editIndex:null,addOpen:false,addDraft:null,addCreateFolders:true,source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,date1904:false,legacyDateCount:0,preview:null,selectedFile:null});};
  async function load(force=false){
   const user=getUser?.();
   if(!user?.id){reset();return;}
@@ -147,7 +146,74 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
    state.editIndex=null;state.status='Company information saved to DMS.';
   }finally{state.saving=false;onRender?.();}
  }
- async function saveRepairedDates(){
+ 
+function manualListingTemplate(){
+ return {version:1,filename:'Manual entries',worksheet:'Master Listing',headerRow:1,startRow:2,
+  nameColumn:1,registrationColumn:2,date1904:false,
+  columns:[{id:'c0',label:'No.'},{id:'c1',label:'Company Name'},{id:'c2',label:'Registration No.'},
+   {id:'c3',label:'Date of Registration'},{id:'c4',label:'Financial Year End'}],
+  rows:[],importedAt:new Date().toISOString(),skipped:{blank:0,duplicate:0}};
+}
+const companyKey=value=>String(value??'').normalize('NFKC').trim().replace(/\s+/g,' ').toUpperCase();
+const registrationKey=value=>String(value??'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+async function saveAddedCompany(form){
+ const original=state.model||manualListingTemplate();
+ validateMasterListing(original);
+ if(original.rows.length>=5000)throw Error('Master Listing has reached the limit of 5,000 companies.');
+ const values=original.columns.map((_,i)=>String(form.elements.namedItem('ml-new-'+i)?.value??'').trim());
+ const createFolders=!!form.elements.namedItem('ml-create-documents')?.checked;
+ state.addDraft=values;state.addCreateFolders=createFolders;
+ const rawName=values[original.nameColumn]||'';
+ const name=rawName.replace(/\s+/g,' ').trim();
+ if(name.length<3||name.length>250||name.toUpperCase()==='N/A')throw Error('A valid company name (3–250 characters) is required.');
+ if(/[\r\n]/.test(rawName))throw Error('Company name must be entered on one line.');
+ const registration=original.registrationColumn>=0?values[original.registrationColumn]:'';
+ if(registration.length>100)throw Error('Registration number must be at most 100 characters.');
+ const nameKey=companyKey(name),regKey=registrationKey(registration);
+ if(original.rows.some(row=>{
+  const info=companyData(original,row);
+  return companyKey(info.name)===nameKey||(regKey&&registrationKey(info.registration)===regKey);
+ }))throw Error('Company name or registration number already exists in Master Listing.');
+ const ordinalCol=original.columns.findIndex((_,i)=>isListingOrdinalColumn(original,i));
+ if(ordinalCol>=0){
+  const last=Math.max(original.rows.length,...original.rows.map(row=>{
+   const n=Number(String(row.values[ordinalCol]||'').trim());
+   return Number.isSafeInteger(n)&&n>0?n:0;
+  }));
+  values[ordinalCol]=String(last+1);
+ }
+ const rowIndex=original.rows.length;
+ const row={id:'manual-'+crypto.randomUUID(),values:original.columns.map(()=>'')};
+ const updated={...original,rows:[...original.rows,row]};
+ for(let i=0;i<values.length;i++)if(values[i])changeListingCell(updated,rowIndex,i,values[i]);
+ const details=companyData(updated,row);
+ if(!details.name)throw Error('Company name is required.');
+ state.saving=true;state.error='';state.status='Saving the added company and backing up the listing…';onRender?.();
+ try{
+  await saveModel(updated,{backup:true});
+  state.addOpen=false;state.addDraft=null;state.search='';
+  state.page=Math.floor(rowIndex/(state.fullScreen?40:PER_PAGE));
+  state.status=details.name+' added to Master Listing without changing existing rows.';
+  if(createFolders){
+   const match=(getCompanies?.()||[]).find(c=>
+    companyKey(c.name)===nameKey||(regKey&&registrationKey(c.registration_no)===regKey));
+   if(match)state.status+=' Documents company already exists; no duplicate created.';
+   else{
+    try{
+     const {error}=await db.rpc('create_company_with_folders',{p_name:details.name,p_registration_no:details.registration});
+     if(error)throw error;
+     state.status+=' Standard Documents folders created.';
+     try{await refreshCompanies?.();}catch(error){
+      state.error='Folders created, but Documents list refresh failed: '+String(error?.message||error);
+     }
+    }catch(error){
+     state.error='Master Listing saved, but Documents company creation failed: '+String(error?.message||error)+'. Use “Sync missing company folders” to retry.';
+    }
+   }
+  }
+ }finally{state.saving=false;onRender?.();}
+}
+async function saveRepairedDates(){
   if(!state.model)throw Error('Import a Master Listing first.');
   const {model,count}=repairLegacyDateSerials(state.model);
   if(!count){state.legacyDateCount=0;onRender?.();return;}
@@ -216,7 +282,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
    '<div class="content-header"><div><p class="eyebrow">STATUTORY COMPANY INFORMATION</p><h1>Master Listing</h1>'+
    '<p class="muted">Import an Excel workbook, keep all company-information columns, and edit each company inside this private DMS tab.</p></div>'+
    '<div class="header-buttons">'+(model?act(state.fullScreen?'Exit full screen ✕':'Full screen ⛶','ml-fullscreen','','secondary'):'')+
-   (model?act('Export CSV','ml-export','','secondary'):'')+act('Import Excel','ml-upload','','primary')+'</div></div>'+
+   (model?act('Export CSV','ml-export','','secondary'):'')+act('+ Add Company','ml-add','','primary')+act('Import Excel','ml-upload','','secondary')+'</div></div>'+
    '<input id="ml-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>'+
    (state.error?'<div class="alert" role="alert">'+esc(state.error)+'</div>':'')+
    (state.status?'<div class="info-strip" role="status">'+esc(state.status)+'</div>':'')+
@@ -261,10 +327,32 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
     '<p class="fineprint">Changes are saved to private DMS cloud storage using your signed-in account. Editing Master Listing fields does not automatically alter the Companies register or existing statutory documents.</p>'
    :(!state.loading&&!state.sheets.length?'<div class="empty-state"><div>📊</div><h3>No Master Listing imported yet</h3>'+
     '<p>Use Import Excel to load your company data, including deadlines, directors, filing details, fees and other worksheet columns.</p>'+
-    act('Import Master Listing Excel','ml-upload','','primary')+'</div>':''))+
-   '</section>'+(state.editIndex!==null&&model?.rows[state.editIndex]?renderEditor(): '');
+    act('Import Master Listing Excel','ml-upload','','primary')+act('+ Add Company','ml-add','','secondary')+'</div>':''))+
+   '</section>'+(state.addOpen?renderAddCompany(): '')+(state.editIndex!==null&&model?.rows[state.editIndex]?renderEditor(): '');
  }
- function renderEditor(){
+ 
+function renderAddCompany(){
+ const model=state.model||manualListingTemplate();
+ const fields=model.columns.map((col,i)=>{
+  if(isListingOrdinalColumn(model,i))return '';
+  const isName=i===model.nameColumn,isReg=i===model.registrationColumn;
+  const hint=isName?'Required':isReg?'Optional':'Optional';
+  const draft=state.addDraft?.[i]??'';
+  return '<label><span>'+esc(col.label)+' <small>('+hint+')</small></span>'+
+   '<textarea name="ml-new-'+i+'" rows="2" maxlength="'+(isName?250:isReg?100:15000)+'"'+(isName?' required':'')+
+   ' placeholder="'+(isName?'Company name':isReg?'Registration number':isListingDateColumn(col.label)?'DD/MM/YYYY':'N/A')+'">'+esc(draft)+'</textarea></label>';
+ }).join('');
+ return '<div class="modal-backdrop"><section class="modal ml-editor-modal" role="dialog" aria-modal="true" aria-label="Add Company to Master Listing">'+
+  '<div class="modal-heading"><h3>Add Company to Master Listing</h3>'+act('✕','ml-close-add')+'</div>'+
+  '<p class="muted">Enter one company without reimporting the Excel file. Existing rows are preserved; No. is assigned automatically.</p>'+
+  '<form id="ml-add-form"><div class="ml-edit-fields">'+fields+'</div>'+
+  '<label class="ml-add-sync"><input type="checkbox" name="ml-create-documents"'+(state.addCreateFolders?' checked':'')+
+  '> Create matching company under Documents with standard folders (if missing)</label>'+
+  '<p class="muted">Statutory dates are displayed as DD/MM/YYYY. Your previous listing is privately backed up before saving.</p>'+
+  '<div class="ml-actions">'+act('Cancel','ml-close-add')+
+  '<button class="btn primary" type="submit"'+(state.saving?' disabled':'')+'>Save New Company</button></div></form></section></div>';
+}
+function renderEditor(){
   const model=state.model,index=state.editIndex,row=model.rows[index],company=companyData(model,row);
   return '<div class="modal-backdrop"><section class="modal ml-editor-modal" role="dialog" aria-modal="true" aria-label="Edit Master Listing company">'+
    '<div class="modal-heading"><h3>Edit '+esc(company.name)+'</h3>'+act('✕','ml-close-edit')+'</div>'+
@@ -278,6 +366,8 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
  function onClick(action,id,readWorkbook){
   if(!action?.startsWith('ml-'))return false;
   const asyncRun=fn=>{if(state.loading||state.saving)return;Promise.resolve().then(fn).catch(fail);};
+  if(action==='ml-add'){state.addOpen=true;state.editIndex=null;state.addDraft=null;state.addCreateFolders=true;state.error='';onRender?.();return true;}
+  if(action==='ml-close-add'){state.addOpen=false;state.addDraft=null;state.error='';onRender?.();return true;}
   if(action==='ml-upload'){document.getElementById('ml-file')?.click();return true;}
   if(action==='ml-cancel'){state.sheets=[];state.preview=null;state.selectedFile=null;state.error='';onRender?.();return true;}
   if(action==='ml-confirm'){asyncRun(importSelected);return true;}
@@ -325,6 +415,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   state.preview=importPreview();onRender?.();return true;
  }
  function onSubmit(form){
+  if(form?.id==='ml-add-form'){Promise.resolve().then(()=>saveAddedCompany(form)).catch(fail);return true;}
   if(form?.id!=='ml-edit-form')return false;
   Promise.resolve().then(()=>saveEdit(form)).catch(fail);
   return true;
