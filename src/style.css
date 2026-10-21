@@ -219,6 +219,8 @@ body.zh-ar-fullscreen-open{overflow:hidden}
 .ml-columns-nav span,.ml-pages span{margin:auto}
 .ml-editor-modal{width:min(900px,96vw);max-height:90dvh;display:flex;flex-direction:column;gap:9px}
 .ml-editor-modal .modal-heading{flex:none}
+.ml-add-sync{display:flex;align-items:center;gap:10px;padding:10px 4px;font-size:13px;color:#294862;line-height:1.4;cursor:pointer}
+.ml-add-sync input[type="checkbox"]{width:18px;height:18px;flex:0 0 18px;accent-color:#173e64;cursor:pointer}
 .ml-editor-modal form{min-height:0;display:flex;flex-direction:column;flex:1}
 .ml-edit-fields{flex:1;min-height:110px;overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;align-content:start;padding:8px 4px}
 .ml-edit-fields label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:#415c75;min-width:0}
