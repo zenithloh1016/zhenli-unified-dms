@@ -73,7 +73,7 @@ export function currentMemberRecords(book,indices){
  }
  return [...latest.values()].filter(item=>isCurrentMember(item.record));
 }
-function currentMemberBlocks(book,indices){
+function currentMemberBlocks(book,indices,{showBlanks=false}={}){
  const active=currentMemberRecords(book,indices);
  const blocks=[];
  for(const {record,sheetIndex} of active){
@@ -84,6 +84,25 @@ function currentMemberBlocks(book,indices){
   if(!name||!shares)continue;
   blocks.push({type:'record',sheetIndex,row:record.row,title:record.title,status:''});
   blocks.push({...mappedField(name,sheetIndex),label:'Shareholder Name'});
+  // Retain existing member identity and contact particulars for CURRENT
+  // shareholders only. Movement history, ceased dates, certificate details,
+  // allotments and transfers remain hidden in the editable review and PDF.
+  const personal=(record.fields||[]).filter(f=>
+   isMemberPersonalOrSharesLabel(f.label)&&f!==name&&f!==shares&&
+   !/^(?:name|full name|shareholder'?s? name|member'?s? name)$/i.test(f.label)&&
+   !/\b(?:shares held|shareholding)\b/i.test(f.label));
+  const addr=personal.find(f=>/^address$/i.test(f.label));
+  const continuation=addr?personal.filter(f=>/^address · continued$/i.test(f.label)&&
+   f.row>addr.row):[];
+  for(const f of personal){
+   if(continuation.includes(f))continue;
+   if(!showBlanks&&!hasText(f.value)&&f!==addr)continue;
+   if(f===addr&&continuation.length){
+    blocks.push({...mappedField(f,sheetIndex),label:'Address',
+     value:[f,...continuation].map(x=>String(x.value||'').trim()).filter(Boolean).join('\n'),
+     composite:true,continuation:continuation.map(x=>({row:x.row,col:x.col}))});
+   }else blocks.push(mappedField(f,sheetIndex));
+  }
   blocks.push({...mappedField(shares,sheetIndex),label:'Current Number of Shares Held'});
  }
  if(!blocks.length)blocks.push({type:'note',
@@ -120,7 +139,7 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
   }
   if(!first)result.blocks.push({type:'note',text:'Registered Address is not recorded. Use Add Field to create it.'});
  }else if(details.kind==='member'){
-  result.blocks.push(...currentMemberBlocks(book,[sheetIndex]));
+  result.blocks.push(...currentMemberBlocks(book,[sheetIndex],{showBlanks}));
  }else if(details.kind==='table'||details.kind==='text'){
   result.blocks.push(...recordsToBlocks(details.records,sheetIndex,showBlanks));
  }else{
@@ -175,7 +194,7 @@ export function buildGroupedRegister(book,sheetIndex,options={}){
  if(!members.length)throw Error('Register not available.');
  if(registerLabel(book.sheets[sheetIndex].name)==='Register of Members'){
   return finishDisplay(book,{sheetIndex:members[0],title:'Register of Members',
-   sourceName:book.sheets[members[0]].name,blocks:currentMemberBlocks(book,members)});
+   sourceName:book.sheets[members[0]].name,blocks:currentMemberBlocks(book,members,options)});
  }
  return buildIndependentRegister(book,sheetIndex,options);
 }
