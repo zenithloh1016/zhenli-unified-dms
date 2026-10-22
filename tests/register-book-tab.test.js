@@ -32,26 +32,40 @@ test('Statutory Registers replaces the old file directory',()=>{
  assert.doesNotMatch(html,/Folder not yet created/);
  assert.match(html,/ALPHA SDN BHD/);
 });
-test('opens editable statutory register templates for a company',async()=>{
+test('each statutory register opens independently without Annual Return or Excel layout',async()=>{
  const {tab}=fixture();
  await tab.openCompany('c1');
  assert.equal(tab.state.book.companyId,'c1');
- const html=tab.render();
- assert.match(html,/data-action="sr-mode-review"/);
- assert.match(html,/data-action="sr-mode-worksheet"/);
- assert.match(html,/Directors/);
- assert.match(html,/Members/);
- assert.match(html,/Beneficial Owners/);
+ let html=tab.render();
+ assert.match(html,/Register of Directors|Directors/);
+ assert.match(html,/Export This Register PDF/);
+ assert.match(html,/Add Entry/);
+ assert.match(html,/Add Field/);
+ assert.match(html,/data-action="sr-sheet"/);
  assert.match(html,/data-action="sr-save"/);
- assert.match(html,/data-action="sr-pdf"/);
- assert.match(html,/Annual Return Layout/);
- assert.match(html,/STATUTORY REGISTER PARTICULARS REVIEW/);
- assert.match(html,/sr-ar-row/);
- tab.command('sr-mode-worksheet');
- const original=tab.render();
- assert.match(original,/Original Worksheet/);
- assert.match(original,/Identification No/);
- assert.match(original,/class="rb-cell"/);
+ assert.match(html,/sr-ar-paper/);
+ assert.doesNotMatch(html,/Annual Return Layout|Original Worksheet|sr-mode-worksheet|rb-grid-scroll/);
+ tab.command('sr-sheet','2');
+ html=tab.render();
+ assert.match(html,/Beneficial Owners/);
+ assert.equal(tab.state.sheetIndex,2);
+ assert.doesNotMatch(html,/Annual Return Layout|Original Worksheet|rb-grid/);
+});
+test('add statutory entries and fields using register controls',async()=>{
+ const {tab}=fixture();
+ await tab.openCompany('c1');
+ const previousPrompt=globalThis.window;
+ globalThis.window={prompt:()=> 'NEW DIRECTOR'};
+ try{
+  const starting=tab.state.book.sheets[0].rows.length;
+  tab.command('sr-add-row');
+  assert.equal(tab.state.book.sheets[0].rows.length,starting+1);
+  assert.match(tab.render(),/NEW DIRECTOR/);
+  globalThis.window.prompt=()=> 'Passport No.';
+  tab.command('sr-add-col');
+  assert.match(tab.render(),/Passport No./);
+  assert.equal(tab.state.dirty,true);
+ }finally{globalThis.window=previousPrompt;}
 });
 test('saves edited register privately and reloads it',async()=>{
  const {tab,blobs,written}=fixture();
