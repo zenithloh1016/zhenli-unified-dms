@@ -105,9 +105,10 @@ test('importing another Excel preserves current-person data without restoring ol
 test('ambiguous duplicate company names are not copied from stale old Excel entries',()=>{
  const original=buildMasterListing([
   ['Company Name','Current Directors','Current Members','Current Beneficial Owners'],
-  ['SILVERSPOONS SDN. BHD.','A','B','C'],
-  ['SILVERSPOONS SDN. BHD.','D','E','F']
+  ['SILVERSPOONS SDN. BHD.','A','B','C']
  ],{nameColumn:0,registrationColumn:-1});
+ // Older DMS data can contain duplicate company rows even though fresh Excel import deduplicates.
+ original.rows.push({...original.rows[0],id:'manual-duplicate',values:['SILVERSPOONS SDN. BHD.','D','E','F']});
  const next=buildMasterListing([
   ['Company Name','Notes'],['SILVERSPOONS SDN. BHD.','Keep']
  ],{nameColumn:0,registrationColumn:-1});
