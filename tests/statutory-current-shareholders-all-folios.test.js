@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makeRegisterBook} from '../src/statutory-register-data.js';
+import {makeRegisterBook,sanitizeSheet} from '../src/statutory-register-data.js';
 import {describeStatutorySheet} from '../src/statutory-register-review.js';
 import {buildGroupedRegister,buildIndependentRegister,currentMemberRecords,buildCombinedRegisters} from '../src/statutory-register-annual-layout.js';
 import {renderStatutoryRegisterDocument} from '../src/statutory-register-annual-ui.js';
@@ -22,7 +22,7 @@ function folio(rows,at,{name,id,shares,ceased='-',balance}){
 }
 function book(rows){
  return makeRegisterBook(company,{path:'Register Book_EXAMPLE SDN BHD.xlsx',
-  sheets:[{name:'Register of Members 001',rows}]});
+  sheets:[sanitizeSheet('Register of Members 001',rows)]});
 }
 test('reads every folio from a multi-member worksheet and excludes ceased or zero-shareholders',()=>{
  const rows=Array.from({length:125},()=>[]);
@@ -64,7 +64,7 @@ test('a newer imported member worksheet supersedes older current holdings and ce
  folio(newRows,8,{name:'SHAREHOLDER ONE',id:'ONE001',shares:'0',ceased:'31/12/2025'});
  folio(newRows,28,{name:'NEW SHAREHOLDER',id:'NEW002',shares:'300'});
  const b=book(old);
- b.sheets.push({name:'Register of Members 001 (Imported 2026-10-22)',rows:newRows});
+ b.sheets.push(sanitizeSheet('Register of Members 001 (Imported 2026-10-22)',newRows));
  const source=structuredClone(b.sheets);
  const current=currentMemberRecords(b,[0,1]);
  assert.deepEqual(current.map(x=>x.record.title),['NEW SHAREHOLDER']);
