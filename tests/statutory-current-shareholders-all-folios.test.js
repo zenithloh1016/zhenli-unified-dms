@@ -60,6 +60,9 @@ test('reads every folio from a multi-member worksheet and excludes ceased or zer
  assert(html.includes('ID-B'),'retain current member identification');
  assert(!html.includes('Date Ceased to be A Member'),'do not display historical cessation dates');
  assert(!html.includes('SHARES ACQUIRED'),'historic share movement ledger is hidden');
+ assert(html.includes('RM100'));
+ assert(html.includes('3,000'));
+ assert(html.includes('78.95%'));
 });
 test('a newer imported member worksheet supersedes older current holdings and cessation states',()=>{
  const old=Array.from({length:25},()=>[]);
