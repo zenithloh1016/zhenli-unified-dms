@@ -6,7 +6,7 @@ import {previewStatutoryZip,makeRegisterBook,mergeRegisterBooks,validateRegister
 import {buildStatutoryRegistersPdf} from './statutory-register-pdf.js';
 import {renderStatutoryRegisterDocument} from './statutory-register-annual-ui.js';
 import {buildGroupedRegister} from './statutory-register-annual-layout.js';
-import {registerLabel,registerKind,describeStatutorySheet,isManagerRegister,normalizeRegisterName,ensureChargeRegister,visibleRegisterIndices} from './statutory-register-review.js';
+import {registerLabel,registerKind,describeStatutorySheet,isManagerRegister,normalizeRegisterName,ensureChargeRegister,visibleRegisterIndices,registerGroupIndices} from './statutory-register-review.js';
 import {browserDownload,saveOrShareFile} from './file-transfer.js';
 import {Capacitor} from '@capacitor/core';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
@@ -148,6 +148,10 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
      (registerKind(sheet.name)==='profile'?'':act(registerKind(sheet.name)==='member'?'Add Member Folio':'Add Entry','sr-add-row')+act('Add Field','sr-add-col'))+
      act(registerKind(sheet.name)==='profile'?'Edit Address Below':'Rename Register',registerKind(sheet.name)==='profile'?'sr-focus-address':'sr-rename-sheet')+
      act(state.showBlankFields?'Hide Blank Fields':'Show Blank Fields','sr-show-blank-fields')+
+     (registerGroupIndices(book,state.sheetIndex).some(i=>
+      Object.keys(book.removedEntries||{}).some(k=>k.startsWith(i+':')&&book.removedEntries[k])||
+      Object.keys(book.removedFields||{}).some(k=>k.startsWith(i+':')&&book.removedFields[k])
+     )?act('Restore Removed Items','sr-restore-removed'):'')+
      '</div><p class="muted sr-register-hint">One register is displayed at a time. Edit the particulars directly and choose Save Changes. The PDF contains this register only, using the same format shown here.</p>'+
      renderStatutoryRegisterDocument(book,state.sheetIndex,{showBlanks:state.showBlankFields}):
      '<div class="rb-help">Select Add Register to begin.</div>')+
@@ -253,6 +257,51 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    document.querySelector('.sr-register-paper textarea[data-merge-address="true"]')?.focus();
    return true;
   }
+  if(action==='sr-remove-field'){
+   const match=/^(\d+):(\d+):(\d+)$/.exec(String(id));
+   if(!match)return true;
+   const [si,ri,ci]=match.slice(1).map(Number);
+   const sheet=state.book?.sheets?.[si];
+   if(!sheet||isManagerRegister(sheet.name)||ri<0||ri>=sheet.rows.length||ci<0||ci>=250)return true;
+   if(!registerGroupIndices(state.book,state.sheetIndex).includes(si))return true;
+   const projected=buildGroupedRegister(state.book,state.sheetIndex,{showBlanks:true});
+   const field=projected.blocks.find(b=>b.type==='field'&&b.sheetIndex===si&&b.row===ri&&b.col===ci);
+   if(!field)return true;
+   if(!window.confirm('Remove "'+field.label+'" from this statutory register and its PDF export?\n\nThis change takes effect when you select Save Changes. The original imported values remain recoverable.'))return true;
+   if(!state.book.removedFields)state.book.removedFields={};
+   state.book.removedFields[id]=true;
+   state.dirty=true;notify();return true;
+  }
+  if(action==='sr-delete-entry'){
+   const match=/^(\d+):(\d+)$/.exec(String(id));
+   if(!match)return true;
+   const [si,ri]=match.slice(1).map(Number);
+   const sheet=state.book?.sheets?.[si];
+   if(!sheet||isManagerRegister(sheet.name)||ri<0||ri>=sheet.rows.length)return true;
+   if(!registerGroupIndices(state.book,state.sheetIndex).includes(si))return true;
+   const projected=buildGroupedRegister(state.book,state.sheetIndex,{showBlanks:true});
+   const entry=projected.blocks.find(b=>b.type==='record'&&b.sheetIndex===si&&b.row===ri);
+   if(!entry)return true;
+   if(!window.confirm('Delete the entry "'+entry.title+'" from this register and its PDF export?\n\nSave Changes to apply. The original record remains in the secure archive.'))return true;
+   if(!state.book.removedEntries)state.book.removedEntries={};
+   state.book.removedEntries[id]=true;
+   state.dirty=true;notify();return true;
+  }
+  if(action==='sr-restore-removed'){
+   const group=registerGroupIndices(state.book,state.sheetIndex);
+   if(!group.length)return true;
+   if(!window.confirm('Restore all previously removed entries and fields in this register? Save Changes to apply.'))return true;
+   let count=0;
+   for(const prop of ['removedEntries','removedFields']){
+    const mapping=state.book[prop]||{};
+    for(const key of Object.keys(mapping)){
+     if(group.some(i=>key.startsWith(i+':'))){delete mapping[key];count++;}
+    }
+   }
+   if(count){state.dirty=true;notify();}
+   return true;
+  }
+
   if(action==='sr-show-blank-fields'){state.showBlankFields=!state.showBlankFields;notify();return true;}
   if(action==='sr-close'){closeCompany();return true;}
   if(action==='sr-cancel-import'){state.importPreview=null;state.importFilename='';notify();return true;}
