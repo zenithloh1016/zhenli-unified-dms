@@ -3,7 +3,7 @@
  * All edit coordinates map to privately stored statutory data; Excel's
  * sheet layout is never displayed and is never required for PDF export.
  */
-import {describeStatutorySheet,registerLabel,isManagerRegister,isMemberPersonalOrSharesLabel} from './statutory-register-review.js';
+import {describeStatutorySheet,registerLabel,registerGroups,isManagerRegister,isMemberPersonalOrSharesLabel} from './statutory-register-review.js';
 
 export const STATUTORY_DOCUMENT_COLORS={
  ink:'#243b4d',navy:'#193f64',blue:'#245f80',light:'#eaf3f8',
@@ -63,7 +63,27 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
  const fields=items=>(items||[]).filter(f=>showBlanks||hasText(f.value))
   .map(f=>mappedField(f,sheetIndex));
  if(details.kind==='profile'){
-  result.blocks.push(...fields(details.fields));
+  // Render the registered office exactly once as a multiline editable address.
+  // Continuation cells remain in the stored import until this field is edited.
+  const address=/^registered (?:office|address)$/i;
+  let current=null;
+  for(const item of details.fields){
+   if(address.test(item.label)){
+    current={...item,label:'Registered Address',continuationRows:[]};
+    result.blocks.push({...mappedField(current,sheetIndex),continuationRows:[]});
+    continue;
+   }
+   if(/^registered (?:office|address) · continued$/i.test(item.label)&&current){
+    const block=result.blocks.find(b=>b.type==='field'&&b.row===current.row&&b.col===current.col);
+    if(block){
+     if(hasText(item.value))block.value+=(hasText(block.value)?'\n':'')+String(item.value);
+     block.continuationRows.push({row:item.row,col:item.col});
+    }
+    continue;
+   }
+   current=null;
+   if(showBlanks||hasText(item.value))result.blocks.push(mappedField(item,sheetIndex));
+  }
  }else if(details.kind==='member'){
   // A folio can contain decades of allotments, acquisitions and transfers.
   // Only display the member's personal/contact details and the recorded
@@ -93,6 +113,26 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
  }else{
   result.blocks.push(...genericEntries(sheet.rows||[],sheetIndex,{showBlanks}));
  }
+ // A deliberate per-field label override is stored apart from source headers:
+ // changing one register's label never changes another member's folio or
+ // disrupts ZIP reimports and their original column positions.
+ for(const item of result.blocks){
+  if(item.type!=='field')continue;
+  const label=book.fieldLabels?.[item.sheetIndex+':'+item.row+':'+item.col];
+  if(typeof label==='string'&&label.trim())item.label=label.slice(0,180);
+ }
  if(!result.blocks.length)result.blocks.push({type:'note',text:'No entries recorded. Choose Add Entry to begin.'});
  return result;
+}
+
+/** The same logical register groups power both the editor and PDF generation. */
+export function buildRegisterSections(book,{sheetIndex=0,combined=false,showBlanks=false}={}){
+ const groups=registerGroups(book,{includeCompanyDetails:!combined});
+ const selected=combined?groups:groups.filter(g=>g.indices.includes(sheetIndex));
+ if(!selected.length)throw Error('No statutory register is selected for export.');
+ return selected.map(group=>{
+  const pieces=group.indices.map(i=>buildIndependentRegister(book,i,{showBlanks}));
+  return {title:group.title,blocks:pieces.flatMap(piece=>piece.blocks),
+   sheetIndices:group.indices};
+ });
 }
