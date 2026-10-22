@@ -44,7 +44,9 @@ test('opens editable statutory register templates for a company',async()=>{
  assert.match(html,/Beneficial Owners/);
  assert.match(html,/data-action="sr-save"/);
  assert.match(html,/data-action="sr-pdf"/);
- assert.match(html,/EASY REVIEW/);
+ assert.match(html,/Annual Return Layout/);
+ assert.match(html,/STATUTORY REGISTER PARTICULARS REVIEW/);
+ assert.match(html,/sr-ar-row/);
  tab.command('sr-mode-worksheet');
  const original=tab.render();
  assert.match(original,/Original Worksheet/);
