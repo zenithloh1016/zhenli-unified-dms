@@ -43,3 +43,15 @@ test('restored ACE director import supersedes older Current classification witho
  assert(merged.every(x=>x.status==='former'&&x.sourceSheetIndex===1));
  assert.equal(book.sheets[0].rows[1][3],'-','source data is preserved');
 });
+
+test('Appointment Status takes precedence over an empty Date of Cessation without inventing a date',()=>{
+ const sheet=sanitizeSheet('Register of Directors',[
+  ['Director Name','Date of Cessation','Appointment Status'],
+  ['HISTORICAL DIRECTOR','', 'Former'],
+  ['ACTIVE DIRECTOR','-', 'Current']
+ ]);
+ const parsed=describeStatutorySheet(sheet);
+ assert.deepEqual(parsed.records.map(x=>x.status),['former','current']);
+ assert.equal(sheet.rows[1][1],'');
+ assert.equal(sheet.rows[2][1],'-');
+});
