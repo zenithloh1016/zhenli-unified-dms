@@ -5,7 +5,8 @@
 import {previewStatutoryZip,makeRegisterBook,mergeRegisterBooks,validateRegisterBook,normValue} from './statutory-register-data.js';
 import {buildStatutoryRegistersPdf} from './statutory-register-pdf.js';
 import {renderStatutoryRegisterDocument} from './statutory-register-annual-ui.js';
-import {registerLabel,registerKind,describeStatutorySheet,isManagerRegister,normalizeRegisterName} from './statutory-register-review.js';
+import {buildRegisterSections} from './statutory-register-annual-layout.js';
+import {registerLabel,registerGroups,registerKind,describeStatutorySheet,isManagerRegister,normalizeRegisterName} from './statutory-register-review.js';
 import {browserDownload,saveOrShareFile} from './file-transfer.js';
 import {Capacitor} from '@capacitor/core';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
@@ -129,23 +130,25 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   if(!book||!company)return '';
   const sheet=book.sheets[state.sheetIndex];
   const name=sheet?registerLabel(sheet.name):'No register selected';
+  const groups=registerGroups(book);
   return '<div class="rb-editor">'+
    '<div class="rb-editor-top">'+act('← All Companies','sr-close')+
    '<div><h2>'+esc(company.name)+'</h2><p class="muted">'+esc(company.registration_no||'No registration number')+
    ' · '+esc(book.sourceFile||'Manually created records')+'</p></div></div>'+
    '<div class="rb-editor-actions">'+act('Save Changes','sr-save','','primary')+
     (sheet&&!isManagerRegister(sheet.name)?act('Export This Register PDF','sr-pdf','','secondary'):'')+
+    (registerGroups(book,{includeCompanyDetails:false}).length?act('Export All Registers PDF','sr-pdf-all','','secondary'):'')+
     act('Add Register','sr-add-sheet')+
     '<span class="rb-dirty" id="sr-dirty">'+(state.dirty?'Unsaved changes':'All changes saved')+'</span></div>'+
    '<div class="sr-registers-label">Choose a statutory register to view, edit or export:</div>'+
-   '<div class="rb-sheet-tabs">'+book.sheets.map((s,i)=>isManagerRegister(s.name)?'':'<button type="button" class="rb-sheet-tab '+
-     (i===state.sheetIndex?'active':'')+'" data-action="sr-sheet" data-id="'+i+'">'+esc(registerLabel(s.name))+'</button>').join('')+'</div>'+
+   '<div class="rb-sheet-tabs">'+groups.map(group=>'<button type="button" class="rb-sheet-tab '+
+     (group.indices.includes(state.sheetIndex)?'active':'')+'" data-action="sr-sheet" data-id="'+group.indices[0]+'">'+esc(group.title)+'</button>').join('')+'</div>'+
    (sheet&&!isManagerRegister(sheet.name)?'<div class="sr-register-controls">'+
      '<strong>'+esc(name)+'</strong>'+
      act(registerKind(sheet.name)==='member'?'Add Member Folio':'Add Entry','sr-add-row')+
      act('Add Field','sr-add-col')+act('Rename Register','sr-rename-sheet')+
      act(state.showBlankFields?'Hide Blank Fields':'Show Blank Fields','sr-show-blank-fields')+
-     '</div><p class="muted sr-register-hint">One register is displayed at a time. Edit the particulars directly and choose Save Changes. The PDF contains this register only, using the same format shown here.</p>'+
+     '</div><p class="muted sr-register-hint">Edit any field directly or choose Edit Field to change its label and value. Registered Address appears once with all address lines. Export This Register downloads the selected register; Export All combines the statutory registers.</p>'+
      renderStatutoryRegisterDocument(book,state.sheetIndex,{showBlanks:state.showBlankFields}):
      '<div class="rb-help">Select Add Register to begin.</div>')+
    (state.originalDocs.length?'<details class="rb-originals"><summary>Preserved original Register Book files ('+state.originalDocs.length+')</summary><p class="muted">Original files remain securely archived, even though their former Documents folders are hidden.</p>'+state.originalDocs.map(d=>'<div class="rb-original-row"><span>'+esc(d.name)+'</span>'+act('Download Original','sr-original',d.id)+'</div>').join('')+'</details>':'')+
@@ -203,7 +206,17 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   if(!sheet||!Number.isInteger(r)||!Number.isInteger(c)||r<0||c<0||r>=sheet.rows.length||c>=250)return false;
   const value=normValue(target.value);
   if((sheet.rows[r][c]||'')===value)return true;
-  sheet.rows[r][c]=value;state.dirty=true;
+  sheet.rows[r][c]=value;
+  // First edit consolidates legacy registered-office continuation cells into
+  // the single displayed multiline address instead of duplicating old lines.
+  if(target.dataset.addressRows){
+   for(const entry of target.dataset.addressRows.split(',')){
+    const [rr,cc]=entry.split(':').map(Number);
+    if(Number.isInteger(rr)&&Number.isInteger(cc)&&sheet.rows[rr]&&cc<sheet.rows[rr].length)
+     sheet.rows[rr][cc]='';
+   }
+  }
+  state.dirty=true;
   const marker=document.getElementById('sr-dirty');if(marker)marker.textContent='Unsaved changes';
   return true;
  }
@@ -216,6 +229,28 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    }return true;
   }
   if(action==='sr-show-blank-fields'){state.showBlankFields=!state.showBlankFields;notify();return true;}
+  if(action==='sr-edit-field'){
+   const [i,r,c]=String(id).split(':').map(Number);
+   if(![i,r,c].every(Number.isInteger))return true;
+   const sheet=state.book?.sheets?.[i];
+   if(!sheet||isManagerRegister(sheet.name)||!sheet.rows[r]||c>=sheet.rows[r].length)return true;
+   const block=buildRegisterSections(state.book,{sheetIndex:i,showBlanks:true})[0].blocks
+    .find(f=>f.type==='field'&&f.sheetIndex===i&&f.row===r&&f.col===c);
+   if(!block)return true;
+   const label=window.prompt('Edit field label:',block.label);
+   if(label===null)return true;
+   const clean=normValue(label.trim()).slice(0,180);
+   if(!clean)throw Error('A field label cannot be empty.');
+   if(!state.book.fieldLabels)state.book.fieldLabels={};
+   state.book.fieldLabels[i+':'+r+':'+c]=clean;
+   const value=window.prompt('Edit field information:',block.value);
+   if(value!==null){
+    sheet.rows[r][c]=normValue(value);
+    for(const child of block.continuationRows||[])
+     if(sheet.rows[child.row])sheet.rows[child.row][child.col]='';
+   }
+   state.dirty=true;notify();return true;
+  }
   if(action==='sr-close'){closeCompany();return true;}
   if(action==='sr-cancel-import'){state.importPreview=null;state.importFilename='';notify();return true;}
   if(action==='sr-original'){void downloadOriginal(id).catch(error=>status('',error?.message||String(error)));return true;}
@@ -227,7 +262,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     let n=1;
     while(state.book.sheets.some(s=>new RegExp('^Register of Members 0*'+n+'(?:\\s|$)','i').test(s.name)))n++;
     const folioName='Register of Members '+String(n).padStart(3,'0');
-    state.book.sheets.push({name:folioName,rows:[['Name:','New member'],['Identification / Registration No.:',''],['Address:',''],['Date Became Member:',''],['Date Ceased to be A Member:','']]});
+    state.book.sheets.push({name:folioName,rows:[['Name:','New member'],['Identification / Registration No.:',''],['Address:',''],['Total Shares Held:','']]});
     state.sheetIndex=state.book.sheets.length-1;state.showBlankFields=true;
     state.dirty=true;notify();return true;
    }
@@ -369,14 +404,14 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     (failed.length?' Errors: '+failed.slice(0,3).join(' | '):'');
   }finally{state.saving=false;notify();}
  }
- async function pdf(){
+ async function pdf({combined=false}={}){
   if(!state.book)throw Error('Select a company.');
-  state.saving=true;state.error='';status('Generating statutory register PDF…');
+  state.saving=true;state.error='';status(combined?'Generating combined statutory registers PDF…':'Generating statutory register PDF…');
   try{
-   const blob=await buildStatutoryRegistersPdf(state.book,{sheetIndex:state.sheetIndex,showBlanks:state.showBlankFields,onProgress:message=>{state.message=message;notify();}});
+   const blob=await buildStatutoryRegistersPdf(state.book,{sheetIndex:state.sheetIndex,combined,showBlanks:state.showBlankFields,onProgress:message=>{state.message=message;notify();}});
    const safe=String(state.book.companyName||'Company').replace(/[\\/:*?"<>|]/g,'_').slice(0,110);
    const type=registerLabel(state.book.sheets[state.sheetIndex]?.name||'Register of Other Records').replace(/[\\/:*?"<>|]/g,'_');
-   const filename='Statutory Register_'+type+'_'+safe+'.pdf';
+   const filename=combined?'Combined_Statutory_Registers_'+safe+'.pdf':'Statutory Register_'+type+'_'+safe+'.pdf';
    if(Capacitor.isNativePlatform()){
     await savePdfToAndroidFiles(blob,filename);
     status('PDF saved to your chosen Android folder.');
