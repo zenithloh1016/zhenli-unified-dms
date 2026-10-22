@@ -325,3 +325,55 @@ body.zh-ar-fullscreen-open{overflow:hidden}
   text-align:center;
   vertical-align:middle;
 }
+
+
+/* Native Statutory Deadlines tab: due dates read directly from saved Master Listing. */
+.tabbar .tab{min-width:0;white-space:normal;font-size:clamp(12px,1.1vw,16px)}
+.sd-workspace{min-width:0}
+.sd-workspace .content-header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.sd-workspace .content-header h1{margin:3px 0 9px}
+.sd-workspace .content-header .muted{margin:0;line-height:1.5}
+.sd-workspace .header-buttons{display:flex;gap:8px;flex-wrap:wrap}
+.sd-sync,.sd-warning{border:1px solid #d6e3ed;padding:12px 14px;border-radius:9px;font-size:13px;margin:8px 0;background:#f7fafc;color:#365570;overflow-wrap:anywhere}
+.sd-warning{background:#fff8ee;border-color:#f0dcba;color:#75552d}
+.sd-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:15px 0 21px}
+.sd-metrics>div{display:flex;flex-direction:column;gap:8px;padding:17px 18px;background:#fff;border:1px solid #dce6ef;border-radius:12px;min-width:0}
+.sd-metrics strong{font-size:24px;color:#193f64;line-height:1}
+.sd-metrics span{font-size:12px;color:#54718a}
+.sd-toolbar{display:grid;grid-template-columns:minmax(190px,1.8fr) minmax(150px,1fr) minmax(160px,1fr) auto;gap:9px;align-items:end;margin:12px 0}
+.sd-toolbar label{display:flex;flex-direction:column;gap:6px;min-width:0;font-size:12px;color:#47617d;font-weight:700}
+.sd-toolbar input,.sd-toolbar select{width:100%;height:41px;border:1px solid #d3e0ec;border-radius:9px;padding:6px 10px;font:inherit;font-size:13px;color:#243d54;background:#fff}
+.sd-toolbar .btn{min-height:41px;font-size:12px;padding:7px 12px;white-space:nowrap}
+.sd-list-heading{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;margin:18px 0 9px;color:#5c7287;font-size:12px}
+.sd-list-heading strong{color:#193f64}
+.sd-scroll{width:100%;max-height:min(75vh,750px);overflow:auto;border:1px solid #d8e4ed;border-radius:12px;background:#fff}
+.sd-table{border-collapse:separate;border-spacing:0;width:100%;min-width:890px;font-size:12px}
+.sd-table th,.sd-table td{border-bottom:1px solid #e8eef3;padding:12px 13px;vertical-align:middle;text-align:center}
+.sd-table th{position:sticky;top:0;z-index:2;background:#eaf2f8;color:#294c6c;font-size:12px;white-space:nowrap}
+.sd-table tbody tr:nth-child(even){background:#f9fbfe}
+.sd-table .sd-company{font-weight:700;color:#284b67;min-width:220px;text-align:left;max-width:300px;overflow-wrap:anywhere}
+.sd-table .sd-date{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.sd-tag,.sd-status{display:inline-flex;align-items:center;justify-content:center;border-radius:8px;padding:5px 8px;font-size:11px;line-height:1.35;max-width:230px}
+.sd-tag{background:#edf4fa;color:#305477}
+.sd-status{background:#eef3f7;color:#526c82}
+.sd-status.sd-soon{background:#fff2dc;color:#77501a}
+.sd-status.sd-past{background:#fceceb;color:#8a4544}
+.sd-status.sd-missing{background:#f1f3f6;color:#617282}
+.sd-table .sd-edit{min-height:30px;font-size:11px;padding:5px 9px;white-space:nowrap}
+.sd-empty,.sd-empty-state{text-align:center;padding:35px 16px;color:#657f95}
+.sd-empty-state{border:1px dashed #cfdeea;border-radius:14px;background:#fff}
+.sd-footnote{margin:12px 0 0;color:#667f91;font-size:12px;line-height:1.65}
+@media(max-width:1050px){
+ .sd-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .sd-toolbar .btn{justify-self:start}
+}
+@media(max-width:650px){
+ .sd-workspace .content-header h1{font-size:26px}
+ .sd-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .sd-metrics>div{padding:14px 12px}
+ .sd-metrics strong{font-size:21px}
+ .sd-toolbar{grid-template-columns:1fr}
+ .sd-toolbar .btn{width:100%}
+ .sd-workspace .header-buttons{width:100%}
+ .sd-workspace .header-buttons .btn{flex:1}
+}
