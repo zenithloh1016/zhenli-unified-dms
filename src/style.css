@@ -517,3 +517,79 @@ body.zh-ar-fullscreen-open{overflow:hidden}
  .sr-filter-group{width:100%}
  .sr-filter{flex:1}
 }
+
+
+/* Annual Return-style statutory register screen / A4 PDF visual contract.
+ * Both screens and exported PDF use the same model, colors, section and row order. */
+.sr-ar-preview-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0 11px}
+.sr-ar-preview-tools strong{font-size:12px;color:#284f6f}
+.sr-ar-preview-tools .muted{font-size:12px}
+.sr-ar-paper{width:100%;max-width:794px;box-sizing:border-box;margin:0 auto 25px;background:#fff;color:#243b4d;
+ border:1px solid #dbe6ee;box-shadow:0 7px 24px rgba(23,50,76,.09);font-family:Arial,"Microsoft YaHei","Noto Sans",sans-serif;
+ overflow:hidden}
+.sr-ar-document-header{padding:0 44px 0}
+.sr-ar-topline{height:6px;background:#193f64;margin:0 -44px 29px}
+.sr-ar-kicker{font-size:10px;font-weight:750;letter-spacing:.065em;color:#245f80;margin:0 0 18px;line-height:1.35}
+.sr-ar-document-header h2{font-size:21px;line-height:1.2;font-weight:750;overflow-wrap:anywhere;color:#193f64;margin:0 0 14px}
+.sr-ar-subtitle{color:#58748b;font-size:12px;font-weight:750;letter-spacing:.02em;margin:0 0 13px}
+.sr-ar-meta{background:#eaf3f8;display:flex;align-items:center;justify-content:space-between;gap:10px;
+ padding:10px 12px;min-height:38px;box-sizing:border-box;font-size:11px;color:#193f64}
+.sr-ar-meta span{font-weight:750}
+.sr-ar-meta strong{font-size:12px;text-align:right;overflow-wrap:anywhere;color:#243b4d}
+.sr-ar-document-body{padding:20px 44px 0}
+.sr-ar-section{margin-bottom:18px;scroll-margin-top:22px}
+.sr-ar-section-header{min-height:40px;display:flex;justify-content:space-between;align-items:center;gap:12px;
+ padding:9px 14px;background:#193f64;color:#fff;box-sizing:border-box}
+.sr-ar-section-header h3{color:#fff;font-size:15px;line-height:1.35;font-weight:750;margin:0;overflow-wrap:anywhere}
+.sr-ar-section-header span{font-size:10px;white-space:nowrap;letter-spacing:.065em;color:#dcebf5;font-weight:700}
+.sr-ar-record-heading{min-height:36px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+ padding:8px 10px;margin-top:7px;box-sizing:border-box;background:#eaf3f8;color:#193f64}
+.sr-ar-record-heading strong{font-size:12px;line-height:1.45;overflow-wrap:anywhere}
+.sr-ar-status{flex:none;font-size:10px;color:#58748b;font-weight:650;white-space:nowrap}
+.sr-ar-row{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:43px;margin:0;align-items:stretch;box-sizing:border-box}
+.sr-ar-label,.sr-ar-value{padding:8px 12px;box-sizing:border-box;border:1px solid #dbe6ee;border-top:0;line-height:1.5;min-width:0}
+.sr-ar-label{background:#f5f9fc;font-size:12px;font-weight:750;color:#243b4d;border-right:0;
+ display:flex;align-items:center;white-space:pre-wrap;overflow-wrap:anywhere}
+.sr-ar-value{background:#fff;display:flex;align-items:center}
+.sr-ar-input{display:block!important;box-sizing:border-box!important;resize:vertical;width:100%!important;
+ margin:0!important;padding:4px 3px!important;min-height:26px!important;height:auto;
+ background:#fff!important;color:#243b4d!important;border:1px solid transparent!important;
+ font:400 13px/1.35 Arial,"Microsoft YaHei","Noto Sans",sans-serif!important;overflow-wrap:anywhere}
+.sr-ar-input:focus{border-color:#7daac6!important;outline:2px solid #a5c8e0;outline-offset:1px;
+ border-radius:4px;background:#fcfdff!important}
+.sr-ar-row.sr-ar-blank .sr-ar-value{background:#fffefb}
+.sr-ar-note{font-size:12px;line-height:1.55;color:#58748b;background:#f5f9fc;padding:12px;
+ margin:0}
+.sr-ar-document-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+ border-top:1px solid #dbe6ee;margin:24px 44px 0;padding:13px 0 22px;color:#58748b;font-size:10px;font-weight:600}
+.sr-ar-document-footer span{font-weight:400;text-align:right}
+@media(max-width:930px){
+ .sr-ar-document-header{padding:0 28px}
+ .sr-ar-topline{margin-left:-28px;margin-right:-28px}
+ .sr-ar-document-body{padding-left:28px;padding-right:28px}
+ .sr-ar-document-footer{margin-left:28px;margin-right:28px}
+ .sr-ar-row{grid-template-columns:minmax(135px,37%) minmax(0,1fr)}
+}
+@media(max-width:550px){
+ .sr-ar-document-header{padding:0 14px}
+ .sr-ar-topline{margin-left:-14px;margin-right:-14px}
+ .sr-ar-document-body{padding-left:14px;padding-right:14px}
+ .sr-ar-document-footer{margin-left:14px;margin-right:14px}
+ .sr-ar-document-header h2{font-size:18px}
+ .sr-ar-meta{align-items:flex-start}
+ .sr-ar-section-header h3{font-size:13px}
+ .sr-ar-row{grid-template-columns:minmax(105px,39%) minmax(0,1fr)}
+ .sr-ar-label,.sr-ar-value{padding:8px}
+ .sr-ar-label{font-size:11px}
+ .sr-ar-input{font-size:12px!important}
+ .sr-ar-status{white-space:normal;text-align:right}
+}
+@media print{
+ .sr-ar-paper{border:0;box-shadow:none;width:794px;max-width:794px;margin:0}
+ .sr-ar-section{break-inside:avoid-page}
+ .sr-ar-row{break-inside:avoid}
+ .sr-ar-document-body{padding:20px 44px 0}
+ .sr-ar-document-header{padding:0 44px}
+ .sr-ar-topline{margin-left:-44px;margin-right:-44px}
+ .sr-ar-document-footer{margin-left:44px;margin-right:44px}
+}
