@@ -51,8 +51,8 @@ test('two active shareholders plus former history all show with correctly format
  assert(formerMemberRecords(b,[0]).some(x=>x.record.title==='FORMER THREE'));
  assert.equal(section.blocks.filter(x=>x.type==='metric'&&x.value==='50.00%').length,2);
  assert(section.blocks.some(x=>x.type==='field'&&x.value==='100,000'));
- assert(section.blocks.some(x=>x.type==='field'&&x.value==='RM1,000,000'));
- assert(section.blocks.some(x=>x.type==='field'&&x.value==='RM2,000,000'));
+ assert(section.blocks.some(x=>x.type==='metric'&&x.value==='RM1,000,000'));
+ assert(section.blocks.some(x=>x.type==='metric'&&x.value==='RM2,000,000'));
  assert(section.blocks.some(x=>x.type==='field'&&x.label==='Date Ceased to be a Member'));
  const html=renderStatutoryRegisterDocument(b,0);
  assert(html.includes('Former'));
