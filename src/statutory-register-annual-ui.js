@@ -4,6 +4,10 @@ const empty=v=>!String(v??'').trim();
 export function renderStatutoryRegisterDocument(book,sheetIndex,{showBlanks=false}={}){
  const section=buildGroupedRegister(book,sheetIndex,{showBlanks});
  const parts=section.blocks.map(block=>{
+  if(block.type==='group')return '<div class="sr-member-group">'+esc(block.title)+'</div>';
+  if(block.type==='metric')return '<div class="sr-ar-row sr-derived-row">'+
+    '<span class="sr-ar-label"><span>'+esc(block.label)+'</span></span>'+
+    '<span class="sr-ar-value"><strong>'+esc(block.value)+'</strong></span></div>';
   if(block.type==='record')return '<div class="sr-ar-record-heading"><strong>'+esc(block.title)+'</strong>'+
    (block.status?'<span class="sr-ar-status">'+esc(block.status)+'</span>':'')+
    '<button type="button" class="sr-delete-entry" data-action="sr-delete-entry" data-id="'+
@@ -17,6 +21,7 @@ export function renderStatutoryRegisterDocument(book,sheetIndex,{showBlanks=fals
      block.sheetIndex+':'+block.row+':'+block.col+'" aria-label="Remove field '+esc(block.label)+'">Remove Field</button></span></span>'+
    '<span class="sr-ar-value"><textarea class="rb-cell sr-ar-input" data-s="'+block.sheetIndex+
     '" data-r="'+block.row+'" data-c="'+block.col+'"'+
+    (block.numericKind?' data-numeric-kind="'+esc(block.numericKind)+'"':'')+
     (block.composite?' data-merge-address="true"':'')+
     ' maxlength="15000" rows="'+(String(block.value).length>100||block.composite?'4':'2')+
     '" aria-label="'+esc(section.title+' · '+block.label)+'">'+esc(block.value)+'</textarea></span></div>';
