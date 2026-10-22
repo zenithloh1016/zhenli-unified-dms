@@ -19,10 +19,7 @@ export function registerLabel(name){
  const imported=original.slice(source.length);
  const bare=source.replace(/^register (?:of|or)\s+/i,'').trim();
  const member=/^members?(?:\s+0*(\d+))?$/i.exec(bare);
- if(member){
-  const folio=member[1]?' '+member[1].padStart(3,'0'):'';
-  return 'Register of Members'+folio+imported;
- }
+ if(member)return 'Register of Members'; // All member folios share one view/tab.
  const replacements={
   bo:'Beneficial Owners',
   'beneficial owner':'Beneficial Owners',
@@ -227,4 +224,45 @@ export function filterReviewRecords(records,{query='',status='all'}={}){
  return (records||[]).filter(r=>(status==='all'||r.status===status)
   &&(!q||[r.title,...r.fields.map(f=>f.value),...r.fields.map(f=>f.label)]
    .some(v=>String(v).toLowerCase().includes(q))));
+}
+
+
+/** Ensure a Register of Charges exists without inventing a charge. */
+export function ensureChargeRegister(book){
+ if(!book?.sheets||!Array.isArray(book.sheets))return false;
+ if(book.sheets.some(sheet=>/^register (?:of|or) charges?(?:\b|$)/i.test(sheet.name)))return false;
+ if(book.sheets.length>=100)throw Error('Cannot create Register of Charges: 100-register limit reached.');
+ book.sheets.push({name:'Register of Charges',rows:[
+  ['Chargee','Description','Creation Date','Registration Date','Status']
+ ]});
+ return true;
+}
+
+/** Existing Member folio files are grouped behind one Register of Members tab. */
+export function visibleRegisterIndices(book){
+ const indices=[],seen=new Set();
+ for(let i=0;i<(book?.sheets||[]).length;i++){
+  const sheet=book.sheets[i];
+  if(isManagerRegister(sheet.name))continue;
+  const label=registerLabel(sheet.name);
+  if(label==='Register of Members'){
+   if(seen.has(label))continue;
+   seen.add(label);
+  }
+  indices.push(i);
+ }
+ return indices;
+}
+export function registerGroupIndices(book,index){
+ const sheet=book?.sheets?.[index];
+ if(!sheet)return [];
+ if(registerLabel(sheet.name)==='Register of Members')
+  return (book.sheets||[]).map((s,i)=>registerLabel(s.name)==='Register of Members'?i:-1).filter(i=>i>=0);
+ return [index];
+}
+
+/** One label/field can be renamed without modifying imported worksheet headers. */
+export function getRegisterFieldOverrides(book){
+ const obj=book?.fieldLabels;
+ return obj && typeof obj==='object'&&!Array.isArray(obj)?obj:{};
 }

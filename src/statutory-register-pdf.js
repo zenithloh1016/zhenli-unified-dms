@@ -4,7 +4,7 @@
  * Nothing is uploaded externally; works offline in the Android DMS.
  */
 import {validateRegisterBook} from './statutory-register-data.js';
-import {buildIndependentRegister,STATUTORY_DOCUMENT_COLORS as C} from './statutory-register-annual-layout.js';
+import {buildGroupedRegister,buildCombinedRegisters,STATUTORY_DOCUMENT_COLORS as C} from './statutory-register-annual-layout.js';
 const enc=new TextEncoder(),B=v=>enc.encode(v);
 function makePdf(images){
  const objects=[null,null],pages=[];
@@ -55,10 +55,11 @@ function wrap(ctx,value,maxWidth){
 function jpeg(canvas){
  return new Promise((res,rej)=>canvas.toBlob(blob=>blob?res(blob):rej(Error('PDF canvas could not be encoded.')),'image/jpeg',0.88));
 }
-export async function buildStatutoryRegistersPdf(book,{sheetIndex=0,onProgress=()=>{},showBlanks=false}={}){
+export async function buildStatutoryRegistersPdf(book,{sheetIndex=0,combined=false,onProgress=()=>{},showBlanks=false}={}){
  validateRegisterBook(book);
- const selected=buildIndependentRegister(book,sheetIndex,{showBlanks});
- const sections=[selected];
+ const sections=combined?buildCombinedRegisters(book,{showBlanks}):[buildGroupedRegister(book,sheetIndex,{showBlanks})];
+ if(!sections.length)throw Error('No statutory registers are available for export.');
+ let activeTitle=sections[0].title;
  const W=794,H=1123,S=1.4,LM=44,RM=W-44,BOTTOM=H-72;
  const ctxCanvas=document.createElement('canvas');
  ctxCanvas.width=Math.round(W*S);ctxCanvas.height=Math.round(H*S);
@@ -88,7 +89,7 @@ export async function buildStatutoryRegistersPdf(book,{sheetIndex=0,onProgress=(
   const blob=await jpeg(ctxCanvas);
   images.push({w:ctxCanvas.width,h:ctxCanvas.height,bytes:new Uint8Array(await blob.arrayBuffer())});
   if(images.length>200)throw Error('PDF exceeds 200 pages. Export the statutory records in smaller parts.');
-  onProgress('Rendered '+selected.title+' PDF page '+number);
+  onProgress('Rendered '+activeTitle+' PDF page '+number);
  }
  async function newPage(){
   if(number)await finishPage();
@@ -101,7 +102,7 @@ export async function buildStatutoryRegistersPdf(book,{sheetIndex=0,onProgress=(
   const names=wrap(ctx,book.companyName||'Company Name',RM-LM);
   for(let i=0;i<Math.min(2,names.length);i++)text(names[i],LM,73+i*24,C.navy);
   let gap=Math.min(2,names.length)-1;
-  setFont(700,12);text(selected.title.toUpperCase(),LM,105+gap*24,C.muted);
+  setFont(700,12);text(activeTitle.toUpperCase(),LM,105+gap*24,C.muted);
   background(C.light,LM,120+gap*24,RM-LM,38);
   setFont(700,11);text('Company Registration No.',LM+12,144+gap*24,C.navy);
   setFont(600,12);ctx.textAlign='right';
@@ -171,7 +172,10 @@ export async function buildStatutoryRegistersPdf(book,{sheetIndex=0,onProgress=(
  }
  try{
   await newPage();
-  for(const part of sections){
+  for(let index=0;index<sections.length;index++){
+   const part=sections[index];
+   activeTitle=part.title;
+   if(index>0){await newPage();}
    await drawSection(part.title);
    for(const block of part.blocks){
     if(block.type==='field')await drawField(block.label,block.value);
