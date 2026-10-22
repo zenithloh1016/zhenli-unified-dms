@@ -116,3 +116,30 @@ test('converts styled Excel dates correctly for the 1904 calendar system',async(
  assert.equal(values[2],'20.10.2026');
  assert.equal(values[6],'20/10/2026');
 });
+
+
+test('sparse statutory reader avoids thousands of style-only blank cells while retaining row positions',async()=>{
+ const empty=Array.from({length:1000},(_,index)=>{
+  const n=index+1;
+  if(n===4)return '<row r="4"><c r="A4" t="inlineStr"><is><t>Company Name:</t></is></c><c r="B4" t="inlineStr"><is><t>BCS TEAM SDN BHD</t></is></c></row>';
+  if(n===1000)return '<row r="1000"><c r="A1000" t="inlineStr"><is><t>Last entry</t></is></c></row>';
+  return '<row r="'+n+'">'+Array.from({length:27},(_,c)=>'<c r="'+String.fromCharCode(65+c%26)+n+'" s="1"/>').join('')+'</row>';
+ }).join('');
+ const workbook=workbookXml.replace('Master Listing','Master');
+ const bytes=zipSync({
+  'xl/workbook.xml':strToU8(workbook),
+  'xl/_rels/workbook.xml.rels':strToU8(relsXml),
+  'xl/worksheets/sheet1.xml':strToU8('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+empty+'</sheetData></worksheet>'),
+  'xl/worksheets/sheet2.xml':strToU8('<worksheet/>')
+ });
+ const file=new Blob([bytes]);file.name='Register Book_BCS TEAM SDN BHD.xlsx';
+ const parsed=await openMasterListingWorkbook(file);
+ const normal=parsed.readSheet('Master');
+ const sparse=parsed.readSheet('Master',{sparse:true});
+ assert.equal(normal[3][0],'Company Name:');
+ assert.equal(sparse[3][0],'Company Name:');
+ assert.equal(sparse[3][1],'BCS TEAM SDN BHD');
+ assert.equal(sparse[999][0],'Last entry');
+ assert.deepEqual(sparse[0],[]);
+ assert.equal(sparse.length,normal.length);
+});
