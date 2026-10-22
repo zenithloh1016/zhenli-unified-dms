@@ -106,7 +106,7 @@ function memberPersonBlocks(item,{showBlanks=false,former=false,total=0}={}){
  const shares=record.shareField||record.fields.find(f=>
   /^(?:current number of shares held|total shares held|shares held|shareholding)$/i.test(f.label));
  blocks.push({type:'record',sheetIndex,row:record.row,title:record.title,
-  status:former?'Former / History':'Current'});
+  status:former?(record.status==='former'?'Former / Ceased':'No Current Shares'):'Current'});
  blocks.push({...mappedField(name,sheetIndex),label:'Shareholder Name'});
  const personal=record.fields.filter(f=>isPersonalField(f)&&f!==shares);
  const addr=personal.find(f=>/^address$/i.test(f.label));
@@ -151,7 +151,7 @@ function memberDisplayBlocks(book,indices,options={}){
  if(current.length){
   for(const item of current)blocks.push(...memberPersonBlocks(item,{...options,total}));
   blocks.push({type:'note',text:'Shareholding percentages are calculated against the total positive current holdings recorded in this register, not independently verified issued share capital.'});
- }else blocks.push({type:'note',text:'No current members with verified positive shares are recorded. Review recent SSM returns and share transfers.'});
+ }else blocks.push({type:'note',text:'No current shareholders with verified positive shares are recorded. Review recent SSM returns and share transfers.'});
  blocks.push({type:'group',title:'Former Members (History)'});
  if(former.length){
   for(const item of former)blocks.push(...memberPersonBlocks(item,{...options,former:true}));
