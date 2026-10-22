@@ -14,6 +14,7 @@ import {WORKING_RESOLUTION_FOLDER_NAME,WORKING_RESOLUTION_FOLDER_SORT_ORDER,miss
 import {CHARGES_FOLDER_NAME,CHARGES_FOLDER_SORT_ORDER,missingChargesFolders} from './charges-folders.js';
 import {REGISTER_BOOK_FOLDER_NAME,REGISTER_BOOK_FOLDER_SORT_ORDER,STANDARD_FOLDER_COUNT,missingRegisterBookFolders} from './register-book-folders.js';
 import {previewRegisterZip} from './register-book-zip.js';
+import {createRegisterBookTab} from './register-book-tab.js';
 import './style.css';
 import {installHubBridge} from './integrated-modules.js';
 
@@ -64,6 +65,8 @@ const masterListingUI=createMasterListingTab({
  notify:message=>{if(message)state.notice=message;}
 });
 masterListingUI.afterRender(()=>render());
+const registerBookUI=createRegisterBookTab({db,getUser:()=>state.user,getCompanies:()=>state.companies});
+registerBookUI.afterRender(()=>{if(state.tab==='register-book')render();});
 let deadlineLastCheck=0;
 async function reloadStatutoryDeadlines(force=false){
   if(!state.user||state.tab!=='statutory-deadlines')return;
@@ -729,11 +732,11 @@ function render() {
   document.body.classList.toggle('zh-ar-fullscreen-open',!!(state.user && state.tab==='annual-return' && state.arFullscreen));
   if (!db) { ROOT.innerHTML=`<div class="auth-page"><div class="auth-card"><div class="auth-logo">Z</div><h1>Set up private workspace</h1><p>Connect a Supabase project to enable authenticated documents and synced company folders.</p><p class="muted">Follow START_HERE.md in the downloadable source package. The Task Hub and Signing code is already bundled.</p></div></div>`;return; }
   if (!state.user) {ROOT.innerHTML=renderAuth();return;}
-  const tabs = ['overview','documents','master-listing','statutory-deadlines','tasks','annual-return','signing'];
-  const label = {overview:'Overview',documents:'Documents','master-listing':'Master Listing','statutory-deadlines':'Statutory Deadlines',tasks:'Tasks','annual-return':'Annual Return',signing:'Signing'};
+  const tabs = ['overview','documents','master-listing','register-book','statutory-deadlines','tasks','annual-return','signing'];
+  const label = {overview:'Overview',documents:'Documents','master-listing':'Master Listing','register-book':'Register Book','statutory-deadlines':'Statutory Deadlines',tasks:'Tasks','annual-return':'Annual Return',signing:'Signing'};
   ROOT.innerHTML = `<div class="app-shell"><header class="topbar"><div class="top-title">Document Management System</div><div class="top-right"><span class="online-dot"></span> Private workspace</div></header>
     <nav class="tabbar" aria-label="Main workspace navigation">${tabs.map(t=>`<button type="button" class="tab ${state.tab===t?'current':''}" data-action="tab-${t}" ${state.tab===t?'aria-current="page"':''}>${label[t]}</button>`).join('')}</nav>
-    <main class="main-content">${state.tab==='documents'?(state.companyId?renderFolder():renderCompanies()):state.tab==='overview'?renderOverview():state.tab==='master-listing'?masterListingUI.render():state.tab==='statutory-deadlines'?renderStatutoryDeadlines(masterListingUI.state.userId===state.user?.id?masterListingUI.model:null,{query:state.deadlineQuery,kind:state.deadlineKind,period:state.deadlinePeriod,loading:masterListingUI.state.loading,error:masterListingUI.state.error}):state.tab==='tasks'?renderTasks():state.tab==='annual-return'?renderAnnualReturn():renderSigning()}</main>
+    <main class="main-content">${state.tab==='documents'?(state.companyId?renderFolder():renderCompanies()):state.tab==='overview'?renderOverview():state.tab==='master-listing'?masterListingUI.render():state.tab==='register-book'?registerBookUI.render():state.tab==='statutory-deadlines'?renderStatutoryDeadlines(masterListingUI.state.userId===state.user?.id?masterListingUI.model:null,{query:state.deadlineQuery,kind:state.deadlineKind,period:state.deadlinePeriod,loading:masterListingUI.state.loading,error:masterListingUI.state.error}):state.tab==='tasks'?renderTasks():state.tab==='annual-return'?renderAnnualReturn():renderSigning()}</main>
     <footer class="app-footer"><span>ZHENLI DMS V1.2 · Add Company · Web + Android</span><span>${esc(state.user.email || '')} · ${action('Sign out','sign-out')}</span></footer></div>
   ${state.notice ? `<div class="toast" role="status">${esc(state.notice)} ${action('✕','dismiss')}</div>` : ''}
   ${state.busy ? '<div class="busy-bar">Working… please keep this page open</div>' : ''}
@@ -745,6 +748,14 @@ function render() {
    }
 }
 
+async function openRegisterBookCompany(id){
+  if(!state.companies.some(c=>c.id===id))throw Error('This company is no longer in your DMS.');
+  state.tab='documents';state.companyId=id;state.folderId=null;state.search='';
+  await reloadContent();
+  const folder=state.folders.find(f=>f.parent_id===null && String(f.name||'').trim().toLowerCase()==='register book');
+  if(folder)state.folderId=folder.id;
+  else state.notice='Register Book folder not found yet. Use Ensure Register Book folders in Documents to create it.';
+}
 function openCompany(id){state.companyId=id;state.folderId=null;state.search='';busyDo(reloadContent);}
 function openFolder(id){state.folderId=id;render();}
 function getDocument(id){return state.documents.find(d=>d.id===id);}
@@ -852,6 +863,7 @@ async function runImport() {
     if(i===0 && failed.length===chunk.length){break;}
   }
   await refresh();
+  if(state.tab==='register-book')await registerBookUI.load(true);
   if(failures.length){
     state.importError=`Imported or verified ${done-failures.length} of ${done} attempted companies. ${failures.length} failed. ${failures.slice(0,3).join(' | ')}. Your selected data is preserved; fix the error and retry safely.`;
     state.importProgress=`Import paused. ${state.companies.length} companies are currently in your account.`;
@@ -866,6 +878,10 @@ ROOT.addEventListener('click', event=>{
   const a=button.dataset.action,id=button.dataset.id;
   if(masterListingUI.onClick(a,id))return;
   if(signingUI.onClick(a,id,event))return;
+  if(a==='rb-refresh'){busyDo(()=>registerBookUI.load(true));return;}
+  if(a==='rb-open'){busyDo(()=>openRegisterBookCompany(id));return;}
+  if(a==='rb-prev'){registerBookUI.changePage(-1);return;}
+  if(a==='rb-next'){registerBookUI.changePage(1);return;}
   if(a==='deadline-refresh'){reloadStatutoryDeadlines(true).catch(showError);return;}
   if(a==='deadline-open-master'){
     state.tab='master-listing';render();
@@ -890,6 +906,7 @@ ROOT.addEventListener('click', event=>{
     // Drafts are saved as edits are made; no JSON export is needed before switching modules.
     state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;if(state.tab!=='annual-return')state.arFullscreen=false;render();
     if(nextTab==='master-listing')masterListingUI.load().catch(showError);
+    if(nextTab==='register-book')registerBookUI.load().catch(showError);
     if(nextTab==='statutory-deadlines')reloadStatutoryDeadlines(true).catch(showError);
     return;
   }
@@ -926,7 +943,7 @@ ROOT.addEventListener('click', event=>{
     return;
   }
   if(a==='auth-login'||a==='auth-signup'){state.authMode=a==='auth-login'?'login':'signup';state.notice='';render();return;}
-  if(a==='sign-out'){busyDo(async()=>{check((await db.auth.signOut()).error);masterListingUI.reset();state.user=null;state.companies=[];state.companyId=null;state.notice='';state.signingFullscreen=false;state.arFullscreen=false;});return;}
+  if(a==='sign-out'){busyDo(async()=>{check((await db.auth.signOut()).error);masterListingUI.reset();registerBookUI.reset();state.user=null;state.companies=[];state.companyId=null;state.notice='';state.signingFullscreen=false;state.arFullscreen=false;});return;}
   if(a==='home'){state.tab='documents';state.companyId=null;state.folderId=null;state.search='';render();return;}
   if(a==='open-company'){openCompany(id);return;}
   if(a==='open-folder'){openFolder(id);return;}
@@ -1067,6 +1084,13 @@ document.addEventListener('keydown',event=>{
    else if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
 });
 ROOT.addEventListener('input',e=>{
+ if(e.target.id==='rb-search'){
+   const pos=e.target.selectionStart??e.target.value.length;
+   registerBookUI.search(e.target.value);
+   const input=ROOT.querySelector('#rb-search');
+   input?.focus();input?.setSelectionRange(pos,pos);
+   return;
+ }
  if(e.target.id==='sd-search'){
     const pos=e.target.selectionStart??e.target.value.length;
     state.deadlineQuery=e.target.value;render();
@@ -1181,7 +1205,7 @@ async function init() {
     if(state.user)await refresh();
     render();
     db.auth.onAuthStateChange((event,session)=>{
-      if(event==='SIGNED_OUT'){masterListingUI.reset();state.user=null;state.companyId=null;state.companies=[];state.folders=[];state.documents=[];render();}
+      if(event==='SIGNED_OUT'){masterListingUI.reset();registerBookUI.reset();state.user=null;state.companyId=null;state.companies=[];state.folders=[];state.documents=[];render();}
       if(event==='SIGNED_IN' && session?.user && (!state.user || state.user.id!==session.user.id)){
         state.user=session.user;Promise.resolve().then(refresh).catch(showError);
       }
