@@ -5,7 +5,7 @@
  * service-role credentials are required. Documents folders change only when the user requests synchronization on add or through Sync.
  */
 import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn} from './master-listing-data.js';
-import {previewRegisterParticularsZip,preserveRegisterParticulars} from './master-listing-register-particulars.js';
+import {previewRegisterParticularsZip,preserveRegisterParticulars,compactRegisterColumns,REGISTER_PARTICULARS_COLUMNS} from './master-listing-register-particulars.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeText=value=>String(value??'').slice(0,15000);
@@ -138,18 +138,32 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
    state.registerPreview=await previewRegisterParticularsZip(file,state.model,{
     onProgress:message=>{state.status=message;onRender?.();}
    });
-   state.status='Review the two-column update before saving. '+state.registerPreview.matchedRows+' Master Listing company rows matched.';
+   state.status='Review the three-column update before saving. '+state.registerPreview.matchedRows+' Master Listing company rows matched.';
   }finally{state.loading=false;onRender?.();}
  }
  async function applyRegisterPreview(){
   const proposal=state.registerPreview;
   if(!proposal||!proposal.matchedRows)throw Error('No companies were matched; your Master Listing has not been changed.');
-  if(!window.confirm('Update Directors & Members and Beneficial Owners for '+proposal.matchedRows+' rows? A private Master Listing backup will be created. All other fields remain unchanged.'))return;
+  if(!window.confirm('Update the Current Directors, Current Members and Current Beneficial Owners for '+proposal.matchedRows+' rows, removing '+compactRegisterColumns(state.model).removed+' redundant Register Book columns? A private Master Listing backup will be created. Original business and filing fields remain unchanged.'))return;
   state.saving=true;state.error='';state.status='Backing up and saving updated Register Book particulars…';onRender?.();
   try{
    await saveModel(proposal.model,{backup:true});
    state.registerPreview=null;
-   state.status='Saved Directors & Members and Beneficial Owners for '+proposal.matchedRows+' company rows. No other Master Listing fields were changed.';
+   state.status='Saved Current Directors, Current Members and Current Beneficial Owners for '+proposal.matchedRows+' company rows.';
+  }finally{state.saving=false;onRender?.();}
+ }
+ async function compactSavedRegisterColumns(){
+  if(!state.model)throw Error('No Master Listing is loaded.');
+  const result=compactRegisterColumns(state.model);
+  if(!result.removed){
+   state.status='Only the three current-person register columns remain.';onRender?.();return;
+  }
+  if(!window.confirm('Remove '+result.removed+' redundant Register Book columns and keep Current Directors, Current Members and Current Beneficial Owners? A private backup will be saved. Existing original Master Listing columns are preserved.'))return;
+  state.saving=true;state.error='';state.status='Backing up and simplifying Master Listing columns…';onRender?.();
+  try{
+   await saveModel(result.model,{backup:true});
+   state.registerPreview=null;state.columnStart=0;
+   state.status='Removed '+result.removed+' redundant statutory columns; retained Current Directors, Current Members and Current Beneficial Owners.';
   }finally{state.saving=false;onRender?.();}
  }
  async function saveEdit(form){
@@ -295,7 +309,12 @@ async function saveRepairedDates(){
   // Display the imported company-name column ONCE, in the second position
   // after No. Never repeat it among the scrolling worksheet columns.
   const visible=model?.columns.map((col,index)=>({...col,index}))
-   .filter(col=>!isListingOrdinalColumn(model,col.index)&&col.index!==model.nameColumn&&col.index!==model.registrationColumn)||[];
+   .filter(col=>!isListingOrdinalColumn(model,col.index)&&col.index!==model.nameColumn&&col.index!==model.registrationColumn)
+   .sort((a,b)=>{
+    const x=REGISTER_PARTICULARS_COLUMNS.indexOf(a.label.trim());
+    const y=REGISTER_PARTICULARS_COLUMNS.indexOf(b.label.trim());
+    return (x<0?999:x)-(y<0?999:y)||a.index-b.index;
+   })||[];
   const first=state.fullScreen?0:state.columnStart,end=model?(state.fullScreen?visible.length:Math.min(visible.length,first+6)):0;
   const cols=visible.slice(first,end);
   const previewCols=preview&&!preview.error?preview.columns.map((col,index)=>({...col,index}))
@@ -306,12 +325,12 @@ async function saveRepairedDates(){
    '<div class="content-header"><div><p class="eyebrow">STATUTORY COMPANY INFORMATION</p><h1>Master Listing</h1>'+
    '<p class="muted">Import an Excel workbook, keep all company-information columns, and edit each company inside this private DMS tab.</p></div>'+
    '<div class="header-buttons">'+(model?act(state.fullScreen?'Exit full screen ✕':'Full screen ⛶','ml-fullscreen','','secondary'):'')+
-   (model?act('Export CSV','ml-export','','secondary'):'')+(model?act('Import Register Books','ml-register-upload','','secondary'):'')+act('+ Add Company','ml-add','','primary')+act('Import Excel','ml-upload','','secondary')+'</div></div>'+
+   (model?act('Export CSV','ml-export','','secondary'):'')+(model?act('Import Register Books','ml-register-upload','','secondary'):'')+(model&&compactRegisterColumns(model).removed?act('Keep Current Names Only','ml-compact-register','','secondary'):'')+act('+ Add Company','ml-add','','primary')+act('Import Excel','ml-upload','','secondary')+'</div></div>'+
    '<input id="ml-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>'+
    '<input id="ml-register-file" type="file" accept=".zip,application/zip" hidden>'+
    (state.error?'<div class="alert" role="alert">'+esc(state.error)+'</div>':'')+
    (state.status?'<div class="info-strip" role="status">'+esc(state.status)+'</div>':'')+
-   (state.registerPreview?'<section class="ml-import-panel"><h3>Review Register Book update</h3><p>'+state.registerPreview.parsedBooks+' Register Books parsed · '+state.registerPreview.matchedRows+' company rows matched · '+state.registerPreview.missingCompanies.length+' listing rows without a matching Register Book.</p><p class="muted">Only Directors & Members and Beneficial Owners will be added or updated. Other cells and existing document folders remain unchanged. A private backup is saved first. '+(state.registerPreview.errors.length?'Some files could not be read ('+state.registerPreview.errors.length+'); these companies will not be updated.':'')+'</p><div class="ml-actions">'+act('Confirm Register Book update','ml-register-apply','','primary')+act('Cancel','ml-register-cancel','','secondary')+'</div></section>':'')+
+   (state.registerPreview?'<section class="ml-import-panel"><h3>Review Register Book update</h3><p>'+state.registerPreview.parsedBooks+' Register Books parsed · '+state.registerPreview.matchedRows+' company rows matched · '+state.registerPreview.missingCompanies.length+' listing rows without a matching Register Book.</p><p class="muted">Only Current Directors, Current Members and Current Beneficial Owners are added or updated. Earlier expanded statutory columns will be removed. Existing company, banking and filing fields and document folders remain unchanged. A private backup is saved first. '+(state.registerPreview.errors.length?'Some files could not be read ('+state.registerPreview.errors.length+'); these companies will not be updated.':'')+'</p><div class="ml-actions">'+act('Confirm Register Book update','ml-register-apply','','primary')+act('Cancel','ml-register-cancel','','secondary')+'</div></section>':'')+
    (model&&state.legacyDateCount?'<div class="ml-date-repair" role="status"><strong>'+state.legacyDateCount+' saved date serial(s) detected.</strong> They are shown as DD/MM/YYYY in date columns. '+act('Save corrected dates','ml-repair-dates','','primary')+'<p>Save a corrected copy with backup, or re-import the original Excel workbook to retain its precise date styles.</p></div>':'')+
    (state.sheets.length?'<section class="ml-import-panel"><h3>Review workbook before importing</h3>'+
     '<div class="ml-import-controls"><label>Worksheet<select id="ml-sheet">'+state.sheets.map((x,i)=>'<option value="'+i+'"'+(i===state.sheetIndex?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></label>'+
@@ -398,6 +417,7 @@ function renderEditor(){
   if(action==='ml-register-upload'){document.getElementById('ml-register-file')?.click();return true;}
   if(action==='ml-register-cancel'){state.registerPreview=null;state.error='';onRender?.();return true;}
   if(action==='ml-register-apply'){asyncRun(applyRegisterPreview);return true;}
+  if(action==='ml-compact-register'){asyncRun(compactSavedRegisterColumns);return true;}
   if(action==='ml-cancel'){state.sheets=[];state.preview=null;state.selectedFile=null;state.error='';onRender?.();return true;}
   if(action==='ml-confirm'){asyncRun(importSelected);return true;}
   if(action==='ml-edit'){state.editIndex=Number(id);onRender?.();return true;}
