@@ -54,7 +54,16 @@ test('member folios show only identity/contact particulars and current shares he
  const register=buildIndependentRegister(company,2);
  assert.equal(register.title,'Register of Members');
  const labels=register.blocks.filter(b=>b.type==='field').map(b=>b.label);
- assert.deepEqual(labels,['Shareholder Name','Current Number of Shares Held']);
+ assert.deepEqual(labels,[
+  'Shareholder Name','Date of Birth','ID Type','Nationality/Origin',
+  'Identification No.','Race','Occupation','Email Address',
+  'Address','Current Number of Shares Held'
+ ]);
+ const address=register.blocks.find(f=>f.type==='field'&&f.label==='Address');
+ assert.equal(address.value,'NO. 1 SAMPLE ROAD\\nIPO, PERAK'.replace('\\n','\n'));
+ assert.equal(address.composite,true);
+ assert.equal(address.row,12);
+ assert.equal(address.col,1);
  assert(!labels.includes('Date Entered as A Member'));
  assert(!labels.includes('Date Ceased to be A Member'));
  assert(!labels.includes('Class of Shares'));
@@ -67,6 +76,9 @@ test('member folios show only identity/contact particulars and current shares he
  const html=renderStatutoryRegisterDocument(company,2);
  assert.match(html,/Register of Members/);
  assert.match(html,/Current Number of Shares Held/);
+ assert.match(html,/member@example\.test/);
+ assert.match(html,/TEST-ID-0001/);
+ assert.match(html,/data-merge-address="true"/);
  assert.match(html,/>250<\/textarea>/);
  assert(!html.includes('Share acquisition and transfer history'));
  assert(!html.includes('SHARES ACQUIRED'));
