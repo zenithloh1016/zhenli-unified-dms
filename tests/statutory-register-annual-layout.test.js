@@ -33,7 +33,7 @@ test('each statutory register is an independent, editable document',()=>{
  assert(details.blocks.some(b=>b.type==='field'&&b.value==='Ipoh, Perak'));
  const director=directors.blocks.find(b=>b.type==='field'&&b.value==='DIRECTOR ALPHA');
  assert.deepEqual({sheet:director.sheetIndex,row:director.row,col:director.col},{sheet:1,row:4,col:0});
- assert(directors.blocks.some(b=>b.type==='record'&&b.status==='Former / Ceased'));
+ assert(directors.blocks.some(b=>b.type==='record'&&b.status==='Former'));
  assert.equal(JSON.stringify(company),before);
 });
 test('individual register preview and exported PDF include only that register',async()=>{
