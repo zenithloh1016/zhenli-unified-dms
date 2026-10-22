@@ -14,6 +14,7 @@ import {WORKING_RESOLUTION_FOLDER_NAME,WORKING_RESOLUTION_FOLDER_SORT_ORDER,miss
 import {CHARGES_FOLDER_NAME,CHARGES_FOLDER_SORT_ORDER,missingChargesFolders} from './charges-folders.js';
 import {STANDARD_FOLDER_COUNT,isExistingRegisterBookFolder} from './register-book-folders.js';
 import {createRegisterBookTab} from './register-book-tab.js';
+import {combinedRegisterSnapshot} from './statutory-ar-bridge.js';
 import './style.css';
 import {installHubBridge} from './integrated-modules.js';
 
@@ -1010,6 +1011,32 @@ window.addEventListener('message',event=>{
  if(event.origin!==window.location.origin||!state.user||state.tab!=='annual-return')return;
  const frame=ROOT.querySelector('#zh-annual-return-frame');
  if(!frame||event.source!==frame.contentWindow||!event.data||typeof event.data!=='object')return;
+ if(event.data.type==='ZHENLI_DMS_AR_IMPORT_COMBINED_REQUEST'){
+   const requestId=event.data.id,requested=event.data.companyId;
+   if(typeof requestId!=='string'||!/^ar_register_[\w-]{1,70}$/.test(requestId))return;
+   const source=frame.contentWindow;
+   const reply=(ok,payload,error)=>source?.postMessage({
+    type:'ZHENLI_DMS_AR_IMPORT_COMBINED_RESPONSE',id:requestId,ok,
+    payload:ok?payload:null,error:ok?'':String(error||'').slice(0,300)
+   },window.location.origin);
+   void (async()=>{
+    const user=state.user,company=state.companies.find(c=>c.id===requested);
+    if(!user||!company||!state.arSelectedCompanyId||state.arSelectedCompanyId!==company.id)
+     throw Error('Select the correct DMS company in Annual Return before importing.');
+    const key=String(user.id)+'/statutory-registers/'+company.id+'.json';
+    const {data,error}=await db.storage.from(BUCKET).download(key);
+    if(error)throw Error(/not found|404/i.test(error.message||'')?
+     'No saved combined Statutory Registers found for this company. Save or import its registers first.':
+     'Could not read the private combined registers: '+error.message);
+    const book=JSON.parse(await data.text());
+    if(state.user?.id!==user.id||state.arSelectedCompanyId!==company.id||
+       state.tab!=='annual-return')throw Error('Company changed while loading. Try again.');
+    const payload=combinedRegisterSnapshot(book,{companyId:company.id,
+     companyName:company.name,registrationNo:company.registration_no||''});
+    reply(true,payload,'');
+   })().catch(error=>reply(false,null,error.message||error));
+   return;
+ }
  if(event.data.type==='ZHENLI_DMS_AR_SAVE_PDF'){
    const source=frame.contentWindow,id=event.data.id,blob=event.data.blob;
    if(typeof id!=='string'||id.length>100||!/^ar_pdf_[\w-]+$/.test(id))return;

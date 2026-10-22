@@ -121,9 +121,14 @@ function isPlaceholder(row){
  return !entries.length||entries.every(x=>absent(x.value)||/^0(?:\.0+)?$/.test(x.value));
 }
 function statusFor(fields){
- const cessation=fields.find(f=>/\b(?:date of cessation|cessation date|date ceased|date of discharge|date ceased to be|date of resignation)\b/i.test(f.label));
- if(!cessation)return 'unknown';
- return absent(cessation.value)?'current':'former';
+ const end=fields.find(f=>/^(?:date of cessation|cessation date|date ceased|date of discharge|date of satisfaction|date of release|date ceased to be(?: a member)?|date of resignation|date of termination)$/i.test(f.label));
+ if(end)return absent(end.value)?'current':'former';
+ const status=fields.find(f=>/^(?:status|charge status|appointment status|active\/inactive)$/i.test(f.label));
+ if(status){
+  if(/(?:discharg|satisfi|releas|cease|resign|terminat|former|inactive|cancel)/i.test(status.value))return 'former';
+  if(/(?:current|active|existing|ongoing|appointed|outstanding)/i.test(status.value))return 'current';
+ }
+ return 'unknown';
 }
 function titleFor(fields,index){
  const preferred=fields.find(f=>/^(?:director name|full name|name|allottee'?s? name|chargee(?: name)?|name of chargee|transferor name|registered no\.?)$/i.test(f.label));
@@ -238,12 +243,44 @@ export function filterReviewRecords(records,{query='',status='all'}={}){
 /** Ensure a Register of Charges exists without inventing a charge. */
 export function ensureChargeRegister(book){
  if(!book?.sheets||!Array.isArray(book.sheets))return false;
- if(book.sheets.some(sheet=>/^register (?:of|or) charges?(?:\b|$)/i.test(sheet.name)))return false;
- if(book.sheets.length>=100)throw Error('Cannot create Register of Charges: 100-register limit reached.');
- book.sheets.push({name:'Register of Charges',rows:[
-  ['Chargee','Description','Creation Date','Registration Date','Status']
- ]});
- return true;
+ let changed=false;
+ let charges=book.sheets.filter(sheet=>/^register (?:of|or) charges?(?:\b|$)/i.test(sheet.name));
+ if(!charges.length){
+  if(book.sheets.length>=100)throw Error('Cannot create Register of Charges: 100-register limit reached.');
+  const sheet={name:'Register of Charges',rows:[
+   ['Registered No.','Date of Registration','Name of Chargee',
+    'Nature of Charge','Amount of Indebtedness','Date of Discharge']
+  ]};
+  book.sheets.push(sheet);charges=[sheet];changed=true;
+ }
+ for(const sheet of charges){
+  const rows=sheet.rows||[];
+  // Import templates frequently already contain "Date of Discharge". Retain
+  // it and every existing value. Extend a missing column only if the register
+  // is tabular, without creating imaginary charges or changing prior columns.
+  let header=-1;
+  for(let i=0;i<Math.min(rows.length,45);i++){
+   const row=rows[i]||[];
+   const labels=row.map(v=>String(v||'').trim().toLowerCase());
+   if(labels.some(v=>/^(registered no\.?|name of chargee|chargee|nature of charge)$/.test(v))&&
+      labels.filter(x=>x).length>=2){header=i;break;}
+  }
+  if(header<0){
+   // Blank and non-standard charge records retain their existing layout.
+   // A discharge label is only shown when there is a corresponding charge.
+   continue;
+  }
+  const existing=(rows[header]||[]).some(v=>/^date of (?:discharge|satisfaction|release)$/i.test(String(v||'').trim()));
+  if(existing)continue;
+  const at=Math.max(rows[header].length,...rows.map(row=>row.length));
+  if(at>=250)continue;
+  rows[header][at]='Date of Discharge';
+  for(let i=header+1;i<rows.length;i++){
+   if(rows[i].length<=at)rows[i][at]='';
+  }
+  changed=true;
+ }
+ return changed;
 }
 
 /** Existing Member folio files are grouped behind one Register of Members tab. */

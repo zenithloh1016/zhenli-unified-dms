@@ -16,18 +16,38 @@ function mappedField(item,sheetIndex){
  return {type:'field',sheetIndex,row:item.row,col:item.col,
   label:String(item.label||'Particulars').trim(),value:String(item.value??'')};
 }
-function recordsToBlocks(records,sheetIndex,showBlanks){
+function recordsToBlocks(records,sheetIndex,showBlanks,{separateHistory=true,kind=''}={}){
  const result=[];
- for(let i=0;i<(records||[]).length;i++){
-  const record=records[i];
-  result.push({type:'record',title:record.title||'Record '+(i+1),
-   row:record.row,sheetIndex,status:record.status==='former'?'Former / Ceased':
-    record.status==='current'?'Current / Active':''});
+ const renderRecord=record=>{
+  result.push({type:'record',title:record.title||'Record '+(result.length+1),
+   row:record.row,sheetIndex,status:record.status==='former'?
+    (kind==='charges'?'Discharged / Former':'Former / Ceased'):
+    record.status==='current'?'Current / Active':'Status Not Recorded'});
   const visible=(record.fields||[]).filter(f=>showBlanks||hasText(f.value));
   if(visible.length)result.push(...visible.map(f=>mappedField(f,sheetIndex)));
   else result.push({type:'note',text:'No particulars recorded.'});
+ };
+ if(!separateHistory){
+  for(const record of records||[])renderRecord(record);
+  return result;
+ }
+ const groups=[
+  {status:'current',title:'Current / Active'},
+  {status:'former',title:kind==='charges'?'Discharged / Former (History)':'Former / Ceased (History)'},
+  {status:'unknown',title:'Status Not Recorded — Verify'}
+ ];
+ for(const group of groups){
+  const items=(records||[]).filter(record=>record.status===group.status||
+   (group.status==='unknown'&&!['current','former'].includes(record.status)));
+  result.push({type:'group',title:group.title});
+  if(items.length){for(const record of items)renderRecord(record);}
+  else result.push({type:'note',text:'No '+(group.status==='current'?'current':
+   group.status==='former'?'former':'unverified')+' entries recorded.'});
  }
  return result;
+}
+function historyExcluded(name){
+ return /^register of (?:share )?(?:transfer|transfers|allotment|allotments)(?:$|\b)/i.test(name);
 }
 function genericEntries(rows,sheetIndex,{showBlanks=false}={}){
  // For non-standard registers, convert rows to labelled, editable particulars.
@@ -189,7 +209,9 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
  }else if(details.kind==='member'){
   result.blocks.push(...memberDisplayBlocks(book,[sheetIndex],{showBlanks}));
  }else if(details.kind==='table'||details.kind==='text'){
-  result.blocks.push(...recordsToBlocks(details.records,sheetIndex,showBlanks));
+  result.blocks.push(...recordsToBlocks(details.records,sheetIndex,showBlanks,{
+   separateHistory:!historyExcluded(result.title),
+   kind:/^register of charges$/i.test(result.title)?'charges':''}));
  }else{
   result.blocks.push(...genericEntries(sheet.rows||[],sheetIndex,{showBlanks}));
  }
