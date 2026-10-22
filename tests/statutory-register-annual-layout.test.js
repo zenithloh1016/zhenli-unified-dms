@@ -28,8 +28,8 @@ test('each statutory register is an independent, editable document',()=>{
  const directors=buildIndependentRegister(company,1);
  const owners=buildIndependentRegister(company,2);
  assert.equal(details.title,'Company Details');
- assert.equal(directors.title,'Directors');
- assert.equal(owners.title,'Beneficial Owners');
+ assert.equal(directors.title,'Register of Directors');
+ assert.equal(owners.title,'Register of Beneficial Owners');
  assert(details.blocks.some(b=>b.type==='field'&&b.value==='Ipoh, Perak'));
  const director=directors.blocks.find(b=>b.type==='field'&&b.value==='DIRECTOR ALPHA');
  assert.deepEqual({sheet:director.sheetIndex,row:director.row,col:director.col},{sheet:1,row:4,col:0});
@@ -71,7 +71,7 @@ test('individual register preview and exported PDF include only that register',a
 });
 test('unknown register layout becomes labelled records without Excel coordinates',()=>{
  const details=buildIndependentRegister(company,3);
- assert.equal(details.title,'Irregular Register');
+ assert.equal(details.title,'Register of Irregular Register');
  assert(details.blocks.some(b=>b.type==='record'&&b.title==='Entry 1'));
  assert(details.blocks.some(b=>b.type==='field'&&b.value==='example value'));
  assert(details.blocks.every(b=>!b.label||!/\bRow \d+ · Column \d+/.test(b.label)));
