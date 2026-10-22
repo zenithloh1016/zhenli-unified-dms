@@ -5,12 +5,16 @@ export function renderStatutoryRegisterDocument(book,sheetIndex,{showBlanks=fals
  const section=buildGroupedRegister(book,sheetIndex,{showBlanks});
  const parts=section.blocks.map(block=>{
   if(block.type==='record')return '<div class="sr-ar-record-heading"><strong>'+esc(block.title)+'</strong>'+
-   (block.status?'<span class="sr-ar-status">'+esc(block.status)+'</span>':'')+'</div>';
+   (block.status?'<span class="sr-ar-status">'+esc(block.status)+'</span>':'')+
+   '<button type="button" class="sr-delete-entry" data-action="sr-delete-entry" data-id="'+
+    block.sheetIndex+':'+block.row+'" aria-label="Delete entry '+esc(block.title)+'">Delete Entry</button></div>';
   if(block.type==='note')return '<p class="sr-ar-note">'+esc(block.text)+'</p>';
   return '<div class="sr-ar-row'+(empty(block.value)?' sr-ar-blank':'')+'">'+
    '<span class="sr-ar-label"><span>'+esc(block.label)+'</span>'+
-    '<button type="button" class="sr-edit-field" data-action="sr-edit-field" data-id="'+
-     block.sheetIndex+':'+block.row+':'+block.col+'" title="Edit field label">Edit Field</button></span>'+
+    '<span class="sr-field-actions"><button type="button" class="sr-edit-field" data-action="sr-edit-field" data-id="'+
+     block.sheetIndex+':'+block.row+':'+block.col+'" title="Edit field label">Edit Field</button>'+
+    '<button type="button" class="sr-remove-field" data-action="sr-remove-field" data-id="'+
+     block.sheetIndex+':'+block.row+':'+block.col+'" aria-label="Remove field '+esc(block.label)+'">Remove Field</button></span></span>'+
    '<span class="sr-ar-value"><textarea class="rb-cell sr-ar-input" data-s="'+block.sheetIndex+
     '" data-r="'+block.row+'" data-c="'+block.col+'"'+
     (block.composite?' data-merge-address="true"':'')+
