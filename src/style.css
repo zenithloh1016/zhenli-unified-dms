@@ -593,3 +593,14 @@ body.zh-ar-fullscreen-open{overflow:hidden}
  .sr-ar-topline{margin-left:-44px;margin-right:-44px}
  .sr-ar-document-footer{margin-left:44px;margin-right:44px}
 }
+
+
+/* Editable statutory register field controls */
+.sr-ar-row .sr-ar-label{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.sr-ar-row .sr-ar-label>span{flex:1;min-width:90px;overflow-wrap:anywhere}
+.sr-edit-field{flex:none;border:1px solid #b7cfdf;background:#fff;color:#245d7c;
+ border-radius:6px;padding:4px 7px;font:600 10px/1.4 Arial,sans-serif;cursor:pointer}
+.sr-edit-field:focus-visible{outline:2px solid #3f83b6;outline-offset:2px}
+.sr-edit-field:hover{background:#eaf3f8}
+@media(max-width:600px){.sr-edit-field{width:100%;text-align:center}}
+@media print{.sr-edit-field{display:none!important}}
