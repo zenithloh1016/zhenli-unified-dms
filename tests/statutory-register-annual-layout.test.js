@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildStatutoryAnnualSections} from '../src/statutory-register-annual-layout.js';
-import {renderStatutoryAnnualDocument} from '../src/statutory-register-annual-ui.js';
+import {buildIndependentRegister} from '../src/statutory-register-annual-layout.js';
+import {renderStatutoryRegisterDocument} from '../src/statutory-register-annual-ui.js';
 import {buildStatutoryRegistersPdf} from '../src/statutory-register-pdf.js';
 
 const company={
@@ -22,27 +22,30 @@ const company={
   {name:'Irregular Register',rows:[['UNUSUAL COMPANY ENTRY','example value'],['SOME MORE','information']]}
  ]
 };
-test('builds complete Annual Return-style sections and leaves source values untouched',()=>{
+test('each statutory register is an independent, editable document',()=>{
  const before=JSON.stringify(company);
- const sections=buildStatutoryAnnualSections(company);
- assert.deepEqual(sections.map(s=>s.title),['Company Details','Directors','Beneficial Owners','Irregular Register']);
- assert(sections[0].blocks.some(b=>b.type==='field'&&b.label==='Registered Office'&&b.value==='Ipoh, Perak'));
- const director=sections[1].blocks.find(b=>b.type==='field'&&b.value==='DIRECTOR ALPHA');
+ const details=buildIndependentRegister(company,0);
+ const directors=buildIndependentRegister(company,1);
+ const owners=buildIndependentRegister(company,2);
+ assert.equal(details.title,'Company Details');
+ assert.equal(directors.title,'Directors');
+ assert.equal(owners.title,'Beneficial Owners');
+ assert(details.blocks.some(b=>b.type==='field'&&b.value==='Ipoh, Perak'));
+ const director=directors.blocks.find(b=>b.type==='field'&&b.value==='DIRECTOR ALPHA');
  assert.deepEqual({sheet:director.sheetIndex,row:director.row,col:director.col},{sheet:1,row:4,col:0});
- assert(sections[1].blocks.some(b=>b.type==='record'&&b.status==='Former / Ceased'));
- assert(sections[3].blocks.some(b=>b.type==='field'&&b.label==='Row 1 · Column 1'));
+ assert(directors.blocks.some(b=>b.type==='record'&&b.status==='Former / Ceased'));
  assert.equal(JSON.stringify(company),before);
 });
-test('view and PDF share an identical source-section model and field values',async()=>{
- const html=renderStatutoryAnnualDocument(company);
- assert.match(html,/STATUTORY REGISTER PARTICULARS REVIEW/);
+test('individual register preview and exported PDF include only that register',async()=>{
+ const html=renderStatutoryRegisterDocument(company,1);
+ assert.match(html,/STATUTORY REGISTER/);
  assert.match(html,/Company Registration No./);
  assert.match(html,/sr-ar-section-header/);
  assert.match(html,/sr-ar-row/);
  assert.match(html,/data-s="1" data-r="4" data-c="0"/);
- assert(html.indexOf('Company Details')<html.indexOf('Directors'));
- assert(html.indexOf('Directors')<html.indexOf('Beneficial Owners'));
  assert(html.includes('DIRECTOR ALPHA'));
+ assert(!html.includes('BENEFICIAL OWNER ALPHA'));
+ assert(!html.includes('Ipoh, Perak'));
  const drawn=[];
  const ctx={
   scale(){},fillRect(){},strokeRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},
@@ -52,34 +55,42 @@ test('view and PDF share an identical source-section model and field values',asy
  };
  const prior=globalThis.document;
  globalThis.document={createElement(){
-  return {
-   width:0,height:0,getContext(){return ctx},
-   toBlob(callback){callback(new Blob([Uint8Array.of(0xff,0xd8,0xff,0xd9)],{type:'image/jpeg'}));}
-  };
+  return {width:0,height:0,getContext(){return ctx},
+   toBlob(cb){cb(new Blob([Uint8Array.of(0xff,0xd8,0xff,0xd9)],{type:'image/jpeg'}));}};
  }};
  try{
-  const pdf=await buildStatutoryRegistersPdf(company);
+  const pdf=await buildStatutoryRegistersPdf(company,{sheetIndex:1});
   const raw=await pdf.text();
   assert(raw.startsWith('%PDF-1.4'));
   assert(raw.includes('/MediaBox [0 0 595.28 841.89]'));
   assert(drawn.includes('DIRECTOR ALPHA'));
-  assert(drawn.includes('BENEFICIAL OWNER ALPHA'));
-  assert(drawn.includes('Irregular Register'));
-  assert(drawn.includes('Ipoh, Perak'));
+  assert(!drawn.includes('BENEFICIAL OWNER ALPHA'));
+  assert(!drawn.includes('Irregular Register'));
+  assert(!drawn.includes('Ipoh, Perak'));
  }finally{globalThis.document=prior;}
 });
-test('show blank fields is consistent on screen and in PDF source model',()=>{
- const base=buildStatutoryAnnualSections(company);
- const withBlank=buildStatutoryAnnualSections(company,{showBlanks:true});
- assert(withBlank[1].blocks.length>base[1].blocks.length);
- assert(!renderStatutoryAnnualDocument(company).includes('data-s="1" data-r="4" data-c="3"'));
- assert(renderStatutoryAnnualDocument(company,{showBlanks:true}).includes('data-s="1" data-r="4" data-c="3"'));
+test('unknown register layout becomes labelled records without Excel coordinates',()=>{
+ const details=buildIndependentRegister(company,3);
+ assert.equal(details.title,'Irregular Register');
+ assert(details.blocks.some(b=>b.type==='record'&&b.title==='Entry 1'));
+ assert(details.blocks.some(b=>b.type==='field'&&b.value==='example value'));
+ assert(details.blocks.every(b=>!b.label||!/\bRow \d+ · Column \d+/.test(b.label)));
+ const html=renderStatutoryRegisterDocument(company,3);
+ assert(!html.includes('Original Worksheet'));
+ assert(!html.includes('<table'));
+});
+test('show blank fields uses the same register model in view and PDF',()=>{
+ const base=buildIndependentRegister(company,1);
+ const more=buildIndependentRegister(company,1,{showBlanks:true});
+ assert(more.blocks.length>base.blocks.length);
+ assert(!renderStatutoryRegisterDocument(company,1).includes('data-s="1" data-r="4" data-c="3"'));
+ assert(renderStatutoryRegisterDocument(company,1,{showBlanks:true}).includes('data-s="1" data-r="4" data-c="3"'));
 });
 test('html escaping prevents code injection into editable statutory form',()=>{
  const book=structuredClone(company);
  book.companyName='<img src=x onerror=alert(1)>';
  book.sheets[0].rows[4][1]='<script>alert(1)</script>';
- const html=renderStatutoryAnnualDocument(book);
+ const html=renderStatutoryRegisterDocument(book,0);
  assert.doesNotMatch(html,/<script>|<img/);
  assert.match(html,/&lt;script&gt;/);
 });
