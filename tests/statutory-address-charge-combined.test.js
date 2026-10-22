@@ -205,13 +205,15 @@ test('Remove Field works on member folios without affecting another member',asyn
  tab.command('sr-sheet','1');
  assert(tab.render().includes('Remove Field'));
  assert(tab.render().includes('Delete Entry'));
- assert(tab.render().includes('data-action="sr-remove-field" data-id="1:0:1"'));
- const original=structuredClone(tab.state.book.sheets[1].rows[0]);
+ assert(tab.render().includes('data-action="sr-remove-field" data-id="1:1:1"'));
+ const original=structuredClone(tab.state.book.sheets[1].rows[1]);
  const prior=globalThis.window;globalThis.window={confirm:()=>true};
  try{
-  tab.command('sr-remove-field','1:0:1');
-  assert.deepEqual(tab.state.book.sheets[1].rows[0],original);
-  assert(!tab.render().includes('MEMBER A'));
-  assert(tab.render().includes('MEMBER B'));
+  tab.command('sr-remove-field','1:1:1');
+  assert.deepEqual(tab.state.book.sheets[1].rows[1],original);
+  const after=buildGroupedRegister(tab.state.book,1);
+  assert(!after.blocks.some(b=>b.type==='field'&&b.sheetIndex===1&&b.row===1&&b.col===1));
+  assert(after.blocks.some(b=>b.type==='field'&&b.sheetIndex===2&&b.value==='330'));
+  assert(tab.render().includes('MEMBER A')&&tab.render().includes('MEMBER B'));
  }finally{globalThis.window=prior;}
 });
