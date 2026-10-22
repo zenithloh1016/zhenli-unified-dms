@@ -3,6 +3,7 @@ import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
 import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord} from './core.js';
+import {importCombinedRegisterSnapshot} from './register-import.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
 import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,removeAnnualReturnDraft,draftIdOfKey} from './drafts.js';
@@ -39,6 +40,7 @@ document.addEventListener('keydown',event=>{
 
 let draftScope=window.parent===window?'standalone':'dms:pending',newDraftId='new-'+Date.now().toString(36),draftTimer=null;
 let selectedDmsCompanyId=null,dmsCompanies=[];
+let pendingRegisterImport='';
 function currentDraftId(){return selectedDmsCompanyId||newDraftId;}
 function hasDraftData(){return doc.particulars.some(x=>x.type==='field'&&String(x.value||'').trim())||Boolean(doc.signatureDirector?.name||doc.signatureDirector?.nric);}
 function draftStatus(message,error=false){const el=$('draft-status');if(el){el.textContent=message;el.style.color=error?'#b23b44':'#327284';}}
@@ -134,6 +136,31 @@ if(window.parent!==window){
     draftScope='dms:'+event.data.userId;draftOptions();
    }
    renderSections();return;
+  }
+  if(event.data?.type==='ZHENLI_DMS_AR_IMPORT_COMBINED_RESPONSE'){
+   if(!pendingRegisterImport||event.data.id!==pendingRegisterImport)return;
+   pendingRegisterImport='';
+   const button=$('import-combined-register');if(button)button.disabled=false;
+   if(!event.data.ok){
+    status('Combined register import failed: '+String(event.data.error||'Unable to read saved registers.').slice(0,240),true);
+    return;
+   }
+   try{
+    const payload=event.data.payload;
+    if(payload?.companyId!==selectedDmsCompanyId)throw Error('Company changed. Import cancelled.');
+    if(!flushDraft())throw Error('Current draft could not be backed up.');
+    const result=importCombinedRegisterSnapshot(doc,payload);
+    doc=result.document;
+    generated=null;$('download-box').hidden=true;
+    resetView();queueDraftSave();
+    const count=result.summary;
+    const breakdown=Object.entries(count.records).filter(([,n])=>n>0)
+     .map(([key,n])=>n+' '+key).join(', ');
+    status('Combined registers imported: '+count.filled+' fields populated'+
+     (breakdown?' ('+breakdown+')':'')+'. '+count.kept+
+     ' existing values retained. Review all particulars and verify against SSM before generating the PDF.');
+   }catch(error){status('Combined register import could not be applied: '+error.message,true);}
+   return;
   }
   if(event.data?.type!=='ZHENLI_DMS_AR_SELECT_COMPANY')return;
   let result={ok:false,reason:'Company selection could not be processed.'};
@@ -411,6 +438,19 @@ async function generate(){
  }catch(error){status('PDF generation failed: '+error.message+'. Try again after closing other apps to free memory.',true);}
  finally{setBusy(false);}
 }
+$('import-combined-register').addEventListener('click',()=>{
+ if(window.parent===window)return status('Open Annual Return inside ZHENLI DMS to import its private statutory records.',true);
+ if(pendingRegisterImport)return;
+ if(!selectedDmsCompanyId)return status('Select the company in Company Details before importing combined registers.',true);
+ if(!confirm('Import matching fields from this company’s saved Combined Statutory Registers?\n\nExisting non-blank Annual Return values will be kept. Current directors, members, beneficial owners and registered charges will be imported where supported. Verify everything before generating.'))return;
+ pendingRegisterImport='ar_register_'+Date.now().toString(36);
+ $('import-combined-register').disabled=true;
+ status('Loading saved combined statutory registers for this company…');
+ window.parent.postMessage({
+  type:'ZHENLI_DMS_AR_IMPORT_COMBINED_REQUEST',
+  id:pendingRegisterImport,companyId:selectedDmsCompanyId
+ },window.location.origin);
+});
 $('save-draft').addEventListener('click',()=>{if(!hasDraftData())return draftStatus('Enter some particulars before saving.',true);saveDraftNow();});
 $('resume-draft').addEventListener('click',()=>{if(flushDraft())resumeLocalDraft($('draft-picker').value);});
 $('delete-draft').addEventListener('click',()=>{
