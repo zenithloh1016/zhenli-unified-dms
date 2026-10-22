@@ -40,7 +40,7 @@ const company={
 };
 test('all statutory registers use the full Register of prefix and Managers are excluded',()=>{
  assert.equal(registerLabel('Register of Directors'),'Register of Directors');
- assert.equal(registerLabel('Register of Members 001'),'Register of Members 001');
+ assert.equal(registerLabel('Register of Members 001'),'Register of Members');
  assert.equal(registerLabel('Register of BO'),'Register of Beneficial Owners');
  assert.equal(registerLabel('Register of Charge'),'Register of Charges');
  assert.equal(registerLabel('Register of Transfer'),'Register of Transfers');
@@ -52,7 +52,7 @@ test('all statutory registers use the full Register of prefix and Managers are e
 });
 test('member folios show only identity/contact particulars and current shares held',()=>{
  const register=buildIndependentRegister(company,2);
- assert.equal(register.title,'Register of Members 001');
+ assert.equal(register.title,'Register of Members');
  const labels=register.blocks.filter(b=>b.type==='field').map(b=>b.label);
  assert(labels.includes('Name'));
  assert(labels.includes('Date of Birth'));
@@ -72,7 +72,7 @@ test('member folios show only identity/contact particulars and current shares he
  assert.equal(shares.row,14);
  assert.equal(shares.col,7);
  const html=renderStatutoryRegisterDocument(company,2);
- assert.match(html,/Register of Members 001/);
+ assert.match(html,/Register of Members/);
  assert.match(html,/Current Number of Shares Held/);
  assert.match(html,/>250<\/textarea>/);
  assert(!html.includes('Share acquisition and transfer history'));
@@ -111,7 +111,7 @@ test('Managers tab is hidden in the DMS; source data retained and other register
  await tab.openCompany('c1');
  const html=tab.render();
  assert(!html.includes('Register of Managers'));
- assert(html.includes('Register of Members 001'));
+ assert(html.includes('Register of Members'));
  assert(html.includes('Register of Beneficial Owners'));
  assert(html.includes('Register of Charges'));
  assert(html.includes('Register of Transfers'));
