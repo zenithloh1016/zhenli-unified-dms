@@ -317,7 +317,7 @@ async function saveRepairedDates(){
     rows.map(({row,index})=>{
      const c=companyData(model,row),match=findCompanyMatch(model,row,getCompanies?.()||[]);
      return '<tr><td class="ml-no-col">'+esc(listingOrdinalValue(model,row,index))+'</td><td><strong>'+esc(displayedListingValue(model,model.nameColumn,row.values[model.nameColumn]))+'</strong></td><td>'+esc(c.registration||'N/A')+'</td>'+
-      cols.map(col=>{const display=displayedListingValue(model,col.index,row.values[col.index]);return '<td class="'+dateCss(col.label)+'" title="'+esc(display.slice(0,350))+'">'+esc(display.slice(0,100))+'</td>';}).join('')+
+      cols.map(col=>{const display=displayedListingValue(model,col.index,row.values[col.index]);return '<td class="'+dateCss(col.label)+'" title="'+esc(display)+'">'+esc(display)+'</td>';}).join('')+
       '<td><div class="ml-row-actions">'+act('Edit','ml-edit',index,'primary')+
       (match?act('Documents','ml-documents',match.id,'secondary'):'<small>Not in Documents</small>')+'</div></td></tr>';
     }).join('')+'</tbody></table>'+(rows.length?'':'<div class="empty-line">No companies match your search.</div>')+'</div>'+
