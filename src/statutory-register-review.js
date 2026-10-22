@@ -8,12 +8,51 @@ const cleanLabel=value=>tidy(value).replace(/:$/,'').slice(0,180);
 const absent=value=>!tidy(value)||/^(?:-|–|—|n\/a|na|nil|none)$/i.test(tidy(value));
 const isDateOrPerson=s=>/\b(?:name|full name|director|no\.?|date|chargee|allottee|shares|transfer|folio)\b/i.test(s);
 
+/** Keep the familiar statutory register titles, not shortened Excel tabs. */
+export function isManagerRegister(name){
+ return /^register (?:of|or) managers?(?:\b|$)/i.test(tidy(name));
+}
 export function registerLabel(name){
- const value=tidy(name).replace(/\s+\(Imported\s+[^)]*\)\s*$/i,'');
- if(/^master$/i.test(value))return 'Company Details';
- const m=/^register of members(?:\s+0*(\d+))?/i.exec(value);
- if(m)return 'Members'+(m[1]?' · '+Number(m[1]):'');
- return value.replace(/^register (?:of|or)\s+/i,'').replace(/\bBO\b/i,'Beneficial Owners');
+ const original=tidy(name);
+ if(/^master$/i.test(original))return 'Company Details';
+ const source=original.replace(/\s+\(Imported\s+[^)]*\)(?:\s+\d+)?$/i,'');
+ const imported=original.slice(source.length);
+ const bare=source.replace(/^register (?:of|or)\s+/i,'').trim();
+ const member=/^members?(?:\s+0*(\d+))?$/i.exec(bare);
+ if(member){
+  const folio=member[1]?' '+member[1].padStart(3,'0'):'';
+  return 'Register of Members'+folio+imported;
+ }
+ const replacements={
+  bo:'Beneficial Owners',
+  'beneficial owner':'Beneficial Owners',
+  'beneficial owners':'Beneficial Owners',
+  manager:'Managers',managers:'Managers',
+  director:'Directors',directors:'Directors',
+  secretary:'Secretaries',secretaries:'Secretaries',
+  charge:'Charges',charges:'Charges',
+  'charge satisfaction':'Satisfaction of Charges',
+  transfer:'Transfers',transfers:'Transfers',
+  allotment:'Allotments',allotments:'Allotments',
+  'share transfer':'Share Transfers','share transfers':'Share Transfers',
+  'share allotment':'Share Allotments','share allotments':'Share Allotments'
+ };
+ const standardized=replacements[bare.toLowerCase()]||
+  (/^register\b/i.test(bare)?'Other Records — '+bare:bare);
+ return 'Register of '+(standardized||'Other Records')+imported;
+}
+export function normalizeRegisterName(name){
+ const input=tidy(name);
+ if(!input)throw Error('Enter a register name.');
+ const value=registerLabel(input);
+ if(isManagerRegister(value))throw Error('Register of Managers is excluded from Statutory Registers.');
+ return value.slice(0,120);
+}
+export function isMemberPersonalOrSharesLabel(label){
+ const v=tidy(label).replace(/:$/,'').toLowerCase();
+ // Personal/contact information and the CURRENT total held only;
+ // no acquired/transferred/ledger, certificate, consideration or balance history.
+ return /^(?:name|full name|member'?s? name|shareholder'?s? name|individual\/corporate|id type|identification (?:no\.?|number)|nric(?:\/passport)?(?: no\.?)?|passport(?: no\.?)?|company registration (?:no\.?|number)|registration (?:no\.?|number)|date of birth|nationality(?:\/origin)?|race|occupation|email(?: address)?|address(?: · continued)?|contact(?: no\.?| number)?|phone(?: number)?|mobile(?: number)?|postal address|residential address|current (?:no\.? of |number of )?shares held|total (?:no\.? of |number of )?shares held|(?:no\.? of |number of )?shares held|shares held|shareholding(?: held)?|total shareholding)$/i.test(v);
 }
 export function registerKind(name){
  const s=tidy(name).toLowerCase();
@@ -146,7 +185,10 @@ function memberDetails(rows){
  }:null;
  const ledger=ledgerStart<0?{headerRow:-1,records:[]}:
   parseTable(rows,ledgerStart+1);
- return {kind:'member',fields,records:record?[record]:[],ledger};
+ // Newer hand-entered registers can be a table of members rather than one
+ // traditional folio per sheet. Preserve their personal details and held shares.
+ const tableRecords=record?[]:parseTable(rows).records;
+ return {kind:'member',fields,records:record?[record]:tableRecords,ledger};
 }
 export function describeStatutorySheet(sheet){
  const rows=sheet?.rows||[],name=sheet?.name||'Register';
