@@ -2,9 +2,9 @@
  * ZHENLI Statutory Registers: editable worksheets persisted per company in
  * private Supabase Storage. No new SQL table or repository-stored client data.
  */
-import {previewStatutoryZip,makeRegisterBook,validateRegisterBook,normValue} from './statutory-register-data.js';
+import {previewStatutoryZip,makeRegisterBook,mergeRegisterBooks,validateRegisterBook,normValue} from './statutory-register-data.js';
 import {buildStatutoryRegistersPdf} from './statutory-register-pdf.js';
-import {browserDownload} from './file-transfer.js';
+import {browserDownload,saveOrShareFile} from './file-transfer.js';
 import {Capacitor} from '@capacitor/core';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
 
@@ -20,7 +20,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   userId:'',loaded:false,loading:false,saving:false,error:'',message:'',
   search:'',page:0,available:new Set(),selectedId:null,book:null,
   originalUpdatedAt:null,dirty:false,sheetIndex:0,rowPage:0,
-  importPreview:null,importFilename:'',importing:false
+  importPreview:null,importFilename:'',importing:false,originalDocs:[]
  };
  let renderHook=null;
  const afterRender=fn=>{renderHook=fn;};
@@ -30,7 +30,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  function reset(){
   Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,error:'',message:'',
    search:'',page:0,available:new Set(),selectedId:null,book:null,originalUpdatedAt:null,
-   dirty:false,sheetIndex:0,rowPage:0,importPreview:null,importFilename:'',importing:false});
+   dirty:false,sheetIndex:0,rowPage:0,importPreview:null,importFilename:'',importing:false,originalDocs:[]});
  }
  function canLeave(){
   return !state.dirty||window.confirm('Your Statutory Registers have unsaved edits. Leave without saving?');
@@ -70,6 +70,32 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   if(value.companyId!==cid)throw Error('Stored register belongs to a different company.');
   return value;
  }
+
+ async function legacyOriginals(cid){
+  const {data:folders,error}=await db.from('folders').select('id').eq('company_id',cid)
+   .is('parent_id',null).ilike('name','Register Book').limit(5);
+  if(error)throw Error('Could not locate original Register Book files: '+error.message);
+  const docs=[];
+  for(const folder of folders||[]){
+   const {data,error:e}=await db.from('documents').select('id,name,storage_path,size_bytes')
+    .eq('folder_id',folder.id).order('name').limit(500);
+   if(e)throw Error('Cannot list original Register Book files: '+e.message);
+   docs.push(...(data||[]));
+  }
+  return docs;
+ }
+ async function downloadOriginal(id){
+  const doc=state.originalDocs.find(d=>d.id===id);
+  if(!doc)throw Error('Original archived document not found.');
+  const {data,error}=await storage.createSignedUrl(doc.storage_path,120,{download:doc.name});
+  if(error)throw Error('Cannot access original Register Book: '+error.message);
+  const res=await fetch(data.signedUrl,{cache:'no-store'});
+  if(!res.ok)throw Error('Original Register Book download failed (HTTP '+res.status+').');
+  const blob=await res.blob();
+  if(Capacitor.isNativePlatform())await saveOrShareFile(blob,doc.name,{preferShare:true});
+  else browserDownload(blob,doc.name);
+ }
+
  async function openCompany(id){
   const company=(getCompanies?.()||[]).find(c=>c.id===id);
   if(!company)throw Error('Company is not in your DMS portfolio.');
@@ -78,9 +104,10 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   const uid=getUser?.()?.id;if(!uid)throw Error('Sign in first.');
   state.loading=true;state.error='';state.message='Loading '+company.name+' registers…';notify();
   try{
-   const book=await remoteBook(uid,id)||makeRegisterBook(company);
+   const [saved,originalDocs]=await Promise.all([remoteBook(uid,id),legacyOriginals(id)]);
+   const book=saved||makeRegisterBook(company);
    if(getUser?.()?.id!==uid)return;
-   state.selectedId=id;state.book=book;state.originalUpdatedAt=book.updatedAt;
+   state.selectedId=id;state.book=book;state.originalUpdatedAt=book.updatedAt;state.originalDocs=originalDocs;
    state.dirty=false;state.sheetIndex=0;state.rowPage=0;
    state.message=book.sourceFile==='Manual entry'?'No imported register yet. Editable statutory register templates are ready.':'Statutory registers loaded. Edit any cell, then select Save Changes.';
   }catch(error){state.error=String(error?.message||error);}
@@ -88,7 +115,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  }
  function closeCompany(){
   if(!canLeave())return;
-  state.selectedId=null;state.book=null;state.dirty=false;state.message='';notify();
+  state.selectedId=null;state.book=null;state.originalDocs=[];state.dirty=false;state.message='';notify();
  }
  function pageRows(){
   const sheet=state.book?.sheets[state.sheetIndex];
@@ -131,13 +158,14 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
        '<button type="button" class="btn secondary" data-action="sr-prev" '+(state.rowPage===0?'disabled':'')+'>Previous</button>'+
        '<button type="button" class="btn secondary" data-action="sr-next" '+(state.rowPage>=view.pages-1?'disabled':'')+'>Next</button></div>'
     :'<div class="rb-help">No worksheets yet. Select Add Worksheet to begin.</div>')+
+   (state.originalDocs.length?'<details class="rb-originals"><summary>Preserved original Register Book files ('+state.originalDocs.length+')</summary><p class="muted">Original files remain private although their former Documents folder is hidden.</p>'+state.originalDocs.map(d=>'<div class="rb-original-row"><span>'+esc(d.name)+'</span>'+act('Download Original','sr-original',d.id)+'</div>').join('')+'</details>':'')+
    '<p class="rb-footnote muted">These are editable working statutory register records. Verify all imported particulars against the original and relevant SSM filings before relying on them. Saved data is private to your DMS account.</p></div>';
  }
  function renderPreview(){
   const p=state.importPreview;
   if(!p)return '';
   return '<div class="rb-import-preview"><h3>Review ZIP import</h3><p class="muted">'+esc(state.importFilename)+
-    ' · '+p.matched+' matched · '+p.unmatched+' skipped. Existing editable registers will be privately backed up before replacement.</p>'+
+    ' · '+p.matched+' matched · '+p.unmatched+' skipped. Existing worksheets will be preserved; changed imported versions are appended without overwriting edits.</p>'+
     '<div class="rb-preview-rows">'+p.rows.map(r=>'<div class="rb-preview-row"><strong>'+esc(r.path)+'</strong><span>'+
      (r.company?'✓ '+esc(r.company.name)+' · '+r.sheets.length+' worksheets · '+esc(r.status):'⚠ '+esc(r.error))+
      '</span></div>').join('')+'</div>'+
@@ -154,7 +182,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   return '<div class="rb-metrics"><div><strong>'+companies.length+'</strong><span>Companies</span></div>'+
    '<div><strong>'+state.available.size+'</strong><span>Editable registers saved</span></div>'+
    '<div><strong>'+filtered.length+'</strong><span>Matching companies</span></div></div>'+
-   '<div class="rb-help">Import ZIP files containing company Excel Register Books (.xlsx) or text-based PDFs. All Excel worksheets and imported text become editable within Statutory Registers. Scanned PDFs and older .xls files require conversion to .xlsx first. The original ZIP is not published or stored.</div>'+
+   '<div class="rb-help">Import ZIP files containing Excel Register Books (.xlsx), text-based PDFs or Word (.docx). Excel worksheets and extracted text become editable. Scanned PDFs need manual transcription; older .xls files must be converted to .xlsx. The original ZIP is not published or stored.</div>'+
    '<label class="rb-search-label" for="rb-search">Find company by name or registration number</label>'+
    '<input type="search" id="rb-search" value="'+esc(state.search)+'" placeholder="Search companies"/>'+
    '<div class="rb-table-scroll"><table class="rb-table"><thead><tr><th>No.</th><th>Company</th><th>Registration No.</th><th>Record</th><th>Action</th></tr></thead><tbody>'+
@@ -196,6 +224,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   }
   if(action==='sr-close'){closeCompany();return true;}
   if(action==='sr-cancel-import'){state.importPreview=null;state.importFilename='';notify();return true;}
+  if(action==='sr-original'){void downloadOriginal(id).catch(error=>status('',error?.message||String(error)));return true;}
   if(action==='sr-add-row'){
    const sheet=state.book.sheets[state.sheetIndex],width=Math.max(1,...sheet.rows.map(r=>r.length));
    if(sheet.rows.length>=12000)throw Error('Maximum 12,000 rows in a worksheet.');
@@ -271,19 +300,30 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  async function importZip(){
   const p=state.importPreview;
   if(!p||!p.matched)throw Error('No suitable company Register Books matched the ZIP.');
-  if(!window.confirm('Import '+p.matched+' company registers as editable DMS data? Previous saved registers will be backed up, then replaced. Skipped documents remain unchanged.'))return;
-  state.saving=true;state.error='';const failed=[];let saved=0;
+  if(!window.confirm('Embed '+p.matched+' company register files as editable data? Existing edited worksheets will remain intact. Changed versions will be added separately and previous saved registers backed up.'))return;
+  state.saving=true;state.error='';
+  const failed=[];let saved=0,added=0,skipped=0;
   try{
    for(const row of p.rows.filter(r=>r.company)){
     try{
-     const updated=makeRegisterBook(row.company,row);
-     await writeBook(updated,{overwrite:true});saved++;
-     if(state.selectedId===row.company.id){state.book=updated;state.originalUpdatedAt=updated.updatedAt;state.dirty=false;}
+     const uid=getUser?.()?.id;if(!uid)throw Error('Sign in first.');
+     const existing=await remoteBook(uid,row.company.id);
+     const incoming=makeRegisterBook(row.company,row);
+     const merged=mergeRegisterBooks(existing,incoming);
+     skipped+=merged.skipped;
+     if(merged.added){
+      const updated=await writeBook(merged.book,{expectedUpdatedAt:existing?.updatedAt||null});
+      added+=merged.added;saved++;
+      if(state.selectedId===row.company.id){
+       state.book=updated;state.originalUpdatedAt=updated.updatedAt;state.dirty=false;
+      }
+     }
     }catch(e){failed.push(row.path+': '+(e?.message||e));}
-    state.message='Imported '+saved+' of '+p.matched+' company registers; '+failed.length+' failures';notify();
+    state.message='Embedded '+saved+' company registers so far; '+failed.length+' errors';notify();
    }
-   if(!failed.length){state.importPreview=null;state.importFilename='';state.selectedId=null;state.book=null;}
-   state.message='Imported '+saved+' editable company register(s). '+p.unmatched+' ZIP documents skipped.'+
+   if(!failed.length){state.importPreview=null;state.importFilename='';}
+   state.message='Embedded '+added+' editable sections across '+saved+' companies; '+skipped+
+    ' identical worksheets skipped; '+p.unmatched+' unmatched files skipped.'+
     (failed.length?' Errors: '+failed.slice(0,3).join(' | '):'');
   }finally{state.saving=false;notify();}
  }
@@ -305,5 +345,5 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  }
  function search(value){state.search=String(value||'');state.page=0;notify();}
  return {state,afterRender,reset,canLeave,load,render,search,openCompany,closeCompany,updateCell,command,
-  readZip,importZip,save,pdf};
+  readZip,importZip,save,pdf,downloadOriginal};
 }
