@@ -4,7 +4,7 @@
  * Nothing is uploaded externally; works offline in the Android DMS.
  */
 import {validateRegisterBook} from './statutory-register-data.js';
-import {buildIndependentRegister,STATUTORY_DOCUMENT_COLORS as C} from './statutory-register-annual-layout.js';
+import {buildRegisterSections,STATUTORY_DOCUMENT_COLORS as C} from './statutory-register-annual-layout.js';
 const enc=new TextEncoder(),B=v=>enc.encode(v);
 function makePdf(images){
  const objects=[null,null],pages=[];
@@ -55,10 +55,10 @@ function wrap(ctx,value,maxWidth){
 function jpeg(canvas){
  return new Promise((res,rej)=>canvas.toBlob(blob=>blob?res(blob):rej(Error('PDF canvas could not be encoded.')),'image/jpeg',0.88));
 }
-export async function buildStatutoryRegistersPdf(book,{sheetIndex=0,onProgress=()=>{},showBlanks=false}={}){
+export async function buildStatutoryRegistersPdf(book,{sheetIndex=0,combined=false,onProgress=()=>{},showBlanks=false}={}){
  validateRegisterBook(book);
- const selected=buildIndependentRegister(book,sheetIndex,{showBlanks});
- const sections=[selected];
+ const sections=buildRegisterSections(book,{sheetIndex,combined,showBlanks});
+ const selected={title:combined?'COMBINED STATUTORY REGISTERS':sections[0].title};
  const W=794,H=1123,S=1.4,LM=44,RM=W-44,BOTTOM=H-72;
  const ctxCanvas=document.createElement('canvas');
  ctxCanvas.width=Math.round(W*S);ctxCanvas.height=Math.round(H*S);
