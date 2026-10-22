@@ -40,7 +40,7 @@ test('reads every folio from a multi-member worksheet and excludes ceased or zer
  const result=buildGroupedRegister(b,0);
  const names=result.blocks.filter(x=>x.type==='field'&&x.label==='Shareholder Name');
  const holdings=result.blocks.filter(x=>x.type==='field'&&x.label==='Current Number of Shares Held');
- assert.equal(names.length,2);assert.equal(holdings.length,2);
+ assert.equal(names.length,4);assert.equal(holdings.length,2);
  assert(holdings.some(x=>x.value==='3,000'&&x.row===93&&x.col===7),
   'newest folio must supply current shares with original editable cell coordinates');
  assert(holdings.some(x=>x.value==='800'));
