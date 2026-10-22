@@ -55,7 +55,7 @@ function membersFrom(rows){
    if(/date ceased to be a member/i.test(field(r,6)))ceased=field(r,7);
    if(/total shares held/i.test(field(r,6)))shares=field(r,7);
   }
-  if(none(ceased)&&(none(shares)||Number(shares.replace(/,/g,''))>0))names.push(name);
+  if(none(ceased)&&(!shares||(!none(shares)&&Number(shares.replace(/,/g,''))>0)))names.push(name);
  }
  return unique(names);
 }
