@@ -20,5 +20,5 @@ test('DMS no longer includes Office editing or installed-app launch integration'
 });
 
 test('Other modules and document features remain available',()=>{
- for(const action of ['view-file','download-file','upload-trigger','register-zip','tab-annual-return','tab-signing','tab-tasks'])assert.ok(main.includes(action),'Missing '+action);
+ for(const action of ['view-file','download-file','upload-trigger','sr-zip-input','tab-annual-return','tab-signing','tab-tasks'])assert.ok(main.includes(action),'Missing '+action);
 });
