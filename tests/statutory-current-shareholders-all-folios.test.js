@@ -53,7 +53,12 @@ test('reads every folio from a multi-member worksheet and excludes ceased or zer
  assert(html.includes('CURRENT HOLDER C'));
  assert(!html.includes('FORMER HOLDER'));
  assert(!html.includes('ZERO SHARE HOLDER'));
- assert(!html.includes('NO. 1 SAMPLE STREET'),'only name and current shares should display');
+ assert(html.includes('NO. 1 SAMPLE STREET'),'retain current member address');
+ assert(html.includes('SAMPLE CITY'),'retain continued address lines in one field');
+ assert(html.includes('Date of Birth'),'retain current member personal details');
+ assert(html.includes('Nationality/Origin'),'retain current member nationality');
+ assert(html.includes('ID-B'),'retain current member identification');
+ assert(!html.includes('Date Ceased to be A Member'),'do not display historical cessation dates');
  assert(!html.includes('SHARES ACQUIRED'),'historic share movement ledger is hidden');
 });
 test('a newer imported member worksheet supersedes older current holdings and cessation states',()=>{
@@ -115,6 +120,10 @@ test('member PDF exports the same current-only shareholders, never historic name
   assert((await pdf.text()).startsWith('%PDF'));
   assert(drawn.includes('ACTIVE PERSON'));
   assert(drawn.includes('5,000'));
+  assert(drawn.includes('Date of Birth'));
+  assert(drawn.includes('Nationality/Origin'));
+  assert(drawn.includes('NO. 1 SAMPLE STREET'));
+  assert(drawn.includes('ACTIVE001'));
   assert(!drawn.includes('FORMER PERSON'));
   assert(!drawn.includes('SHARES ACQUIRED'));
  }finally{globalThis.document=prev;}
