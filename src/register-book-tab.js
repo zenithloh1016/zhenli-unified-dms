@@ -24,7 +24,9 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   search:'',page:0,available:new Set(),selectedId:null,book:null,
   originalUpdatedAt:null,dirty:false,sheetIndex:0,rowPage:0,
   reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:false,
-  importPreview:null,importFilename:'',importing:false,originalDocs:[]
+  importPreview:null,importFilename:'',importing:false,originalDocs:[],
+  historyOpen:false,historyItems:[],historyPreview:null,historyPreviewName:'',
+  historyLoading:false,historyLoaded:false
  };
  let renderHook=null;
  const afterRender=fn=>{renderHook=fn;};
@@ -35,7 +37,9 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,error:'',message:'',
    search:'',page:0,available:new Set(),selectedId:null,book:null,originalUpdatedAt:null,
    dirty:false,sheetIndex:0,rowPage:0,reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:false,
-    importPreview:null,importFilename:'',importing:false,originalDocs:[]});
+    importPreview:null,importFilename:'',importing:false,originalDocs:[],
+    historyOpen:false,historyItems:[],historyPreview:null,historyPreviewName:'',
+    historyLoading:false,historyLoaded:false});
  }
  function canLeave(){
   return !state.dirty||window.confirm('Your Statutory Registers have unsaved edits. Leave without saving?');
@@ -114,6 +118,8 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    ensureChargeRegister(book);
    if(getUser?.()?.id!==uid)return;
    state.selectedId=id;state.book=book;state.originalUpdatedAt=book.updatedAt;state.originalDocs=originalDocs;
+   state.historyOpen=false;state.historyItems=[];state.historyPreview=null;
+   state.historyPreviewName='';state.historyLoaded=false;state.historyLoading=false;
    state.dirty=false;
    state.sheetIndex=Math.max(0,book.sheets.findIndex(s=>!isManagerRegister(s.name)));
    state.showBlankFields=false;
@@ -123,7 +129,9 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  }
  function closeCompany(){
   if(!canLeave())return;
-  state.selectedId=null;state.book=null;state.originalDocs=[];state.dirty=false;state.message='';notify();
+  state.selectedId=null;state.book=null;state.originalDocs=[];state.dirty=false;state.message='';
+  state.historyOpen=false;state.historyItems=[];state.historyPreview=null;
+  state.historyPreviewName='';state.historyLoaded=false;notify();
  }
  function renderEditor(){
   const book=state.book;
@@ -136,6 +144,8 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    '<div><h2>'+esc(company.name)+'</h2><p class="muted">'+esc(company.registration_no||'No registration number')+
    ' · '+esc(book.sourceFile||'Manually created records')+'</p></div></div>'+
    '<div class="rb-editor-actions">'+act('Save Changes','sr-save','','primary')+
+    act('Previous Versions','sr-history')+
+    (state.dirty?act('Discard Unsaved Edits','sr-discard'):'')+
     (sheet&&!isManagerRegister(sheet.name)?act('Export This Register PDF','sr-pdf','','secondary'):'')+
     act('Export Combined Registers PDF','sr-pdf-combined','','secondary')+
     act('Add Register','sr-add-sheet')+
@@ -158,6 +168,48 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    (state.originalDocs.length?'<details class="rb-originals"><summary>Preserved original Register Book files ('+state.originalDocs.length+')</summary><p class="muted">Original files remain securely archived, even though their former Documents folders are hidden.</p>'+state.originalDocs.map(d=>'<div class="rb-original-row"><span>'+esc(d.name)+'</span>'+act('Download Original','sr-original',d.id)+'</div>').join('')+'</details>':'')+
    '<p class="rb-footnote muted">Working statutory register particulars. Verify information against SSM filings and the original documents before relying on these records. Changes are saved privately.</p></div>';
  }
+
+ function dateLabel(value){
+  if(!value)return 'Date unavailable';
+  const parsed=new Date(value);
+  if(!Number.isFinite(parsed.getTime()))return 'Date unavailable';
+  return parsed.toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',
+   hour:'2-digit',minute:'2-digit'});
+ }
+ function renderHistory(){
+  const book=state.book;
+  const names=book?.sheets?.map(s=>registerLabel(s.name)).filter(Boolean)||[];
+  const backup=state.historyPreview;
+  const backupNames=backup?.sheets?.map(s=>registerLabel(s.name)).filter(Boolean)||[];
+  return '<div class="rb-editor rb-history">'+
+   '<div class="rb-editor-top">'+act('← Back to Registers','sr-history-close')+
+   '<div><h2>Previous Versions</h2><p class="muted">'+esc(book?.companyName||'Company')+
+   ' · '+esc(book?.registrationNo||'')+'</p></div></div>'+
+   '<p class="rb-help">Choose a snapshot from before your edits. Preview it before restoring. '+
+   'The current saved version will be backed up again when you restore, allowing you to reverse the operation.</p>'+
+   '<div class="rb-history-current"><strong>Current saved version</strong><span>'+
+    esc(dateLabel(state.originalUpdatedAt))+' · '+names.length+' register sections</span></div>'+
+   (state.historyLoading?'<p class="muted" role="status">Loading private version history…</p>':'')+
+   (state.historyLoaded&&!state.historyItems.length?
+    '<div class="rb-help">No earlier saved versions were found for this company. '+
+    'If you have not saved the recent changes, use Discard Unsaved Edits instead.</div>':'')+
+   '<div class="rb-history-list">'+state.historyItems.map(entry=>
+    '<div class="rb-history-row"><div><strong>'+esc(dateLabel(entry.created_at||entry.updated_at))+
+    '</strong><span class="muted">Earlier saved snapshot · '+esc(entry.name.replace(/\.json$/,''))+'</span></div>'+
+    act(state.historyPreviewName===entry.name?'Selected':'Preview Version','sr-history-preview',entry.name,
+     state.historyPreviewName===entry.name?'primary':'secondary')+'</div>').join('')+'</div>'+
+   (backup?'<section class="rb-history-preview"><h3>Version preview</h3>'+
+    '<p><strong>Saved data date:</strong> '+esc(dateLabel(backup.updatedAt))+'</p>'+
+    '<p><strong>Imported source:</strong> '+esc(backup.sourceFile||'Manually created')+'</p>'+
+    '<p><strong>Registers:</strong> '+backupNames.length+
+    ' · <strong>Worksheet entries:</strong> '+backup.sheets.reduce((n,s)=>n+s.rows.length,0)+'</p>'+
+    '<div class="rb-history-tags">'+backupNames.slice(0,32).map(n=>'<span>'+esc(n)+'</span>').join('')+'</div>'+
+    '<p class="muted">Restoration replaces all saved statutory registers for this company with the selected snapshot. It does not affect other companies or DMS tabs.</p>'+
+    act('Restore This Version','sr-history-restore','','primary')+'</section>':'')+
+   '<p class="rb-footnote muted">History is private to your signed-in DMS account. '+
+   'Only versions previously saved with backup support can be restored here.</p></div>';
+ }
+
  function renderPreview(){
   const p=state.importPreview;
   if(!p)return '';
@@ -199,7 +251,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     (state.error?'<div class="rb-error" role="alert">'+esc(state.error)+'</div>':'')+
     (state.message?'<p class="rb-help" role="status">'+esc(state.message)+'</p>':'')+
     (state.loading||state.saving?'<p class="muted" role="status">Processing statutory register records…</p>':'')+
-    (state.importPreview?renderPreview():state.selectedId?renderEditor():renderDirectory())+
+    (state.importPreview?renderPreview():state.selectedId?(state.historyOpen?renderHistory():renderEditor()):renderDirectory())+
     '<input id="sr-zip-input" type="file" accept=".zip,application/zip" hidden />'+
    '</section>';
  }
@@ -303,6 +355,9 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   }
 
   if(action==='sr-show-blank-fields'){state.showBlankFields=!state.showBlankFields;notify();return true;}
+  if(action==='sr-history-close'){
+   state.historyOpen=false;state.historyPreview=null;state.historyPreviewName='';notify();return true;
+  }
   if(action==='sr-close'){closeCompany();return true;}
   if(action==='sr-cancel-import'){state.importPreview=null;state.importFilename='';notify();return true;}
   if(action==='sr-original'){void downloadOriginal(id).catch(error=>status('',error?.message||String(error)));return true;}
@@ -418,6 +473,115 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   }catch(error){state.error=String(error?.message||error);notify();throw error;}
   finally{state.saving=false;notify();}
  }
+
+ async function discardUnsaved(){
+  if(!state.selectedId||!state.dirty)return;
+  if(!window.confirm('Discard your unsaved statutory register edits and reload the last saved version?'))return;
+  const company=(getCompanies?.()||[]).find(c=>c.id===state.selectedId);
+  const uid=getUser?.()?.id;if(!uid||!company)throw Error('Sign in and open a company.');
+  state.loading=true;state.error='';notify();
+  try{
+   const saved=await remoteBook(uid,company.id);
+   if(getUser?.()?.id!==uid||state.selectedId!==company.id)return;
+   const original=saved||makeRegisterBook(company);
+   ensureChargeRegister(original);
+   state.book=original;state.originalUpdatedAt=original.updatedAt;state.dirty=false;
+   state.sheetIndex=Math.max(0,original.sheets.findIndex(s=>!isManagerRegister(s.name)));
+   state.message='Unsaved edits discarded. The last saved version is loaded.';
+  }finally{state.loading=false;notify();}
+ }
+ async function openHistory(){
+  if(!state.selectedId||!state.book)throw Error('Open a company first.');
+  if(state.dirty){
+   if(!window.confirm('You have unsaved changes. Discard them and review the previously saved versions?'))return;
+   const uid=getUser?.()?.id;if(!uid)throw Error('Sign in first.');
+   const saved=await remoteBook(uid,state.selectedId);
+   if(!saved)throw Error('No previously saved Statutory Registers found for this company.');
+   state.book=saved;state.originalUpdatedAt=saved.updatedAt;state.dirty=false;
+  }
+  state.historyOpen=true;state.historyPreview=null;state.historyPreviewName='';
+  state.historyItems=[];state.historyLoaded=false;state.error='';
+  state.historyLoading=true;notify();
+  const uid=getUser?.()?.id;
+  const companyId=state.selectedId;
+  try{
+   if(!uid)throw Error('Sign in to view private versions.');
+   const prefix=uid+'/statutory-registers/history';
+   const matched=[];
+   // Search storage by company prefix to avoid pulling other company histories.
+   for(let offset=0;offset<300;offset+=100){
+    const {data,error}=await storage.list(prefix,{
+     limit:100,offset,search:companyId+'-',
+     sortBy:{column:'created_at',order:'desc'}
+    });
+    if(error)throw Error('Could not list previous versions: '+error.message);
+    const items=data||[];
+    for(const f of items)
+     if(typeof f.name==='string'&&f.name.startsWith(companyId+'-')&&
+        f.name.endsWith('.json')&&!f.name.includes('/'))matched.push(f);
+    if(items.length<100)break;
+   }
+   if(getUser?.()?.id!==uid||state.selectedId!==companyId)return;
+   state.historyItems=matched.sort((a,b)=>
+    Date.parse(b.created_at||b.updated_at||0)-Date.parse(a.created_at||a.updated_at||0));
+   state.historyLoaded=true;
+   state.message=matched.length?matched.length+' earlier version(s) found. Preview before restoring.':
+    'No previous saved versions are available for this company.';
+  }finally{state.historyLoading=false;notify();}
+ }
+ async function previewHistory(name){
+  if(!state.historyOpen||!state.selectedId)return;
+  const found=state.historyItems.find(f=>f.name===name);
+  if(!found)throw Error('Please choose a version from the private history list.');
+  const uid=getUser?.()?.id,companyId=state.selectedId;
+  if(!uid)throw Error('Sign in first.');
+  state.historyLoading=true;state.error='';notify();
+  try{
+   const key=uid+'/statutory-registers/history/'+found.name;
+   const {data,error}=await storage.download(key);
+   if(error)throw Error('Could not open earlier version: '+error.message);
+   let version;
+   try{version=JSON.parse(await data.text());}
+   catch{throw Error('Earlier saved version is damaged and cannot be restored.');}
+   validateRegisterBook(version);
+   if(version.companyId!==companyId)throw Error('This version belongs to another company.');
+   if(getUser?.()?.id!==uid||state.selectedId!==companyId)return;
+   state.historyPreview=version;state.historyPreviewName=name;
+  }finally{state.historyLoading=false;notify();}
+ }
+ async function restoreHistory(){
+  const version=state.historyPreview;
+  if(!state.historyOpen||!version||!state.historyPreviewName)
+   throw Error('Preview an earlier version before restoring it.');
+  if(!state.historyItems.some(f=>f.name===state.historyPreviewName))
+   throw Error('The selected version is no longer available.');
+  if(!state.selectedId||version.companyId!==state.selectedId)
+   throw Error('Version and company do not match.');
+  const company=(getCompanies?.()||[]).find(c=>c.id===state.selectedId);
+  if(!company)throw Error('Company not found.');
+  if(!window.confirm('Restore the previous saved Statutory Registers for '+company.name+
+   '?\n\nThis replaces the CURRENT saved register information for this company only.'+
+   '\nA new private backup of the current version will be created first.'))return;
+  state.saving=true;state.error='';notify();
+  try{
+   // Normal optimistic-concurrency save. It refuses changes from other devices
+   // and backs up the CURRENT value before overwriting the company file.
+   const restored=structuredClone(version);
+   restored.companyId=company.id;
+   restored.companyName=company.name;
+   restored.registrationNo=company.registration_no||restored.registrationNo||'';
+   const updated=await writeBook(restored,{expectedUpdatedAt:state.originalUpdatedAt});
+   if(getUser?.()?.id!==state.userId)return;
+   state.book=updated;state.originalUpdatedAt=updated.updatedAt;state.dirty=false;
+   ensureChargeRegister(state.book);
+   state.sheetIndex=Math.max(0,state.book.sheets.findIndex(s=>!isManagerRegister(s.name)));
+   state.historyOpen=false;state.historyItems=[];state.historyPreview=null;
+   state.historyPreviewName='';state.historyLoaded=false;
+   state.message='Previous saved Statutory Registers restored for '+company.name+
+    '. A backup of the replaced version is preserved.';
+  }finally{state.saving=false;notify();}
+ }
+
  async function readZip(file){
   if(state.dirty&&!canLeave())return;
   state.loading=true;state.importFilename=file?.name||'';state.importPreview=null;state.error='';
@@ -478,5 +642,6 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  function search(value){state.search=String(value||'');state.page=0;notify();}
  function searchReview(value){state.reviewQuery=String(value||'');state.reviewPage=0;state.reviewExpanded='';notify();}
  return {state,afterRender,reset,canLeave,load,render,search,openCompany,closeCompany,updateCell,command,
-  readZip,importZip,save,pdf,downloadOriginal,searchReview};
+  readZip,importZip,save,pdf,downloadOriginal,searchReview,
+  openHistory,previewHistory,restoreHistory,discardUnsaved};
 }
