@@ -4,7 +4,7 @@
  */
 import {previewStatutoryZip,makeRegisterBook,mergeRegisterBooks,validateRegisterBook,normValue} from './statutory-register-data.js';
 import {buildStatutoryRegistersPdf} from './statutory-register-pdf.js';
-import {renderReadableRegister} from './statutory-register-review-ui.js';
+import {renderStatutoryAnnualDocument} from './statutory-register-annual-ui.js';
 import {registerLabel} from './statutory-register-review.js';
 import {browserDownload,saveOrShareFile} from './file-transfer.js';
 import {Capacitor} from '@capacitor/core';
@@ -146,9 +146,9 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     '<span class="rb-dirty" id="sr-dirty">'+(state.dirty?'Unsaved changes':'All changes saved')+'</span></div>'+
    '<div class="rb-sheet-tabs">'+book.sheets.map((s,i)=>'<button type="button" class="rb-sheet-tab '+(i===state.sheetIndex?'active':'')+
      '" data-action="sr-sheet" data-id="'+i+'">'+esc(registerLabel(s.name))+'</button>').join('')+'</div>'+
-   '<div class="sr-mode-switch"><span class="sr-mode-intro">Display:</span>'+act('Easy Review','sr-mode-review','',state.reviewMode==='review'?'primary':'secondary')+
+   '<div class="sr-mode-switch"><span class="sr-mode-intro">Display:</span>'+act('Annual Return Layout','sr-mode-review','',state.reviewMode==='review'?'primary':'secondary')+
     act('Original Worksheet','sr-mode-worksheet','',state.reviewMode==='worksheet'?'primary':'secondary')+'</div>'+
-   (state.reviewMode==='review'?renderReadableRegister(book,state.sheetIndex,state):
+   (state.reviewMode==='review'?'<div class="sr-ar-preview-tools"><strong>A4 portrait · Full Register Book</strong>'+act(state.showBlankFields?'Hide blank fields':'Show blank fields','sr-show-blank-fields')+'<span class="muted">PDF export uses this same document format, including all register sections.</span></div>'+renderStatutoryAnnualDocument(book,{showBlanks:state.showBlankFields}):
    (sheet?'<div class="rb-sheet-tools">'+
       act('+ Add Row','sr-add-row')+act('+ Add Column','sr-add-col')+act('Rename Worksheet','sr-rename-sheet')+
       '<span class="muted">'+sheet.rows.length+' rows · '+width+' columns</span></div>'+
@@ -216,7 +216,8 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  }
  function updateCell(target){
   const r=Number(target.dataset.r),c=Number(target.dataset.c);
-  const sheet=state.book?.sheets?.[state.sheetIndex];
+  const s=target.dataset.s===undefined?state.sheetIndex:Number(target.dataset.s);
+  const sheet=state.book?.sheets?.[s];
   if(!sheet||!Number.isInteger(r)||!Number.isInteger(c)||r<0||c<0||r>=sheet.rows.length||c>=250)return false;
   const value=normValue(target.value);
   if((sheet.rows[r][c]||'')===value)return true;
@@ -229,7 +230,12 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   if(action==='sr-prev'||action==='sr-next'){state.rowPage=Math.max(0,state.rowPage+(action==='sr-next'?1:-1));notify();return true;}
   if(action==='sr-sheet'){
    const n=Number(id);if(Number.isInteger(n)&&n>=0&&n<(state.book?.sheets?.length||0)){
-    state.sheetIndex=n;state.rowPage=0;state.reviewPage=0;state.reviewQuery='';state.reviewStatus='all';state.reviewExpanded='';notify();
+    state.sheetIndex=n;
+    if(state.reviewMode==='review'){
+     document.getElementById('sr-annual-'+n)?.scrollIntoView({behavior:'smooth',block:'start'});
+    }else{
+     state.rowPage=0;state.reviewPage=0;state.reviewQuery='';state.reviewStatus='all';state.reviewExpanded='';notify();
+    }
    }return true;
   }
   if(action==='sr-mode-review'||action==='sr-mode-worksheet'){
@@ -353,9 +359,9 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   if(!state.book)throw Error('Select a company.');
   state.saving=true;state.error='';status('Generating statutory register PDF…');
   try{
-   const blob=await buildStatutoryRegistersPdf(state.book,{onProgress:message=>{state.message=message;notify();}});
+   const blob=await buildStatutoryRegistersPdf(state.book,{showBlanks:state.showBlankFields,onProgress:message=>{state.message=message;notify();}});
    const safe=String(state.book.companyName||'Company').replace(/[\\/:*?"<>|]/g,'_').slice(0,110);
-   const filename='Statutory Registers_'+safe+'.pdf';
+   const filename='Statutory Registers_Annual Return Layout_'+safe+'.pdf';
    if(Capacitor.isNativePlatform()){
     await savePdfToAndroidFiles(blob,filename);
     status('PDF saved to your chosen Android folder.');
