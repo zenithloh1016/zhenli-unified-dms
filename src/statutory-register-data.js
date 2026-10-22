@@ -3,7 +3,7 @@
  * Processing is local in the signed-in browser. Nothing is uploaded until
  * the user reviews and confirms matched companies.
  */
-import {unzipSync} from 'fflate';
+import {unzipSync,strFromU8} from 'fflate';
 import {openMasterListingWorkbook} from './master-listing-reader.js';
 import {matchRegisterBook} from './register-book-zip.js';
 
@@ -86,6 +86,23 @@ async function parsePdf(bytes){
   };
  }finally{await pdf.destroy();}
 }
+
+async function parseDocx(bytes){
+ if(bytes.byteLength>MAX_WORKBOOK)throw Error('DOCX exceeds the 20 MB text-extraction limit.');
+ const files=unzipSync(bytes,{filter:part=>part.name==='word/document.xml'});
+ const xml=files['word/document.xml'];
+ if(!xml)throw Error('This Word document has no readable document.xml.');
+ const document=new DOMParser().parseFromString(strFromU8(xml),'application/xml');
+ if(document.getElementsByTagName('parsererror').length)throw Error('Invalid DOCX XML.');
+ const paragraphs=Array.from(document.getElementsByTagNameNS('*','p'));
+ const lines=paragraphs.map(p=>Array.from(p.getElementsByTagNameNS('*','t')).map(t=>t.textContent||'').join(''));
+ if(!lines.some(line=>line.trim()))throw Error('Word file contains no selectable text.');
+ const header=lines.slice(0,40).join('\n');
+ return {sheets:[sanitizeSheet('Word Register Text',lines.map(x=>[x]))],
+  headerName:(header.match(/Company Name\s*:\s*([^\n]+)/i)||[])[1]?.trim()||'',
+  headerNumber:(header.match(/Company No\.?\s*:\s*([^\n]+)/i)||[])[1]?.trim()||''};
+}
+
 export async function previewStatutoryZip(file,companies,{onProgress=()=>{}}={}){
  if(!file||!/\.zip$/i.test(file.name)||!file.size||file.size>MAX_ZIP)
   throw Error('Choose a nonempty Register Book ZIP file no larger than 80 MB.');
@@ -104,9 +121,9 @@ export async function previewStatutoryZip(file,companies,{onProgress=()=>{}}={})
   const entry={path,company:null,sheets:[],status:'',error:''};
   try{
    const ext=path.split('.').at(-1).toLowerCase();
-   if(!['xlsx','pdf'].includes(ext))throw Error('Unsupported for direct editing: use .xlsx or text-based .pdf.');
+   if(!['xlsx','pdf','docx'].includes(ext))throw Error('Unsupported for direct editing: use .xlsx, text-based .pdf or .docx.');
    if(!bytes.length)throw Error('Empty register document.');
-   const parsed=ext==='xlsx'?await parseExcel(bytes,path):await parsePdf(bytes);
+   const parsed=ext==='xlsx'?await parseExcel(bytes,path):ext==='pdf'?await parsePdf(bytes):await parseDocx(bytes);
    const found=matchRegisterBook(path,companies,{
     headerName:parsed.headerName||'',
     headerNumber:parsed.headerNumber||''
@@ -115,7 +132,7 @@ export async function previewStatutoryZip(file,companies,{onProgress=()=>{}}={})
    const company=found.company;
    // Never merge unrelated files into the same company's register silently.
    if(seen.has(company.id))throw Error('More than one source for this company; combine its worksheets in one Excel workbook.');
-   entry.company=company;entry.sheets=parsed.sheets;entry.status=ext==='pdf'?'PDF text converted to editable lines (verify layout)':'Excel worksheets converted to editable cells';
+   entry.company=company;entry.sheets=parsed.sheets;entry.status=ext==='pdf'?'PDF text converted to editable lines (verify layout)':ext==='docx'?'Word text converted to editable rows (verify layout)':'Excel worksheets converted to editable cells';
    seen.add(company.id);
   }catch(e){entry.error=e?.message||String(e);}
   result.push(entry);
@@ -139,4 +156,30 @@ export function makeRegisterBook(company,row){
    {name:'Register of Share Transfers',rows:[['Transferor','Transferee','Shares','Transfer Date']]}
   ]};
  return validateRegisterBook(value);
+}
+
+/** Preserve existing edited worksheets when the next imported book differs. */
+export function mergeRegisterBooks(oldBook, importedBook){
+ validateRegisterBook(importedBook);
+ if(!oldBook)return {book:importedBook,added:importedBook.sheets.length,skipped:0};
+ validateRegisterBook(oldBook);
+ if(oldBook.companyId!==importedBook.companyId)throw Error('Cannot merge registers for different companies.');
+ const result=structuredClone(oldBook);
+ let added=0,skipped=0;
+ for(const sheet of importedBook.sheets){
+  if(result.sheets.some(s=>s.name===sheet.name&&JSON.stringify(s.rows)===JSON.stringify(sheet.rows))){
+   skipped++;continue;
+  }
+  let name=sheet.name;
+  if(result.sheets.some(s=>s.name===name)){
+   const stem=(sheet.name+' (Imported '+new Date().toISOString().slice(0,10)+')').slice(0,110);
+   name=stem;let number=2;
+   while(result.sheets.some(s=>s.name===name)){name=(stem+' '+number++).slice(0,120);}
+  }
+  result.sheets.push({name,rows:sheet.rows.map(r=>r.slice())});
+  added++;
+ }
+ result.sourceFile=[oldBook.sourceFile,importedBook.sourceFile].filter(Boolean).join(' | ').slice(0,500);
+ result.importedAt=importedBook.importedAt;
+ return {book:validateRegisterBook(result),added,skipped};
 }
