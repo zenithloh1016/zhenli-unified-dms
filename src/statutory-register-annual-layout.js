@@ -3,7 +3,7 @@
  * All edit coordinates map to privately stored statutory data; Excel's
  * sheet layout is never displayed and is never required for PDF export.
  */
-import {describeStatutorySheet,registerLabel,isManagerRegister,isMemberPersonalOrSharesLabel} from './statutory-register-review.js';
+import {describeStatutorySheet,registerLabel,isManagerRegister,isMemberPersonalOrSharesLabel,registerGroupIndices,visibleRegisterIndices,getRegisterFieldOverrides} from './statutory-register-review.js';
 
 export const STATUTORY_DOCUMENT_COLORS={
  ink:'#243b4d',navy:'#193f64',blue:'#245f80',light:'#eaf3f8',
@@ -63,7 +63,21 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
  const fields=items=>(items||[]).filter(f=>showBlanks||hasText(f.value))
   .map(f=>mappedField(f,sheetIndex));
  if(details.kind==='profile'){
-  result.blocks.push(...fields(details.fields));
+  // Company Details should present only a single Registered Address. Excel
+  // templates split the address across several "Registered Office: continued"
+  // rows; combine their text but leave all original values recoverable.
+  const profile=details.fields||[];
+  const first=profile.find(f=>/^registered (?:office|address)$/i.test(f.label));
+  if(first){
+   const after=profile.filter(f=>f.row>first.row&&
+    /^registered (?:office|address) · continued$/i.test(f.label));
+   const lines=[first,...after].map(f=>String(f.value||'').trim()).filter(Boolean);
+   result.blocks.push({...mappedField(first,sheetIndex),
+    label:'Registered Address',value:lines.join('\n'),
+    continuation:after.map(f=>({row:f.row,col:f.col})),composite:true});
+  }else{
+   result.blocks.push({type:'note',text:'Registered Address not recorded. Use Add Field to enter it.'});
+  }
  }else if(details.kind==='member'){
   // A folio can contain decades of allotments, acquisitions and transfers.
   // Only display the member's personal/contact details and the recorded
@@ -93,6 +107,41 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
  }else{
   result.blocks.push(...genericEntries(sheet.rows||[],sheetIndex,{showBlanks}));
  }
+ // A charge register without a charge record must state N/A, not a fake entry.
+ if(/^register of charges$/i.test(result.title)){
+  const rows=sheet.rows||[];
+  const onlyHeadings=rows.length===0||rows.every((row,i)=>
+   !row.some(v=>String(v??'').trim()&&i>0&&
+    !/^(?:n\/a|nil|none|not applicable|-)$/i.test(String(v).trim())));
+  if(onlyHeadings||!result.blocks.some(b=>b.type==='record'&&b.title&&!/^(?:no entries|entry 1)$/i.test(b.title)))
+   if(onlyHeadings)result.blocks=[{type:'note',text:'N/A — No charge record'}];
+ }
  if(!result.blocks.length)result.blocks.push({type:'note',text:'No entries recorded. Choose Add Entry to begin.'});
+ // Label overrides affect both editable web fields and generated PDFs.
+ const overrides=getRegisterFieldOverrides(book);
+ for(const block of result.blocks){
+  if(block.type!=='field')continue;
+  const key=block.sheetIndex+':'+block.row+':'+block.col;
+  if(typeof overrides[key]==='string'&&overrides[key].trim())
+   block.label=overrides[key].slice(0,120);
+ }
  return result;
+}
+
+
+/** The first Member tab presents all numbered source folios under one register. */
+export function buildGroupedRegister(book,sheetIndex,options={}){
+ const members=registerGroupIndices(book,sheetIndex);
+ if(!members.length)throw Error('Register not available.');
+ const first=buildIndependentRegister(book,members[0],options);
+ if(members.length===1)return first;
+ for(const i of members.slice(1)){
+  const next=buildIndependentRegister(book,i,options);
+  first.blocks.push(...next.blocks);
+ }
+ return first;
+}
+/** One complete PDF: Company Details plus every distinct statutory register, excluding Managers. */
+export function buildCombinedRegisters(book,options={}){
+ return visibleRegisterIndices(book).map(i=>buildGroupedRegister(book,i,options));
 }
