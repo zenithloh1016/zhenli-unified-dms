@@ -156,10 +156,12 @@ function memberPersonBlocks(item,{showBlanks=false,former=false,total=0}={}){
  // cell: a member can have many share movements with different amounts.
  const ledger=record.ledgerTotals;
  if(ledger){
-  if(ledger.acquisitionValueCount>0){
+  // Acquisition consideration is relevant to the current holder view only.
+  // Do not show former members' historical acquisitions; their transferred
+  // shares and transfer consideration are the figures required in that view.
+  if(!former&&ledger.acquisitionValueCount>0){
    blocks.push({type:'metric',
-    label:former?'Total Share Consideration (Historical Acquisitions)':
-     'Total Share Consideration (Acquisitions)',
+    label:'Total Share Consideration (Acquisitions)',
     value:formatStatutoryNumber('Share Consideration',
      ledger.acquisitionConsideration)});
    if(ledger.acquisitionValueCount<ledger.acquisitionCount)
