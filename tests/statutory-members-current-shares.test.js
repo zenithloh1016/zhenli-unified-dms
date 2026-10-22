@@ -6,7 +6,7 @@ import {
 import {buildIndependentRegister} from '../src/statutory-register-annual-layout.js';
 import {renderStatutoryRegisterDocument} from '../src/statutory-register-annual-ui.js';
 import {createRegisterBookTab} from '../src/register-book-tab.js';
-import {makeRegisterBook} from '../src/statutory-register-data.js';
+import {makeRegisterBook,sanitizeSheet} from '../src/statutory-register-data.js';
 
 function memberRows(){
  const rows=Array.from({length:20},()=>[]);
@@ -94,7 +94,7 @@ test('if Total Shares Held is missing, use the last recorded share balance only'
 });
 test('Managers tab is hidden in the DMS; source data retained and other registers selectable',async()=>{
  const base=makeRegisterBook({id:'c1',name:'SAMPLE SDN BHD',registration_no:'202601111111'},{
-  path:'Register Book_SAMPLE SDN BHD.xlsx',sheets:company.sheets
+  path:'Register Book_SAMPLE SDN BHD.xlsx',sheets:company.sheets.map(s=>sanitizeSheet(s.name,s.rows))
  });
  const storage={
   download:async()=>({data:new Blob([JSON.stringify(base)]),error:null}),
