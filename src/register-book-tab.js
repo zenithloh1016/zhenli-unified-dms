@@ -5,6 +5,7 @@
 import {previewStatutoryZip,makeRegisterBook,mergeRegisterBooks,validateRegisterBook,normValue} from './statutory-register-data.js';
 import {buildStatutoryRegistersPdf} from './statutory-register-pdf.js';
 import {renderStatutoryRegisterDocument} from './statutory-register-annual-ui.js';
+import {buildGroupedRegister} from './statutory-register-annual-layout.js';
 import {registerLabel,registerKind,describeStatutorySheet,isManagerRegister,normalizeRegisterName,ensureChargeRegister,visibleRegisterIndices} from './statutory-register-review.js';
 import {browserDownload,saveOrShareFile} from './file-transfer.js';
 import {Capacitor} from '@capacitor/core';
@@ -237,8 +238,11 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    const sheet=state.book?.sheets?.[si];
    if(!sheet||isManagerRegister(sheet.name)||ri>=sheet.rows.length||ci>=250)return true;
    const key=si+':'+ri+':'+ci;
-   const current=state.book.fieldLabels?.[key]||'';
-   const label=window.prompt('Edit the statutory field label:',current||'');
+   const projected=buildGroupedRegister(state.book,state.sheetIndex,{showBlanks:true});
+   const shown=projected.blocks.find(block=>block.type==='field'&&
+    block.sheetIndex===si&&block.row===ri&&block.col===ci);
+   const current=state.book.fieldLabels?.[key]||shown?.label||'';
+   const label=window.prompt('Edit the statutory field label:',current);
    if(label===null)return true;
    if(!label.trim())throw Error('Field label must not be blank.');
    if(!state.book.fieldLabels)state.book.fieldLabels={};
@@ -261,8 +265,9 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     let n=1;
     while(state.book.sheets.some(s=>new RegExp('^Register of Members 0*'+n+'(?:\\s|$)','i').test(s.name)))n++;
     const folioName='Register of Members '+String(n).padStart(3,'0');
-    state.book.sheets.push({name:folioName,rows:[['Name:','New member'],['Identification / Registration No.:',''],['Address:',''],['Date Became Member:',''],['Date Ceased to be A Member:','']]});
-    state.sheetIndex=state.book.sheets.length-1;state.showBlankFields=true;
+    const firstIndex=state.book.sheets.findIndex(s=>registerLabel(s.name)==='Register of Members');
+    state.book.sheets.push({name:folioName,rows:[['Name:','New member'],['Identification / Registration No.:',''],['Date of Birth:',''],['Nationality/Origin:',''],['Address:',''],['Total Shares Held:','']]});
+    state.sheetIndex=firstIndex>=0?firstIndex:state.book.sheets.length-1;state.showBlankFields=true;
     state.dirty=true;notify();return true;
    }
    if(sheet.rows.length>=12000)throw Error('Maximum 12,000 entries in a register.');
