@@ -558,7 +558,8 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   if(!state.selectedId||version.companyId!==state.selectedId)
    throw Error('Version and company do not match.');
   const company=(getCompanies?.()||[]).find(c=>c.id===state.selectedId);
-  if(!company)throw Error('Company not found.');
+  const uid=getUser?.()?.id;
+  if(!uid||!company)throw Error('Please sign in and open a company.');
   if(!window.confirm('Restore the previous saved Statutory Registers for '+company.name+
    '?\n\nThis replaces the CURRENT saved register information for this company only.'+
    '\nA new private backup of the current version will be created first.'))return;
@@ -571,7 +572,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    restored.companyName=company.name;
    restored.registrationNo=company.registration_no||restored.registrationNo||'';
    const updated=await writeBook(restored,{expectedUpdatedAt:state.originalUpdatedAt});
-   if(getUser?.()?.id!==state.userId)return;
+   if(getUser?.()?.id!==uid)return;
    state.book=updated;state.originalUpdatedAt=updated.updatedAt;state.dirty=false;
    ensureChargeRegister(state.book);
    state.sheetIndex=Math.max(0,state.book.sheets.findIndex(s=>!isManagerRegister(s.name)));
