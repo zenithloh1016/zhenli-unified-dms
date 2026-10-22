@@ -31,7 +31,10 @@ const grouped=(number,decimals)=>{
  return sign+digits+(frac!==undefined?'.'+frac:'');
 };
 export function formatStatutoryNumber(label,value){
- const kind=numericKind(label),n=parseStatutoryNumber(value);
+ return formatStatutoryNumberByKind(numericKind(label),value);
+}
+export function formatStatutoryNumberByKind(kind,value){
+ const n=parseStatutoryNumber(value);
  if(!kind||n===null)return String(value??'');
  if(kind==='shares'){
   const raw=trimmed(value).replace(/,/g,'').replace(/^\+/,'');
@@ -45,13 +48,16 @@ export function formatStatutoryNumber(label,value){
  // Numeric values such as 50 and "50%" already mean 50 percent. A fractional
  // spreadsheet value (0.5) may be a ratio; this is only safely interpreted
  // as 50% when a field explicitly describes a ratio.
- const ratio=/\bratio\b/.test(String(label).toLowerCase());
+ const ratio=false; // Do not infer an unlabelled decimal is an Excel ratio.
  return grouped(ratio && Math.abs(n)<=1 && !trimmed(value).includes('%')?n*100:n,2)+'%';
 }
 export function normalizeStatutoryNumber(label,value){
- // Store a plain numeric string only after the user has intentionally edited
- // a formatted field; imported sources are never rewritten on display.
- const kind=numericKind(label),n=parseStatutoryNumber(value);
+ return normalizeStatutoryNumberByKind(numericKind(label),value);
+}
+export function normalizeStatutoryNumberByKind(kind,value){
+ // Store a plain numeric string only after user intentionally edits a field;
+ // imported source values are never rewritten simply from rendering.
+ const n=parseStatutoryNumber(value);
  if(!kind||n===null)return String(value??'');
  return trimmed(value).replace(/^(?:RM|MYR)\s*/i,'').replace(/,/g,'')
   .replace(/%$/,'').trim();
