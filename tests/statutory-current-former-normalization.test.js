@@ -118,15 +118,16 @@ test('verified Mark Former/Current persists in book without inventing cessation 
   assert(html.includes('Mark Former'));
   assert(html.includes('Mark Current'));
   assert(html.includes('data-action="sr-set-status"'));
-  const source=tab.state.book.sheets[0].rows[9][6];
+  const source=tab.state.book.sheets[1].rows[9][6];
   assert.equal(source,'-');
-  tab.command('sr-set-status','0:9:former');
-  assert.equal(tab.state.book.recordStatuses['0:9'],'former');
-  assert.equal(tab.state.book.sheets[0].rows[9][6],source);
+  tab.command('sr-set-status','1:9:former');
+  assert.equal(tab.state.book.recordStatuses['1:9'],'former');
+  assert.equal(tab.state.book.sheets[1].rows[9][6],source);
   assert.equal(tab.state.dirty,true);
-  // Manual status on a *superseded* imported row does not replace the newer
-  // sheet's status for the same directorship.
+  // The visible latest edition is reclassified; older imported source rows
+  // and original cessation values remain untouched.
   const projection=buildGroupedRegister(tab.state.book,0);
+  assert(projection.blocks.some(x=>x.title==='DIRECTOR B'&&x.status==='Former'));
   assert(projection.blocks.some(x=>x.title==='DIRECTOR A'&&x.status==='Former'));
  }finally{globalThis.window=originalWindow;}
 });
