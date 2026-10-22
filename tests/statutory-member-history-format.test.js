@@ -52,14 +52,16 @@ test('two active shareholders plus former history all show with correctly format
  assert.equal(section.blocks.filter(x=>x.type==='metric'&&x.value==='50.00%').length,2);
  assert(section.blocks.some(x=>x.type==='field'&&x.value==='100,000'));
  assert(section.blocks.some(x=>x.type==='metric'&&x.value==='RM1,000,000'));
- assert(section.blocks.some(x=>x.type==='metric'&&x.value==='RM2,000,000'));
+ assert(!section.blocks.some(x=>x.type==='metric'&&x.value==='RM2,000,000'));
+ assert(!section.blocks.some(x=>x.label==='Total Share Consideration (Historical Acquisitions)'));
  assert(section.blocks.some(x=>x.type==='field'&&x.label==='Date Ceased to be a Member'));
  const html=renderStatutoryRegisterDocument(b,0);
  assert(html.includes('Former'));
  assert(html.includes('50.00%'));
  assert(html.includes('100,000'));
  assert(html.includes('RM1,000,000'));
- assert(html.includes('RM2,000,000'));
+ assert(!html.includes('RM2,000,000'));
+ assert(!html.includes('Historical Acquisitions'));
  assert.equal(JSON.stringify(b),before);
  assert.equal(buildCombinedRegisters(b).length,1);
 });
@@ -99,5 +101,7 @@ test('PDF includes former history, share counts, consideration and percentage',a
   assert(recorded.includes('100,000'));
   assert(recorded.includes('RM1,000,000'));
   assert(recorded.includes('FORMER THREE'));
+  assert(!recorded.includes('RM2,000,000'));
+  assert(!recorded.includes('Total Share Consideration (Historical Acquisitions)'));
  }finally{globalThis.document=old;}
 });

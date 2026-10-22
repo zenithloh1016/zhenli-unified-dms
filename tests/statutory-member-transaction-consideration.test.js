@@ -67,7 +67,10 @@ test('separately sums ALL acquired consideration for current member and transfer
  assert(current.blocks.some(x=>x.type==='metric'&&x.label==='Total Share Consideration (Acquisitions)'&&x.value==='RM1,000,501'));
  assert(former.blocks.some(x=>x.type==='metric'&&x.label==='Total Number of Shares Transferred'&&x.value==='17,001'));
  assert(former.blocks.some(x=>x.type==='metric'&&x.label==='Total Share Consideration (Transfers)'&&x.value==='RM15,600'));
- assert(former.blocks.some(x=>x.type==='metric'&&x.label==='Total Share Consideration (Historical Acquisitions)'&&x.value==='RM17,001'));
+ assert(!former.blocks.some(x=>/Historical Acquisitions/i.test(x.label||'')));
+ assert(!former.blocks.some(x=>x.value==='RM17,001'));
+ assert(current.blocks.some(x=>x.type==='metric'&&x.label==='Total Share Consideration (Acquisitions)'));
+ assert(former.blocks.some(x=>x.label==='Total Number of Shares Transferred'&&x.value==='17,001'));
  assert(!current.blocks.some(x=>x.label==='Total Share Consideration (Transfers)'));
  assert(!former.blocks.some(x=>x.label==='Total Share Consideration (Transfers)'&&x.value==='RM17,001'));
 });
@@ -93,7 +96,9 @@ test('all numeric results render in both member web view and PDF without changin
  assert(html.includes('RM1,000,501'));
  assert(html.includes('17,001'));
  assert(html.includes('RM15,600'));
- assert(html.includes('RM17,001'));
+ assert(!html.includes('Historical Acquisitions'));
+ assert(!html.includes('RM17,001'));
+ assert(!html.includes('Some acquisitions have no consideration recorded; the displayed acquisition amount is a partial total.'));
  assert.equal(JSON.stringify(b),before);
  const drawn=[],previous=globalThis.document;
  const ctx={scale(){},fillRect(){},strokeRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},
@@ -107,5 +112,7 @@ test('all numeric results render in both member web view and PDF without changin
   assert(drawn.includes('RM1,000,501'));
   assert(drawn.includes('17,001'));
   assert(drawn.includes('RM15,600'));
+  assert(!drawn.includes('RM17,001'));
+  assert(!drawn.includes('Total Share Consideration (Historical Acquisitions)'));
  }finally{globalThis.document=previous;}
 });
