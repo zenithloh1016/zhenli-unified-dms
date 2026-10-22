@@ -52,26 +52,32 @@ function matchName(value,c,allowRelaxed=false){
 export function matchRegisterBook(path,companies,{headerName='',headerNumber=''}={}){
  const names=candidatesFromFilename(path);
  const exactIds=new Set();
- const headerNorm=norm(headerName);
+ // Malaysian Register Books commonly append the former name, e.g.
+ // "ABC SDN. BHD. (F.K.A. XYZ SDN. BHD.)". The alias is not the legal
+ // present company name and must not invalidate a correct filename match.
+ const cleanedHeader=String(headerName||'').replace(/\s*\(\s*F\.?\s*K\.?\s*A\.?\s*[\s\S]*$/i,'').trim();
+ const headerNorm=norm(cleanedHeader);
  const headerNumberNorm=norm(headerNumber);
  if(headerNorm){
-  const namesMatch=(companies||[]).filter(c=>norm(c.name)===headerNorm);
+  let namesMatch=(companies||[]).filter(c=>norm(c.name)===headerNorm);
+  if(!namesMatch.length)
+   namesMatch=(companies||[]).filter(c=>relaxed(c.name)===relaxed(cleanedHeader));
   if(namesMatch.length===1)exactIds.add(namesMatch[0].id);
  }
  if(headerNumberNorm){
   for(const c of companies||[])if(registrationKeys(c).some(k=>k.length>=7 && headerNumberNorm.includes(k)))exactIds.add(c.id);
  }
- if(exactIds.size>1)return {company:null,reason:'Conflicting company name and registration number in PDF header'};
+ if(exactIds.size>1)return {company:null,reason:'Conflicting company name and registration number in register header'};
  if(exactIds.size===1){
   const company=(companies||[]).find(c=>exactIds.has(c.id));
   const filenameHits=(companies||[]).filter(c=>names.some(n=>matchName(n,c)));
   if(filenameHits.length && !filenameHits.some(c=>c.id===company.id))
-   return {company:null,reason:'PDF header does not match the company named in the ZIP path'};
-  return {company,reason:'Matched PDF header'};
+   return {company:null,reason:'Register header does not match the company named in the ZIP path'};
+  return {company,reason:'Matched register header'};
  }
  if(headerNorm || headerNumberNorm){
   // Header identifies a company not in this account. Do not guess from a filename.
-  return {company:null,reason:'PDF company details are not an unambiguous match to an existing DMS company'};
+  return {company:null,reason:'Register company details are not an unambiguous match to an existing DMS company'};
  }
  for(const relaxedMatching of [false,true]){
   const hits=(companies||[]).filter(c=>
