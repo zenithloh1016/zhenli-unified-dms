@@ -97,7 +97,11 @@ export function extractRegisterParticulars(sheets){
 export function mergeRegisterParticulars(model,records,{replaceMissing=false}={}){
  validateMasterListing(model);
  const copy={...model,columns:model.columns.map(c=>({...c})),rows:model.rows.map(r=>({...r,values:r.values.slice()}))};
- const colIndex=REGISTER_PARTICULARS_COLUMNS.map(label=>{
+ const hasModernColumns=['Current Directors','Current Members','Current Beneficial Owners']
+  .every(label=>copy.columns.some(c=>c.label.trim().toLowerCase()===label.toLowerCase()));
+ const modernColumns=hasModernColumns?['Current Directors','Current Members','Current Beneficial Owners']
+  :REGISTER_PARTICULARS_COLUMNS;
+ const colIndex=modernColumns.map(label=>{
   let index=copy.columns.findIndex(c=>String(c.label).trim().toLowerCase()===label.toLowerCase());
   if(index<0){
    index=copy.columns.length;
@@ -126,8 +130,18 @@ export function mergeRegisterParticulars(model,records,{replaceMissing=false}={}
   const owners=rec.beneficialOwners?.join('; ')||'Not stated';
   if(combined.length>maxField||owners.length>maxField)
    throw Error('Register Book particulars exceed the Master Listing cell length limit for '+company);
-  row.values[colIndex[0]]=combined;
-  row.values[colIndex[1]]=owners;
+  if(hasModernColumns){
+   row.values[colIndex[0]]=rec.directors?.join('; ')||'Not recorded';
+   row.values[colIndex[1]]=rec.members?.join('; ')||'Not recorded';
+   row.values[colIndex[2]]=owners;
+   for(const [heading,value] of [['Director Count',rec.directors?.length||0],['Member Count',rec.members?.length||0],['BO Count',rec.beneficialOwners?.length||0]]){
+    const index=copy.columns.findIndex(c=>c.label.trim().toLowerCase()===heading.toLowerCase());
+    if(index>=0)row.values[index]=String(value);
+   }
+  }else{
+   row.values[colIndex[0]]=combined;
+   row.values[colIndex[1]]=owners;
+  }
   matchedRows++;
  }
  validateMasterListing(copy);
@@ -137,7 +151,16 @@ export function mergeRegisterParticulars(model,records,{replaceMissing=false}={}
 export function preserveRegisterParticulars(oldModel,nextModel){
  if(!oldModel)return nextModel;
  validateMasterListing(oldModel);validateMasterListing(nextModel);
- const oldIndex=REGISTER_PARTICULARS_COLUMNS.map(label=>oldModel.columns.findIndex(c=>c.label.trim().toLowerCase()===label.toLowerCase()));
+ const nextHeaders=new Set(nextModel.columns.map(c=>c.label.trim().toLowerCase()));
+ // A complete Register Book consolidation replaces the old combined columns.
+ // Do not silently resurrect those redundant legacy headers on Excel import.
+ const hasSeparatePeople=nextHeaders.has('current directors')&&nextHeaders.has('current members');
+ const hasModernOwners=nextHeaders.has('current beneficial owners');
+ const oldIndex=REGISTER_PARTICULARS_COLUMNS.map(label=>{
+  if(label==='Directors & Members'&&hasSeparatePeople)return -1;
+  if(label==='Beneficial Owners'&&hasModernOwners)return -1;
+  return oldModel.columns.findIndex(c=>c.label.trim().toLowerCase()===label.toLowerCase());
+ });
  if(oldIndex.every(i=>i<0))return nextModel;
  const copy={...nextModel,columns:nextModel.columns.map(c=>({...c})),rows:nextModel.rows.map(r=>({...r,values:r.values.slice()}))};
  const indexes=REGISTER_PARTICULARS_COLUMNS.map((label,i)=>{
