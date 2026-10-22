@@ -1,3 +1,4 @@
+import {isCurrentMember,currentMemberKey} from './statutory-current-members.js';
 /**
  * Editable, independent statutory-register document projection.
  * All edit coordinates map to privately stored statutory data; Excel's
@@ -53,6 +54,43 @@ function genericEntries(rows,sheetIndex,{showBlanks=false}={}){
  }
  return result;
 }
+/**
+ * Current Members projection. Later imported worksheets take precedence over
+ * earlier snapshots; a newer cessation or zero holding suppresses an older
+ * 'current' folio for the same identity. Never alter the stored history.
+ */
+export function currentMemberRecords(book,indices){
+ const latest=new Map();
+ for(const sheetIndex of indices){
+  const description=describeStatutorySheet(book.sheets[sheetIndex]);
+  for(const rec of description.records||[]){
+   const id=currentMemberKey(rec);
+   if(!id)continue;
+   // Relatively newer folios / imported revisions supersede older entries.
+   if(latest.has(id))latest.delete(id);
+   latest.set(id,{record:rec,sheetIndex});
+  }
+ }
+ return [...latest.values()].filter(item=>isCurrentMember(item.record));
+}
+function currentMemberBlocks(book,indices){
+ const active=currentMemberRecords(book,indices);
+ const blocks=[];
+ for(const {record,sheetIndex} of active){
+  const name=record.fields.find(f=>/^(?:name|full name|shareholder'?s? name|member'?s? name)$/i.test(f.label))||
+   record.fields.find(f=>/\bname\b/i.test(f.label));
+  const shares=record.shareField||record.fields.find(f=>
+   /^(?:current number of shares held|total shares held|shares held|shareholding)$/i.test(f.label));
+  if(!name||!shares)continue;
+  blocks.push({type:'record',sheetIndex,row:record.row,title:record.title,status:''});
+  blocks.push({...mappedField(name,sheetIndex),label:'Shareholder Name'});
+  blocks.push({...mappedField(shares,sheetIndex),label:'Current Number of Shares Held'});
+ }
+ if(!blocks.length)blocks.push({type:'note',
+  text:'No current shareholders with confirmed positive shareholdings are recorded. Verify the latest register or SSM particulars.'});
+ return blocks;
+}
+
 export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
  if(!Number.isInteger(sheetIndex)||sheetIndex<0||sheetIndex>=(book?.sheets?.length||0))
   throw Error('Select a valid statutory register.');
@@ -82,29 +120,7 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
   }
   if(!first)result.blocks.push({type:'note',text:'Registered Address is not recorded. Use Add Field to create it.'});
  }else if(details.kind==='member'){
-  // A folio can contain decades of allotments, acquisitions and transfers.
-  // Only display the member's personal/contact details and the recorded
-  // CURRENT total held, even though ledger rows stay safely in private storage.
-  for(const record of details.records||[]){
-   const personal=(record.fields||[]).filter(f=>isMemberPersonalOrSharesLabel(f.label));
-   const held=personal.find(f=>/shares held|shareholding/i.test(f.label)&&hasText(f.value));
-   if(!held){
-    // When the folio has no explicit Total Shares Held, the latest Balance
-    // of Shares is the best available recorded balance. No arithmetic on
-    // incomplete historic transfers is attempted.
-    const movements=details.ledger?.records||[];
-    const last=[...movements].reverse().flatMap(x=>[...(x.fields||[])].reverse())
-     .find(f=>/^(?:balance of shares|share balance)$/i.test(f.label)&&String(f.value??'').trim()!=='');
-    if(last)personal.push({...last,label:'Current Number of Shares Held'});
-   }else{
-    held.label='Current Number of Shares Held';
-   }
-   result.blocks.push({type:'record',title:record.title||'Member',row:record.row,sheetIndex,status:''});
-   const rows=personal.filter(f=>showBlanks||hasText(f.value)).map(f=>mappedField(f,sheetIndex));
-   result.blocks.push(...rows);
-   if(!rows.some(b=>b.label==='Current Number of Shares Held'))
-    result.blocks.push({type:'note',text:'Current shares held not recorded; verify the latest statutory records.'});
-  }
+  result.blocks.push(...currentMemberBlocks(book,[sheetIndex]));
  }else if(details.kind==='table'||details.kind==='text'){
   result.blocks.push(...recordsToBlocks(details.records,sheetIndex,showBlanks));
  }else{
@@ -120,7 +136,12 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
    if(onlyHeadings)result.blocks=[{type:'note',text:'N/A — No charge record'}];
  }
  if(!result.blocks.length)result.blocks.push({type:'note',text:'No entries recorded. Choose Add Entry to begin.'});
- // Apply per-register removals to the rendered statutory document and PDF
+ return finishDisplay(book,result);
+}
+
+
+function finishDisplay(book,result){
+// Apply per-register removals to the rendered statutory document and PDF
  // WITHOUT erasing historical imported data or changing original coordinates.
  // The original worksheet remains privately recoverable; Save Changes writes
  // a private backup before persisting the new view state.
@@ -148,18 +169,15 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
  return result;
 }
 
-
 /** The first Member tab presents all numbered source folios under one register. */
 export function buildGroupedRegister(book,sheetIndex,options={}){
  const members=registerGroupIndices(book,sheetIndex);
  if(!members.length)throw Error('Register not available.');
- const first=buildIndependentRegister(book,members[0],options);
- if(members.length===1)return first;
- for(const i of members.slice(1)){
-  const next=buildIndependentRegister(book,i,options);
-  first.blocks.push(...next.blocks);
+ if(registerLabel(book.sheets[sheetIndex].name)==='Register of Members'){
+  return finishDisplay(book,{sheetIndex:members[0],title:'Register of Members',
+   sourceName:book.sheets[members[0]].name,blocks:currentMemberBlocks(book,members)});
  }
- return first;
+ return buildIndependentRegister(book,sheetIndex,options);
 }
 /** One complete PDF: Company Details plus every distinct statutory register, excluding Managers. */
 export function buildCombinedRegisters(book,options={}){

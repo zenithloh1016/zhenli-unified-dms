@@ -1,3 +1,4 @@
+import {parseMemberFolios} from './statutory-current-members.js';
 /**
  * Review-only projections over the original imported worksheet cells.
  * No statutory particulars are deleted or written back in a different order.
@@ -156,6 +157,13 @@ function parseTable(rows,from=0){
  return {headerRow,records,introFields:[]};
 }
 function memberDetails(rows){
+ const allFolios=parseMemberFolios(rows);
+ if(allFolios.length){
+  const movement=rows.findIndex((row,i)=>i>5&&rowCells(row).some(c=>/^shares acquired$/i.test(c.value)));
+  const ledger=movement<0?{headerRow:-1,records:[]}:parseTable(rows,movement+1);
+  return {kind:'member',fields:allFolios[0].fields,records:allFolios,ledger};
+ }
+
  // Members use a folio-style form followed by an acquired/transferred shares
  // ledger. Do not misread the folio's left/right key-value columns as a table.
  const ledgerStart=rows.findIndex((r,i)=>i>5&&rowCells(r).some(c=>/^shares acquired$/i.test(c.value)));
