@@ -19,7 +19,7 @@ function recordsToBlocks(records,sheetIndex,showBlanks){
  for(let i=0;i<(records||[]).length;i++){
   const record=records[i];
   result.push({type:'record',title:record.title||'Record '+(i+1),
-   row:record.row,status:record.status==='former'?'Former / Ceased':
+   row:record.row,sheetIndex,status:record.status==='former'?'Former / Ceased':
     record.status==='current'?'Current / Active':''});
   const visible=(record.fields||[]).filter(f=>showBlanks||hasText(f.value));
   if(visible.length)result.push(...visible.map(f=>mappedField(f,sheetIndex)));
@@ -35,7 +35,7 @@ function genericEntries(rows,sheetIndex,{showBlanks=false}={}){
   const cells=(rows[i]||[]).map((value,col)=>({col,value:String(value??'')}))
    .filter(x=>showBlanks||hasText(x.value));
   if(!cells.length)continue;
-  result.push({type:'record',title:'Entry '+(i+1),row:i,status:''});
+  result.push({type:'record',title:'Entry '+(i+1),row:i,sheetIndex,status:''});
   const first=cells[0];
   if(cells.length===1){
    result.push(mappedField({row:i,col:first.col,label:'Details',value:first.value},sheetIndex));
@@ -63,21 +63,24 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
  const fields=items=>(items||[]).filter(f=>showBlanks||hasText(f.value))
   .map(f=>mappedField(f,sheetIndex));
  if(details.kind==='profile'){
-  // Company Details should present only a single Registered Address. Excel
-  // templates split the address across several "Registered Office: continued"
-  // rows; combine their text but leave all original values recoverable.
+  // Restore every original Company Details field in its imported order.
+  // Only the Registered Office continuation *rows* are collapsed into the
+  // first Registered Address entry; unrelated fields remain editable.
   const profile=details.fields||[];
   const first=profile.find(f=>/^registered (?:office|address)$/i.test(f.label));
-  if(first){
-   const after=profile.filter(f=>f.row>first.row&&
-    /^registered (?:office|address) · continued$/i.test(f.label));
-   const lines=[first,...after].map(f=>String(f.value||'').trim()).filter(Boolean);
-   result.blocks.push({...mappedField(first,sheetIndex),
-    label:'Registered Address',value:lines.join('\n'),
-    continuation:after.map(f=>({row:f.row,col:f.col})),composite:true});
-  }else{
-   result.blocks.push({type:'note',text:'Registered Address not recorded. Use Add Field to enter it.'});
+  const continuation=first?profile.filter(f=>f.row>first.row&&
+   /^registered (?:office|address) · continued$/i.test(f.label)):[];
+  for(const item of profile){
+   if(first&&item===first){
+    const lines=[first,...continuation].map(f=>String(f.value||'').trim()).filter(Boolean);
+    result.blocks.push({...mappedField(first,sheetIndex),
+     label:'Registered Address',value:lines.join('\n'),
+     continuation:continuation.map(f=>({row:f.row,col:f.col})),composite:true});
+   }else if(!continuation.includes(item)){
+    if(showBlanks||hasText(item.value))result.blocks.push(mappedField(item,sheetIndex));
+   }
   }
+  if(!first)result.blocks.push({type:'note',text:'Registered Address is not recorded. Use Add Field to create it.'});
  }else if(details.kind==='member'){
   // A folio can contain decades of allotments, acquisitions and transfers.
   // Only display the member's personal/contact details and the recorded
@@ -96,7 +99,7 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
    }else{
     held.label='Current Number of Shares Held';
    }
-   result.blocks.push({type:'record',title:record.title||'Member',row:record.row,status:''});
+   result.blocks.push({type:'record',title:record.title||'Member',row:record.row,sheetIndex,status:''});
    const rows=personal.filter(f=>showBlanks||hasText(f.value)).map(f=>mappedField(f,sheetIndex));
    result.blocks.push(...rows);
    if(!rows.some(b=>b.label==='Current Number of Shares Held'))
@@ -117,6 +120,23 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
    if(onlyHeadings)result.blocks=[{type:'note',text:'N/A — No charge record'}];
  }
  if(!result.blocks.length)result.blocks.push({type:'note',text:'No entries recorded. Choose Add Entry to begin.'});
+ // Apply per-register removals to the rendered statutory document and PDF
+ // WITHOUT erasing historical imported data or changing original coordinates.
+ // The original worksheet remains privately recoverable; Save Changes writes
+ // a private backup before persisting the new view state.
+ const removedEntries=book?.removedEntries||{};
+ const removedFields=book?.removedFields||{};
+ let skipEntry=false;
+ result.blocks=result.blocks.filter(block=>{
+  if(block.type==='record'){
+   skipEntry=removedEntries[block.sheetIndex+':'+block.row]===true;
+   return !skipEntry;
+  }
+  if(skipEntry)return false;
+  if(block.type==='field')
+   return removedFields[block.sheetIndex+':'+block.row+':'+block.col]!==true;
+  return true;
+ });
  // Label overrides affect both editable web fields and generated PDFs.
  const overrides=getRegisterFieldOverrides(book);
  for(const block of result.blocks){
