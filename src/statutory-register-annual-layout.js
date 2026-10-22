@@ -70,7 +70,7 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
   // CURRENT total held, even though ledger rows stay safely in private storage.
   for(const record of details.records||[]){
    const personal=(record.fields||[]).filter(f=>isMemberPersonalOrSharesLabel(f.label));
-   const held=personal.find(f=>/shares held|shareholding/i.test(f.label));
+   const held=personal.find(f=>/shares held|shareholding/i.test(f.label)&&hasText(f.value));
    if(!held){
     // When the folio has no explicit Total Shares Held, the latest Balance
     // of Shares is the best available recorded balance. No arithmetic on
