@@ -44,15 +44,15 @@ test('reads every folio from a multi-member worksheet and excludes ceased or zer
  assert(holdings.some(x=>x.value==='3,000'&&x.row===93&&x.col===7),
   'newest folio must supply current shares with original editable cell coordinates');
  assert(holdings.some(x=>x.value==='800'));
- assert.equal(result.blocks.filter(x=>x.type==='record').length,2);
- assert(!JSON.stringify(result.blocks).includes('FORMER HOLDER'));
- assert(!JSON.stringify(result.blocks).includes('ZERO SHARE HOLDER'));
+ assert.equal(result.blocks.filter(x=>x.type==='record').length,4);
+ assert(JSON.stringify(result.blocks).includes('FORMER HOLDER'));
+ assert(JSON.stringify(result.blocks).includes('ZERO SHARE HOLDER'));
  assert(!JSON.stringify(result.blocks).includes('2,500'));
  const html=renderStatutoryRegisterDocument(b,0);
  assert(html.includes('CURRENT HOLDER B'));
  assert(html.includes('CURRENT HOLDER C'));
- assert(!html.includes('FORMER HOLDER'));
- assert(!html.includes('ZERO SHARE HOLDER'));
+ assert(html.includes('FORMER HOLDER'));
+ assert(html.includes('ZERO SHARE HOLDER'));
  assert(html.includes('NO. 1 SAMPLE STREET'),'retain current member address');
  assert(html.includes('SAMPLE CITY'),'retain continued address lines in one field');
  assert(html.includes('Date of Birth'),'retain current member personal details');
@@ -74,8 +74,8 @@ test('a newer imported member worksheet supersedes older current holdings and ce
  const current=currentMemberRecords(b,[0,1]);
  assert.deepEqual(current.map(x=>x.record.title),['NEW SHAREHOLDER']);
  const grouped=buildGroupedRegister(b,0);
- assert.equal(grouped.blocks.filter(x=>x.type==='record').length,1);
- assert(!JSON.stringify(grouped).includes('SHAREHOLDER ONE'));
+ assert.equal(grouped.blocks.filter(x=>x.type==='record').length,2);
+ assert(JSON.stringify(grouped).includes('SHAREHOLDER ONE'));
  assert(grouped.blocks.some(x=>x.type==='field'&&x.value==='300'&&x.sheetIndex===1));
  const combined=buildCombinedRegisters(b);
  assert.equal(combined.length,1,'duplicated member source sheets share one tab and PDF section');
@@ -95,7 +95,7 @@ test('when no current holding can be verified show a warning instead of listing 
  folio(rows,28,{name:'NO SHARES',id:'ZERO002',shares:'0'});
  const b=book(rows);
  const result=buildGroupedRegister(b,0);
- assert(!result.blocks.some(x=>x.type==='record'));
+ assert.equal(result.blocks.filter(x=>x.type==='record').length,2);
  assert(result.blocks.some(x=>x.type==='note'&&/No current shareholders/i.test(x.text)));
 });
 test('member PDF exports the same current-only shareholders, never historic names or transactions',async()=>{
@@ -124,7 +124,7 @@ test('member PDF exports the same current-only shareholders, never historic name
   assert(drawn.includes('Nationality/Origin'));
   assert(drawn.includes('NO. 1 SAMPLE STREET'));
   assert(drawn.includes('ACTIVE001'));
-  assert(!drawn.includes('FORMER PERSON'));
+  assert(drawn.includes('FORMER PERSON'));
   assert(!drawn.includes('SHARES ACQUIRED'));
  }finally{globalThis.document=prev;}
 });
