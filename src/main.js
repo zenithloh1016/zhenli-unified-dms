@@ -740,6 +740,10 @@ ROOT.addEventListener('click', event=>{
   if(a==='sr-pick'){ROOT.querySelector('#sr-zip-input')?.click();return;}
   if(a==='sr-open'){busyDo(()=>registerBookUI.openCompany(id));return;}
   if(a==='sr-save'){busyDo(()=>registerBookUI.save());return;}
+  if(a==='sr-history'){busyDo(()=>registerBookUI.openHistory());return;}
+  if(a==='sr-history-preview'){busyDo(()=>registerBookUI.previewHistory(id));return;}
+  if(a==='sr-history-restore'){busyDo(()=>registerBookUI.restoreHistory());return;}
+  if(a==='sr-discard'){busyDo(()=>registerBookUI.discardUnsaved());return;}
   if(a==='sr-import'){busyDo(()=>registerBookUI.importZip());return;}
   if(a==='sr-pdf'){busyDo(()=>registerBookUI.pdf());return;}
   if(a==='sr-pdf-combined'){busyDo(()=>registerBookUI.pdf({combined:true}));return;}
