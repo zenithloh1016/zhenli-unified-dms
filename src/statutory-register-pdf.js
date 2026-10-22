@@ -178,8 +178,9 @@ export async function buildStatutoryRegistersPdf(book,{sheetIndex=0,combined=fal
    if(index>0){await newPage();}
    await drawSection(part.title);
    for(const block of part.blocks){
-    if(block.type==='field')await drawField(block.label,block.value);
+    if(block.type==='field'||block.type==='metric')await drawField(block.label,block.value);
     else if(block.type==='record')await drawRecord(block.title,block.status);
+    else if(block.type==='group')await drawSection(block.title);
     else if(block.type==='note')await drawNote(block.text);
    }
    y+=18;

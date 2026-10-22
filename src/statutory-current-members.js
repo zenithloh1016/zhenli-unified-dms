@@ -27,6 +27,29 @@ function ledgerBalance(rows,start,end){
  }
  return last;
 }
+/** Latest explicitly recorded consideration from a folio's acquisition/transfer history.
+ * It is a transaction amount, not presumed total paid-up capital. */
+function lastConsideration(rows,start,end){
+ let acquisition=-1,transfer=-1,found=null;
+ for(let i=start;i<end;i++){
+  const row=rows[i]||[];
+  // The actual register template uses two consideration headings, one for
+  // acquired shares and one for transferred shares.
+  const columns=row.map((v,index)=>/^(?:consideration|share consideration)$/i.test(txt(v))?index:-1)
+   .filter(v=>v>=0);
+  if(columns.length){acquisition=columns[0];transfer=columns[1]??-1;continue;}
+  const take=(index,nature)=>{
+   if(index<0||!txt(row[index])||/^(?:-|n\/a|nil|none)$/i.test(txt(row[index])))return;
+   const str=txt(row[index]);
+   // Ignore headings and only expose actual currency/numeric consideration.
+   if(!/^(?:(?:RM|MYR)\s*)?\d[\d,.]*$/.test(str))return;
+   found={...asField(i,index,'Share Consideration',row[index]),nature};
+  };
+  take(acquisition,'Acquisition');
+  take(transfer,'Transfer');
+ }
+ return found;
+}
 export function parseMemberFolios(rows){
  const starts=[];
  for(let i=0;i<(rows||[]).length;i++)
@@ -61,7 +84,9 @@ export function parseMemberFolios(rows){
   const identityField=fields.find(f=>isIdentity(f.label))||null;
   const ceasedValue=txt(ceased?.value);
   const status=ceased&&!blank(ceasedValue)&&ceasedValue!=='0'?'former':'current';
-  records.push({row:named.row,title:txt(named.value),fields,shareField,identityField,status});
+  const considerationField=movement<0?null:lastConsideration(rows,movement+1,end);
+  records.push({row:named.row,title:txt(named.value),fields,shareField,
+   identityField,ceasedField:ceased||null,considerationField,status});
  }
  return records;
 }

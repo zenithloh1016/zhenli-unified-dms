@@ -7,6 +7,7 @@ import {buildStatutoryRegistersPdf} from './statutory-register-pdf.js';
 import {renderStatutoryRegisterDocument} from './statutory-register-annual-ui.js';
 import {buildGroupedRegister} from './statutory-register-annual-layout.js';
 import {registerLabel,registerKind,describeStatutorySheet,isManagerRegister,normalizeRegisterName,ensureChargeRegister,visibleRegisterIndices,registerGroupIndices} from './statutory-register-review.js';
+import {formatStatutoryNumberByKind,normalizeStatutoryNumberByKind} from './statutory-number-format.js';
 import {browserDownload,saveOrShareFile} from './file-transfer.js';
 import {Capacitor} from '@capacitor/core';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
@@ -260,7 +261,13 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   const s=target.dataset.s===undefined?state.sheetIndex:Number(target.dataset.s);
   const sheet=state.book?.sheets?.[s];
   if(!sheet||!Number.isInteger(r)||!Number.isInteger(c)||r<0||c<0||r>=sheet.rows.length||c>=250)return false;
-  const value=normValue(target.value);
+  const kind=target.dataset.numericKind||'';
+  const input=normValue(target.value);
+  // Merely tabbing out of a prettified numeric field must not alter saved
+  // source data or mark the register as dirty.
+  const current=String(sheet.rows[r][c]||'');
+  if(kind&&formatStatutoryNumberByKind(kind,current)===input)return true;
+  const value=kind?normValue(normalizeStatutoryNumberByKind(kind,input)):input;
   if(target.dataset.mergeAddress==='true'){
    const additional=[];
    for(let i=r+1;i<sheet.rows.length;i++){

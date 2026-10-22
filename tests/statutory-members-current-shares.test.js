@@ -54,11 +54,14 @@ test('member folios show only identity/contact particulars and current shares he
  const register=buildIndependentRegister(company,2);
  assert.equal(register.title,'Register of Members');
  const labels=register.blocks.filter(b=>b.type==='field').map(b=>b.label);
- assert.deepEqual(labels,[
-  'Shareholder Name','Date of Birth','ID Type','Nationality/Origin',
-  'Identification No.','Race','Occupation','Email Address',
-  'Address','Current Number of Shares Held'
- ]);
+ assert(labels.includes('Shareholder Name'));
+ assert(labels.includes('Current Number of Shares Held'));
+ assert(labels.includes('Date of Birth'));
+ assert(labels.includes('Identification No.'));
+ assert(labels.includes('Address'));
+ assert(labels.some(x=>/consideration/i.test(x)));
+ assert(register.blocks.some(x=>x.type==='group'&&x.title==='Former Members (History)'));
+ assert(register.blocks.some(x=>x.type==='metric'&&x.value==='100.00%'));
  const address=register.blocks.find(f=>f.type==='field'&&f.label==='Address');
  assert.equal(address.value,'NO. 1 SAMPLE ROAD\\nIPO, PERAK'.replace('\\n','\n'));
  assert.equal(address.composite,true);

@@ -645,3 +645,11 @@ body.zh-ar-fullscreen-open{overflow:hidden}
  .rb-history-row .btn{flex:1 1 100%;width:100%}
  .rb-history-preview{padding:13px}
 }
+
+
+/* Member register: current holders, former history and displayed percentages */
+.sr-member-group{margin:17px 0 7px;padding:10px 13px;background:#225579;
+ color:#fff;font-size:13px;font-weight:800;letter-spacing:.015em;border-radius:4px}
+.sr-derived-row .sr-ar-value{background:#f4f9fc}
+.sr-derived-row .sr-ar-value strong{color:#185476;font-size:14px;font-variant-numeric:tabular-nums}
+.sr-ar-input[data-numeric-kind]{font-variant-numeric:tabular-nums}
