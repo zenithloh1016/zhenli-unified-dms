@@ -3,7 +3,7 @@
  * All edit coordinates map to privately stored statutory data; Excel's
  * sheet layout is never displayed and is never required for PDF export.
  */
-import {describeStatutorySheet,registerLabel} from './statutory-register-review.js';
+import {describeStatutorySheet,registerLabel,isManagerRegister,isMemberPersonalOrSharesLabel} from './statutory-register-review.js';
 
 export const STATUTORY_DOCUMENT_COLORS={
  ink:'#243b4d',navy:'#193f64',blue:'#245f80',light:'#eaf3f8',
@@ -57,6 +57,7 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
  if(!Number.isInteger(sheetIndex)||sheetIndex<0||sheetIndex>=(book?.sheets?.length||0))
   throw Error('Select a valid statutory register.');
  const sheet=book.sheets[sheetIndex];
+ if(isManagerRegister(sheet.name))throw Error('Register of Managers is not shown in Statutory Registers.');
  const details=describeStatutorySheet(sheet);
  const result={sheetIndex,title:registerLabel(sheet.name),sourceName:sheet.name,blocks:[]};
  const fields=items=>(items||[]).filter(f=>showBlanks||hasText(f.value))
@@ -64,10 +65,28 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
  if(details.kind==='profile'){
   result.blocks.push(...fields(details.fields));
  }else if(details.kind==='member'){
-  result.blocks.push(...recordsToBlocks(details.records,sheetIndex,showBlanks));
-  if(details.ledger?.records?.length){
-   result.blocks.push({type:'record',title:'Share acquisition and transfer history',status:''});
-   result.blocks.push(...recordsToBlocks(details.ledger.records,sheetIndex,showBlanks));
+  // A folio can contain decades of allotments, acquisitions and transfers.
+  // Only display the member's personal/contact details and the recorded
+  // CURRENT total held, even though ledger rows stay safely in private storage.
+  for(const record of details.records||[]){
+   const personal=(record.fields||[]).filter(f=>isMemberPersonalOrSharesLabel(f.label));
+   const held=personal.find(f=>/shares held|shareholding/i.test(f.label));
+   if(!held){
+    // When the folio has no explicit Total Shares Held, the latest Balance
+    // of Shares is the best available recorded balance. No arithmetic on
+    // incomplete historic transfers is attempted.
+    const movements=details.ledger?.records||[];
+    const last=[...movements].reverse().flatMap(x=>[...(x.fields||[])].reverse())
+     .find(f=>/^(?:balance of shares|share balance)$/i.test(f.label)&&String(f.value??'').trim()!=='');
+    if(last)personal.push({...last,label:'Current Number of Shares Held'});
+   }else{
+    held.label='Current Number of Shares Held';
+   }
+   result.blocks.push({type:'record',title:record.title||'Member',row:record.row,status:''});
+   const rows=personal.filter(f=>showBlanks||hasText(f.value)).map(f=>mappedField(f,sheetIndex));
+   result.blocks.push(...rows);
+   if(!rows.some(b=>b.label==='Current Number of Shares Held'))
+    result.blocks.push({type:'note',text:'Current shares held not recorded; verify the latest statutory records.'});
   }
  }else if(details.kind==='table'||details.kind==='text'){
   result.blocks.push(...recordsToBlocks(details.records,sheetIndex,showBlanks));
