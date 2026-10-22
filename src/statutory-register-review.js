@@ -19,10 +19,7 @@ export function registerLabel(name){
  const imported=original.slice(source.length);
  const bare=source.replace(/^register (?:of|or)\s+/i,'').trim();
  const member=/^members?(?:\s+0*(\d+))?$/i.exec(bare);
- if(member){
-  const folio=member[1]?' '+member[1].padStart(3,'0'):'';
-  return 'Register of Members'+folio+imported;
- }
+ if(member)return 'Register of Members'+imported;
  const replacements={
   bo:'Beneficial Owners',
   'beneficial owner':'Beneficial Owners',
@@ -227,4 +224,21 @@ export function filterReviewRecords(records,{query='',status='all'}={}){
  return (records||[]).filter(r=>(status==='all'||r.status===status)
   &&(!q||[r.title,...r.fields.map(f=>f.value),...r.fields.map(f=>f.label)]
    .some(v=>String(v).toLowerCase().includes(q))));
+}
+
+
+/** One logical register tab for all member folios, without altering source sheets. */
+export function registerGroups(book,{includeCompanyDetails=true}={}){
+ const groups=[],seen=new Map();
+ for(let i=0;i<(book?.sheets||[]).length;i++){
+  const source=book.sheets[i];
+  if(isManagerRegister(source.name))continue;
+  if(!includeCompanyDetails&&registerKind(source.name)==='profile')continue;
+  const title=registerLabel(source.name);
+  const key=registerKind(source.name)==='member'?'members':String(i);
+  let group=seen.get(key);
+  if(!group){group={title,indices:[]};seen.set(key,group);groups.push(group);}
+  group.indices.push(i);
+ }
+ return groups;
 }
