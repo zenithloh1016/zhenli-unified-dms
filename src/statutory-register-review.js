@@ -12,7 +12,7 @@ export function registerLabel(name){
  const value=tidy(name).replace(/\s+\(Imported\s+[^)]*\)\s*$/i,'');
  if(/^master$/i.test(value))return 'Company Details';
  const m=/^register of members(?:\s+0*(\d+))?/i.exec(value);
- if(m)return 'Members'+(m[1]?' · '+m[1]:'');
+ if(m)return 'Members'+(m[1]?' · '+Number(m[1]):'');
  return value.replace(/^register (?:of|or)\s+/i,'').replace(/\bBO\b/i,'Beneficial Owners');
 }
 export function registerKind(name){
