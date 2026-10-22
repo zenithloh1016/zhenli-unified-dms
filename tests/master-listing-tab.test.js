@@ -50,7 +50,8 @@ test('Master Listing tab is wired into DMS without additional SQL tables or alte
  assert.ok(main.includes("masterListingUI.render()"));
  assert.ok(main.includes("masterListingUI.onChange(e.target,prepareExcelImport)"));
  assert.ok(main.includes("Import Master Listing"));
- assert.ok(main.includes("register-zip"));
+ assert.ok(main.includes("sr-zip-input"));
+ assert.ok(main.includes("statutory-registers"));
  assert.ok(sql.includes('create_company_with_folders'));
 });
 test('Master Listing tab uses private user storage and confirmed Documents synchronization',()=>{
