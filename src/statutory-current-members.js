@@ -27,28 +27,81 @@ function ledgerBalance(rows,start,end){
  }
  return last;
 }
-/** Latest explicitly recorded consideration from a folio's acquisition/transfer history.
- * It is a transaction amount, not presumed total paid-up capital. */
-function lastConsideration(rows,start,end){
- let acquisition=-1,transfer=-1,found=null;
+/**
+ * A register-of-members ledger contains TWO distinct transaction groups:
+ *   SHARES ACQUIRED: Date, ... No. of Shares, Consideration
+ *   SHARES TRANSFERRED: Date, ... No. of Shares, Consideration, Balance
+ * Never take the last "Consideration" cell across both groups: a former
+ * shareholder's disposal must not be shown as an acquisition and vice versa.
+ *
+ * Derive totals from matching non-placeholder ledger transactions, preserving
+ * all source cells unchanged. Missing transaction consideration stays unknown;
+ * 0 is accepted only when it is attached to an actual recorded transaction.
+ */
+function ledgerNumber(value,{shares=false}={}){
+ const raw=txt(value).replace(/[,\s]/g,'').replace(/^(?:RM|MYR)/i,'');
+ const clean=shares?raw.replace(/^\*/,''):raw;
+ if(!/^\+?\d+(?:\.\d+)?$/.test(clean))return null;
+ const n=Number(clean);
+ return Number.isFinite(n)&&n>=0?n:null;
+}
+const isConsiderationLabel=v=>/^(?:consideration|share consideration|amount of consideration)$/i.test(txt(v));
+const isSharesLabel=v=>/^(?:no\.?\s*of shares|number of shares|shares transferred|shares acquired|quantity of shares)$/i.test(txt(v));
+function ledgerHeader(row){
+ const cols=(row||[]).map((v,i)=>isConsiderationLabel(v)?i:-1).filter(i=>i>=0);
+ const shares=(row||[]).map((v,i)=>isSharesLabel(v)?i:-1).filter(i=>i>=0);
+ if(cols.length<2||shares.length<2)return null;
+ const left=cols[0],right=cols[1],ls=shares.find(i=>i<left),rs=shares.find(i=>i>left&&i<right);
+ if(ls===undefined||rs===undefined)return null;
+ // In the standard section-50 register the two transaction blocks begin
+ // with a date and have a reference number before each share count.
+ const firstTransferCol=(row||[]).findIndex((v,i)=>i>left&&i<rs&&/^date\s*$/i.test(txt(v)));
+ const dateA=(row||[]).findIndex((v,i)=>i<ls&&/^date\s*$/i.test(txt(v)));
+ const dateT=firstTransferCol>=0?firstTransferCol:Math.max(left+1,rs-4);
+ return {sharesA:ls,moneyA:left,sharesT:rs,moneyT:right,dateA,dateT,
+  referenceA:ls>=3?ls-3:-1,referenceT:rs>=3?rs-3:-1};
+}
+function ledgerEvidence(row,dateCol,referenceCol,shares,consideration){
+ // A number on an unlabeled blank template row is not an actual transfer.
+ // A positive share amount is sufficient evidence when the header is known.
+ const explicitDate=dateCol>=0&&!blank(row[dateCol]);
+ const explicitRef=referenceCol>=0&&!blank(row[referenceCol]);
+ return (shares!==null&&shares>0)||
+  ((explicitDate||explicitRef)&&consideration!==null&&consideration>0);
+}
+export function memberLedgerTotals(rows,start,end){
+ const summary={
+  acquiredShares:0,acquisitionConsideration:0,
+  transferredShares:0,transferConsideration:0,
+  acquisitionCount:0,transferCount:0,
+  acquisitionValueCount:0,transferValueCount:0
+ };
+ let cols=null;
+ // A member folio has its own ledger header and may have repeated headings.
  for(let i=start;i<end;i++){
   const row=rows[i]||[];
-  // The actual register template uses two consideration headings, one for
-  // acquired shares and one for transferred shares.
-  const columns=row.map((v,index)=>/^(?:consideration|share consideration)$/i.test(txt(v))?index:-1)
-   .filter(v=>v>=0);
-  if(columns.length){acquisition=columns[0];transfer=columns[1]??-1;continue;}
-  const take=(index,nature)=>{
-   if(index<0||!txt(row[index])||/^(?:-|n\/a|nil|none)$/i.test(txt(row[index])))return;
-   const str=txt(row[index]);
-   // Ignore headings and only expose actual currency/numeric consideration.
-   if(!/^(?:(?:RM|MYR)\s*)?\d[\d,.]*$/.test(str))return;
-   found={...asField(i,index,'Share Consideration',row[index]),nature};
-  };
-  take(acquisition,'Acquisition');
-  take(transfer,'Transfer');
+  const detected=ledgerHeader(row);
+  if(detected){cols=detected;continue;}
+  if(!cols)continue;
+  const acquired=ledgerNumber(row[cols.sharesA],{shares:true});
+  const transferred=ledgerNumber(row[cols.sharesT],{shares:true});
+  const paid=ledgerNumber(row[cols.moneyA]);
+  const received=ledgerNumber(row[cols.moneyT]);
+  if(ledgerEvidence(row,cols.dateA,cols.referenceA,acquired,paid)){
+   summary.acquisitionCount++;
+   if(acquired!==null)summary.acquiredShares+=acquired;
+   if(paid!==null){summary.acquisitionValueCount++;summary.acquisitionConsideration+=paid;}
+  }
+  if(ledgerEvidence(row,cols.dateT,cols.referenceT,transferred,received)){
+   summary.transferCount++;
+   if(transferred!==null)summary.transferredShares+=transferred;
+   if(received!==null){summary.transferValueCount++;summary.transferConsideration+=received;}
+  }
  }
- return found;
+ // Avoid floating binary artefacts from source currency decimals.
+ summary.acquisitionConsideration=Math.round((summary.acquisitionConsideration+Number.EPSILON)*100)/100;
+ summary.transferConsideration=Math.round((summary.transferConsideration+Number.EPSILON)*100)/100;
+ return summary;
 }
 export function parseMemberFolios(rows){
  const starts=[];
@@ -84,9 +137,9 @@ export function parseMemberFolios(rows){
   const identityField=fields.find(f=>isIdentity(f.label))||null;
   const ceasedValue=txt(ceased?.value);
   const status=ceased&&!blank(ceasedValue)&&ceasedValue!=='0'?'former':'current';
-  const considerationField=movement<0?null:lastConsideration(rows,movement+1,end);
+  const ledgerTotals=movement<0?null:memberLedgerTotals(rows,movement+1,end);
   records.push({row:named.row,title:txt(named.value),fields,shareField,
-   identityField,ceasedField:ceased||null,considerationField,status});
+   identityField,ceasedField:ceased||null,ledgerTotals,status});
  }
  return records;
 }
