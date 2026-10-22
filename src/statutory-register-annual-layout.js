@@ -1,4 +1,5 @@
-import {isCurrentMember,currentMemberKey} from './statutory-current-members.js';
+import {isCurrentMember,currentMemberKey,positiveShares} from './statutory-current-members.js';
+import {formatStatutoryNumber,numericKind,parseStatutoryNumber} from './statutory-number-format.js';
 /**
  * Editable, independent statutory-register document projection.
  * All edit coordinates map to privately stored statutory data; Excel's
@@ -73,43 +74,90 @@ export function currentMemberRecords(book,indices){
  }
  return [...latest.values()].filter(item=>isCurrentMember(item.record));
 }
-function currentMemberBlocks(book,indices,{showBlanks=false}={}){
- const active=currentMemberRecords(book,indices);
- const blocks=[];
- for(const {record,sheetIndex} of active){
-  const name=record.fields.find(f=>/^(?:name|full name|shareholder'?s? name|member'?s? name)$/i.test(f.label))||
-   record.fields.find(f=>/\bname\b/i.test(f.label));
-  const shares=record.shareField||record.fields.find(f=>
-   /^(?:current number of shares held|total shares held|shares held|shareholding)$/i.test(f.label));
-  if(!name||!shares)continue;
-  blocks.push({type:'record',sheetIndex,row:record.row,title:record.title,status:''});
-  blocks.push({...mappedField(name,sheetIndex),label:'Shareholder Name'});
-  // Retain existing member identity and contact particulars for CURRENT
-  // shareholders only. Movement history, ceased dates, certificate details,
-  // allotments and transfers remain hidden in the editable review and PDF.
-  const personal=(record.fields||[]).filter(f=>
-   isMemberPersonalOrSharesLabel(f.label)&&f!==name&&f!==shares&&
-   !/^(?:name|full name|shareholder'?s? name|member'?s? name)$/i.test(f.label)&&
-   !/\b(?:shares held|shareholding)\b/i.test(f.label));
-  const addr=personal.find(f=>/^address$/i.test(f.label));
-  const continuation=addr?personal.filter(f=>/^address · continued$/i.test(f.label)&&
-   f.row>addr.row):[];
-  for(const f of personal){
-   if(continuation.includes(f))continue;
-   if(!showBlanks&&!hasText(f.value)&&f!==addr)continue;
-   if(f===addr&&continuation.length){
-    blocks.push({...mappedField(f,sheetIndex),label:'Address',
-     value:[f,...continuation].map(x=>String(x.value||'').trim()).filter(Boolean).join('\n'),
-     composite:true,continuation:continuation.map(x=>({row:x.row,col:x.col}))});
-   }else blocks.push(mappedField(f,sheetIndex));
+/** Former records are derived from EACH imported member folio, not merely
+ * from the most recent shareholder snapshot. This retains earlier cessation
+ * periods while avoiding duplicate former records on ZIP re-import. */
+export function formerMemberRecords(book,indices){
+ const history=new Map();
+ for(const sheetIndex of indices){
+  const description=describeStatutorySheet(book.sheets[sheetIndex]);
+  for(const record of description.records||[]){
+   const id=currentMemberKey(record);
+   if(!id)continue;
+   if(record.status!=='former'&&
+      (positiveShares(record.shareField?.value)||!record.shareField))continue;
+   const cessation=String(record.ceasedField?.value??'').trim();
+   const amount=String(record.shareField?.value??'').trim().replace(/,/g,'');
+   const key=id+'|'+cessation+'|'+amount;
+   if(history.has(key))history.delete(key);
+   history.set(key,{record,sheetIndex});
   }
-  blocks.push({...mappedField(shares,sheetIndex),label:'Current Number of Shares Held'});
  }
- if(!blocks.length)blocks.push({type:'note',
-  text:'No current shareholders with confirmed positive shareholdings are recorded. Verify the latest register or SSM particulars.'});
+ return [...history.values()];
+}
+const isPersonalField=f=>isMemberPersonalOrSharesLabel(f.label)&&
+ !/^(?:name|full name|shareholder'?s? name|member'?s? name)$/i.test(f.label)&&
+ !/\b(?:shares held|shareholding)\b/i.test(f.label);
+function memberPersonBlocks(item,{showBlanks=false,former=false,total=0}={}){
+ const {record,sheetIndex}=item,blocks=[];
+ const name=record.fields.find(f=>/^(?:name|full name|shareholder'?s? name|member'?s? name)$/i.test(f.label))||
+  record.fields.find(f=>/\bname\b/i.test(f.label));
+ if(!name)return blocks;
+ const shares=record.shareField||record.fields.find(f=>
+  /^(?:current number of shares held|total shares held|shares held|shareholding)$/i.test(f.label));
+ blocks.push({type:'record',sheetIndex,row:record.row,title:record.title,
+  status:former?'Former / History':'Current'});
+ blocks.push({...mappedField(name,sheetIndex),label:'Shareholder Name'});
+ const personal=record.fields.filter(f=>isPersonalField(f)&&f!==shares);
+ const addr=personal.find(f=>/^address$/i.test(f.label));
+ const continuation=addr?personal.filter(f=>/^address · continued$/i.test(f.label)&&f.row>addr.row):[];
+ for(const f of personal){
+  if(continuation.includes(f))continue;
+  if(!showBlanks&&!hasText(f.value)&&f!==addr)continue;
+  if(f===addr&&continuation.length){
+   blocks.push({...mappedField(f,sheetIndex),label:'Address',
+    value:[f,...continuation].map(x=>String(x.value||'').trim()).filter(Boolean).join('\n'),
+    composite:true,continuation:continuation.map(x=>({row:x.row,col:x.col}))});
+  }else blocks.push(mappedField(f,sheetIndex));
+ }
+ if(former){
+  if(record.ceasedField&&hasText(record.ceasedField.value)&&
+     !/^(?:-|n\/a|nil|none)$/i.test(record.ceasedField.value))
+   blocks.push({...mappedField(record.ceasedField,sheetIndex),label:'Date Ceased to be a Member'});
+  if(shares&&hasText(shares.value))
+   blocks.push({...mappedField(shares,sheetIndex),label:'Last Recorded Number of Shares Held'});
+ }else if(shares){
+  blocks.push({...mappedField(shares,sheetIndex),label:'Current Number of Shares Held'});
+  const amount=parseStatutoryNumber(shares.value);
+  if(total>0&&amount!==null&&Number.isFinite(amount)){
+   // Derived only from verified positive CURRENT register totals, not from
+   // assumed issued share capital. Read-only; it has no Excel cell to edit.
+   blocks.push({type:'metric',label:'Percentage of Recorded Current Holdings',
+    value:formatStatutoryNumber('Percentage',(amount/total*100).toFixed(8))});
+  }
+ }
+ if(record.considerationField){
+  const amount=record.considerationField;
+  blocks.push({...mappedField(amount,sheetIndex),
+   label:'Latest Recorded Share Consideration ('+(amount.nature||'Transaction')+')'});
+ }
  return blocks;
 }
-
+function memberDisplayBlocks(book,indices,options={}){
+ const current=currentMemberRecords(book,indices);
+ const former=formerMemberRecords(book,indices);
+ const total=current.reduce((sum,item)=>sum+(parseStatutoryNumber(item.record.shareField?.value)||0),0);
+ const blocks=[{type:'group',title:'Current Members'}];
+ if(current.length){
+  for(const item of current)blocks.push(...memberPersonBlocks(item,{...options,total}));
+  blocks.push({type:'note',text:'Shareholding percentages are calculated against the total positive current holdings recorded in this register, not independently verified issued share capital.'});
+ }else blocks.push({type:'note',text:'No current members with verified positive shares are recorded. Review recent SSM returns and share transfers.'});
+ blocks.push({type:'group',title:'Former Members (History)'});
+ if(former.length){
+  for(const item of former)blocks.push(...memberPersonBlocks(item,{...options,former:true}));
+ }else blocks.push({type:'note',text:'No former shareholder records are available in the imported register.'});
+ return blocks;
+}
 export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
  if(!Number.isInteger(sheetIndex)||sheetIndex<0||sheetIndex>=(book?.sheets?.length||0))
   throw Error('Select a valid statutory register.');
@@ -139,7 +187,7 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
   }
   if(!first)result.blocks.push({type:'note',text:'Registered Address is not recorded. Use Add Field to create it.'});
  }else if(details.kind==='member'){
-  result.blocks.push(...currentMemberBlocks(book,[sheetIndex],{showBlanks}));
+  result.blocks.push(...memberDisplayBlocks(book,[sheetIndex],{showBlanks}));
  }else if(details.kind==='table'||details.kind==='text'){
   result.blocks.push(...recordsToBlocks(details.records,sheetIndex,showBlanks));
  }else{
@@ -182,6 +230,8 @@ function finishDisplay(book,result){
  for(const block of result.blocks){
   if(block.type!=='field')continue;
   const key=block.sheetIndex+':'+block.row+':'+block.col;
+  block.numericKind=numericKind(block.label);
+  block.value=formatStatutoryNumber(block.label,block.value);
   if(typeof overrides[key]==='string'&&overrides[key].trim())
    block.label=overrides[key].slice(0,120);
  }
@@ -194,7 +244,7 @@ export function buildGroupedRegister(book,sheetIndex,options={}){
  if(!members.length)throw Error('Register not available.');
  if(registerLabel(book.sheets[sheetIndex].name)==='Register of Members'){
   return finishDisplay(book,{sheetIndex:members[0],title:'Register of Members',
-   sourceName:book.sheets[members[0]].name,blocks:currentMemberBlocks(book,members,options)});
+   sourceName:book.sheets[members[0]].name,blocks:memberDisplayBlocks(book,members,options)});
  }
  return buildIndependentRegister(book,sheetIndex,options);
 }
