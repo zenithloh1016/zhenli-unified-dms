@@ -294,6 +294,22 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     state.sheetIndex=n;state.showBlankFields=false;notify();
    }return true;
   }
+  if(action==='sr-set-status'){
+   const match=/^(\d+):(\d+):(current|former)$/.exec(String(id));
+   if(!match)return true;
+   const si=Number(match[1]),ri=Number(match[2]),choice=match[3];
+   if(!registerGroupIndices(state.book,state.sheetIndex).includes(si))return true;
+   const sheet=state.book?.sheets?.[si];
+   if(!sheet||ri<0||ri>=sheet.rows.length)return true;
+   const projection=buildGroupedRegister(state.book,state.sheetIndex,{showBlanks:true});
+   const entry=projection.blocks.find(b=>b.type==='record'&&b.sheetIndex===si&&b.row===ri);
+   if(!entry)return true;
+   if(!window.confirm('Mark "'+entry.title+'" as '+(choice==='former'?'Former':'Current')+
+    ' in this statutory register?\n\nThis changes its display classification only. Check the actual cessation or discharge date against SSM records, then Save Changes.'))return true;
+   if(!state.book.recordStatuses)state.book.recordStatuses={};
+   state.book.recordStatuses[si+':'+ri]=choice;
+   state.dirty=true;notify();return true;
+  }
   if(action==='sr-edit-field'){
    const match=/^(\d+):(\d+):(\d+)$/.exec(String(id));
    if(!match)return true;
