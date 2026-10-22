@@ -37,12 +37,18 @@ test('opens editable statutory register templates for a company',async()=>{
  await tab.openCompany('c1');
  assert.equal(tab.state.book.companyId,'c1');
  const html=tab.render();
- assert.match(html,/Register of Directors/);
- assert.match(html,/Register of Members/);
- assert.match(html,/Register of Beneficial Owners/);
+ assert.match(html,/data-action="sr-mode-review"/);
+ assert.match(html,/data-action="sr-mode-worksheet"/);
+ assert.match(html,/Directors/);
+ assert.match(html,/Members/);
+ assert.match(html,/Beneficial Owners/);
  assert.match(html,/data-action="sr-save"/);
  assert.match(html,/data-action="sr-pdf"/);
- assert.match(html,/class="rb-cell"/);
+ assert.match(html,/EASY REVIEW/);
+ tab.command('sr-mode-worksheet');
+ const original=tab.render();
+ assert.match(original,/Register of Directors/);
+ assert.match(original,/class="rb-cell"/);
 });
 test('saves edited register privately and reloads it',async()=>{
  const {tab,blobs,written}=fixture();
