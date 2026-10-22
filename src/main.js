@@ -742,6 +742,7 @@ ROOT.addEventListener('click', event=>{
   if(a==='sr-save'){busyDo(()=>registerBookUI.save());return;}
   if(a==='sr-import'){busyDo(()=>registerBookUI.importZip());return;}
   if(a==='sr-pdf'){busyDo(()=>registerBookUI.pdf());return;}
+  if(a==='sr-pdf-all'){busyDo(()=>registerBookUI.pdf({combined:true}));return;}
   if(registerBookUI.command(a,id))return;
   if(a==='deadline-refresh'){reloadStatutoryDeadlines(true).catch(showError);return;}
   if(a==='deadline-open-master'){
