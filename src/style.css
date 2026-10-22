@@ -451,3 +451,13 @@ body.zh-ar-fullscreen-open{overflow:hidden}
  .rb-grid td{min-width:150px}
  .rb-grid .rb-cell{min-width:145px}
 }
+
+
+/* Archived Register Book originals remain accessible through Statutory Registers. */
+.rb-originals{margin:18px 0;padding:14px 16px;border:1px solid #d5e4ee;border-radius:11px;background:#fff}
+.rb-originals summary{cursor:pointer;color:#264d6c;font-weight:700;font-size:13px}
+.rb-originals>p{font-size:12px;line-height:1.5}
+.rb-original-row{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid #e5edf3;font-size:12px}
+.rb-original-row:last-child{border-bottom:0}
+.rb-original-row span{overflow-wrap:anywhere;flex:1 1 240px}
+@media(max-width:600px){.rb-original-row .btn{width:100%}}
