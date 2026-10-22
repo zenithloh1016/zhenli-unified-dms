@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import readExcelFile from 'read-excel-file/browser';
 import {openMasterListingWorkbook} from './master-listing-reader.js';
 import {createMasterListingTab} from './master-listing-tab.js';
+import {renderStatutoryDeadlines} from './statutory-deadlines.js';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import {saveOrShareFile} from './file-transfer.js';
@@ -48,6 +49,7 @@ const state = {
   companyId: null, folderId: null, search: '', busy: false, notice: '',
   tab: 'documents', totalDocs: 0, taskFullscreen: false, signingFullscreen: false, arFullscreen: false,
   arSelectedCompanyId: null,
+  deadlineQuery: '', deadlineKind: 'all', deadlinePeriod: 'all',
   modal: null, authMode: 'login', importData: null, importWorkbook: null, importReader: '',
   importSheet: 0, importNameCol: 0, importRegCol: -1, importStartRow: 2,
   importProgress: null, importFileName: '', importError: '',
@@ -62,6 +64,29 @@ const masterListingUI=createMasterListingTab({
  notify:message=>{if(message)state.notice=message;}
 });
 masterListingUI.afterRender(()=>render());
+let deadlineLastCheck=0;
+async function reloadStatutoryDeadlines(force=false){
+  if(!state.user||state.tab!=='statutory-deadlines')return;
+  if(masterListingUI.state.loading||masterListingUI.state.saving)return;
+  const now=Date.now();
+  if(!force&&now-deadlineLastCheck<45000)return;
+  deadlineLastCheck=now;
+  await masterListingUI.load(true);
+}
+// Other-device edits are rechecked on tab entry, focus and periodically while
+// this tab is open. Dates are read from the existing private Master Listing.
+setInterval(()=>{
+  if(state.tab==='statutory-deadlines'&&!document.hidden)
+    reloadStatutoryDeadlines().catch(error=>console.warn('Deadline refresh:',error));
+},60000);
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&state.tab==='statutory-deadlines')
+    reloadStatutoryDeadlines().catch(error=>console.warn('Deadline refresh:',error));
+});
+window.addEventListener('focus',()=>{
+  if(state.tab==='statutory-deadlines')
+    reloadStatutoryDeadlines().catch(error=>console.warn('Deadline refresh:',error));
+});
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, m => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -704,11 +729,11 @@ function render() {
   document.body.classList.toggle('zh-ar-fullscreen-open',!!(state.user && state.tab==='annual-return' && state.arFullscreen));
   if (!db) { ROOT.innerHTML=`<div class="auth-page"><div class="auth-card"><div class="auth-logo">Z</div><h1>Set up private workspace</h1><p>Connect a Supabase project to enable authenticated documents and synced company folders.</p><p class="muted">Follow START_HERE.md in the downloadable source package. The Task Hub and Signing code is already bundled.</p></div></div>`;return; }
   if (!state.user) {ROOT.innerHTML=renderAuth();return;}
-  const tabs = ['overview','documents','master-listing','tasks','annual-return','signing'];
-  const label = {overview:'Overview',documents:'Documents','master-listing':'Master Listing',tasks:'Tasks','annual-return':'Annual Return',signing:'Signing'};
+  const tabs = ['overview','documents','master-listing','statutory-deadlines','tasks','annual-return','signing'];
+  const label = {overview:'Overview',documents:'Documents','master-listing':'Master Listing','statutory-deadlines':'Statutory Deadlines',tasks:'Tasks','annual-return':'Annual Return',signing:'Signing'};
   ROOT.innerHTML = `<div class="app-shell"><header class="topbar"><div class="top-title">Document Management System</div><div class="top-right"><span class="online-dot"></span> Private workspace</div></header>
     <nav class="tabbar" aria-label="Main workspace navigation">${tabs.map(t=>`<button type="button" class="tab ${state.tab===t?'current':''}" data-action="tab-${t}" ${state.tab===t?'aria-current="page"':''}>${label[t]}</button>`).join('')}</nav>
-    <main class="main-content">${state.tab==='documents'?(state.companyId?renderFolder():renderCompanies()):state.tab==='overview'?renderOverview():state.tab==='master-listing'?masterListingUI.render():state.tab==='tasks'?renderTasks():state.tab==='annual-return'?renderAnnualReturn():renderSigning()}</main>
+    <main class="main-content">${state.tab==='documents'?(state.companyId?renderFolder():renderCompanies()):state.tab==='overview'?renderOverview():state.tab==='master-listing'?masterListingUI.render():state.tab==='statutory-deadlines'?renderStatutoryDeadlines(masterListingUI.state.userId===state.user?.id?masterListingUI.model:null,{query:state.deadlineQuery,kind:state.deadlineKind,period:state.deadlinePeriod,loading:masterListingUI.state.loading,error:masterListingUI.state.error}):state.tab==='tasks'?renderTasks():state.tab==='annual-return'?renderAnnualReturn():renderSigning()}</main>
     <footer class="app-footer"><span>ZHENLI DMS V1.2 · Add Company · Web + Android</span><span>${esc(state.user.email || '')} · ${action('Sign out','sign-out')}</span></footer></div>
   ${state.notice ? `<div class="toast" role="status">${esc(state.notice)} ${action('✕','dismiss')}</div>` : ''}
   ${state.busy ? '<div class="busy-bar">Working… please keep this page open</div>' : ''}
@@ -841,6 +866,21 @@ ROOT.addEventListener('click', event=>{
   const a=button.dataset.action,id=button.dataset.id;
   if(masterListingUI.onClick(a,id))return;
   if(signingUI.onClick(a,id,event))return;
+  if(a==='deadline-refresh'){reloadStatutoryDeadlines(true).catch(showError);return;}
+  if(a==='deadline-open-master'){
+    state.tab='master-listing';render();
+    masterListingUI.load().catch(showError);return;
+  }
+  if(a==='deadline-edit'){
+    const index=Number(id);
+    if(!Number.isSafeInteger(index)||index<0||index>=(masterListingUI.model?.rows?.length||0))return;
+    state.tab='master-listing';render();
+    masterListingUI.onClick('ml-edit',String(index));return;
+  }
+  if(a==='deadline-clear'){
+    state.deadlineQuery='';state.deadlineKind='all';state.deadlinePeriod='all';
+    render();return;
+  }
   if(a==='modal-bg' && event.target===button){state.modal=null;render();return;}
   if(a==='dismiss'){state.notice='';render();return;}
   if(a==='close-modal' && !state.busy){state.modal=null;state.importData=null;state.importWorkbook=null;resetRegisterZip();render();return;}
@@ -850,6 +890,7 @@ ROOT.addEventListener('click', event=>{
     // Drafts are saved as edits are made; no JSON export is needed before switching modules.
     state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;if(state.tab!=='annual-return')state.arFullscreen=false;render();
     if(nextTab==='master-listing')masterListingUI.load().catch(showError);
+    if(nextTab==='statutory-deadlines')reloadStatutoryDeadlines(true).catch(showError);
     return;
   }
   if(a==='prepare-annual-return'||a==='select-ar-company'){
@@ -1026,8 +1067,17 @@ document.addEventListener('keydown',event=>{
    else if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
 });
 ROOT.addEventListener('input',e=>{
+ if(e.target.id==='sd-search'){
+    const pos=e.target.selectionStart??e.target.value.length;
+    state.deadlineQuery=e.target.value;render();
+    const input=ROOT.querySelector('#sd-search');
+    input?.focus();input?.setSelectionRange(pos,pos);
+    return;
+  }
  signingUI.input(e.target);if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
 ROOT.addEventListener('change',e=>{
+  if(e.target.id==='sd-kind'){state.deadlineKind=e.target.value;render();return;}
+  if(e.target.id==='sd-period'){state.deadlinePeriod=e.target.value;render();return;}
   if(masterListingUI.onChange(e.target,prepareExcelImport))return;
   if(signingUI.changed(e.target))return;
   if(e.target.id==='document-upload'){const files=[...e.target.files];e.target.value='';if(files.length)busyDo(()=>uploadFiles(files));}
