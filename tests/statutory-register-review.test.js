@@ -38,7 +38,7 @@ const uiState=()=>({reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpande
 
 test('review labels and company profile show all important facts as editable fields',()=>{
  assert.equal(registerLabel('Master'),'Company Details');
- assert.equal(registerLabel('Register of Members 001'),'Register of Members 001');
+ assert.equal(registerLabel('Register of Members 001'),'Register of Members');
  assert.equal(registerLabel('Register of BO'),'Register of Beneficial Owners');
  const info=describeStatutorySheet(master);
  assert.equal(info.kind,'profile');
