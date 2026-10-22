@@ -19,7 +19,7 @@ export function registerLabel(name){
  const imported=original.slice(source.length);
  const bare=source.replace(/^register (?:of|or)\s+/i,'').trim();
  const member=/^members?(?:\s+0*(\d+))?$/i.exec(bare);
- if(member)return 'Register of Members'+imported;
+ if(member)return 'Register of Members';
  const replacements={
   bo:'Beneficial Owners',
   'beneficial owner':'Beneficial Owners',
