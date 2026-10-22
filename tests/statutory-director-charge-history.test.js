@@ -42,10 +42,10 @@ const book=()=>makeRegisterBook(company,{path:'Register Book_EXAMPLE.xlsx',sheet
 test('Director history is recovered with personal particulars and current/former grouping',()=>{
  const b=book();
  const section=buildGroupedRegister(b,1);
- assert(section.blocks.some(x=>x.type==='group'&&x.title==='Current / Active'));
- assert(section.blocks.some(x=>x.type==='group'&&x.title==='Former / Ceased (History)'));
- assert(section.blocks.some(x=>x.type==='record'&&x.title==='CURRENT DIRECTOR'&&x.status==='Current / Active'));
- assert(section.blocks.some(x=>x.type==='record'&&x.title==='FORMER DIRECTOR'&&x.status==='Former / Ceased'));
+ assert(section.blocks.some(x=>x.type==='group'&&x.title==='Current'));
+ assert(section.blocks.some(x=>x.type==='group'&&x.title==='Former'));
+ assert(section.blocks.some(x=>x.type==='record'&&x.title==='CURRENT DIRECTOR'&&x.status==='Current'));
+ assert(section.blocks.some(x=>x.type==='record'&&x.title==='FORMER DIRECTOR'&&x.status==='Former'));
  assert(section.blocks.some(x=>x.type==='field'&&x.label==='Date of Cessation'&&x.value==='45356'));
  const html=renderStatutoryRegisterDocument(b,1);
  assert(html.includes('CURRENT DIRECTOR')&&html.includes('FORMER DIRECTOR'));
@@ -55,7 +55,7 @@ test('all applicable registers separate current/former while Transfers and Allot
  const b=book();ensureChargeRegister(b);
  for(const i of [1,2,3,4]){
   const reg=buildGroupedRegister(b,i);
-  assert(reg.blocks.some(x=>x.type==='group'&&x.title==='Current / Active'));
+  assert(reg.blocks.some(x=>x.type==='group'&&x.title==='Current'));
   assert(reg.blocks.some(x=>x.type==='group'&&/Former/.test(x.title)));
  }
  for(const i of [5,6]){
@@ -76,9 +76,9 @@ test('Charge Date of Discharge added once while preserving existing charges and 
  assert.equal(sheet.rows[1][col],'');
  sheet.rows[2][col]='46000';
  const reg=buildGroupedRegister(b,4);
- assert(reg.blocks.some(x=>x.type==='record'&&x.title==='CHG001'&&x.status==='Current / Active'));
+ assert(reg.blocks.some(x=>x.type==='record'&&x.title==='CHG001'&&x.status==='Current'));
  assert(reg.blocks.some(x=>x.type==='field'&&x.label==='Date of Discharge'&&x.value===''&&x.row===1));
- assert(reg.blocks.some(x=>x.type==='record'&&x.title==='CHG002'&&x.status==='Discharged / Former'));
+ assert(reg.blocks.some(x=>x.type==='record'&&x.title==='CHG002'&&x.status==='Former'));
  assert(reg.blocks.some(x=>x.type==='field'&&x.label==='Date of Discharge'&&x.value==='46000'));
  const snapshot=combinedRegisterSnapshot(b,{companyId:company.id});
  assert(snapshot.sections.some(s=>s.title==='Register of Charges'));
@@ -109,7 +109,7 @@ test('Both individual and combined PDFs include the recovered former director hi
   const pdf=await buildStatutoryRegistersPdf(b,{sheetIndex:1});
   assert((await pdf.text()).startsWith('%PDF'));
   assert(values.includes('FORMER DIRECTOR'));
-  assert(values.includes('Former / Ceased (History)'));
+  assert(values.includes('Former'));
   values.length=0;
   await buildStatutoryRegistersPdf(b,{combined:true});
   assert(values.includes('FORMER DIRECTOR'));
