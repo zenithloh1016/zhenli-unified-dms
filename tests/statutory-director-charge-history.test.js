@@ -77,6 +77,7 @@ test('Charge Date of Discharge added once while preserving existing charges and 
  sheet.rows[2][col]='46000';
  const reg=buildGroupedRegister(b,4);
  assert(reg.blocks.some(x=>x.type==='record'&&x.title==='CHG001'&&x.status==='Current / Active'));
+ assert(reg.blocks.some(x=>x.type==='field'&&x.label==='Date of Discharge'&&x.value===''&&x.row===1));
  assert(reg.blocks.some(x=>x.type==='record'&&x.title==='CHG002'&&x.status==='Discharged / Former'));
  assert(reg.blocks.some(x=>x.type==='field'&&x.label==='Date of Discharge'&&x.value==='46000'));
  const snapshot=combinedRegisterSnapshot(b,{companyId:company.id});
