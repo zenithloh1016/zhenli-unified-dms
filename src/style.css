@@ -653,3 +653,9 @@ body.zh-ar-fullscreen-open{overflow:hidden}
 .sr-derived-row .sr-ar-value{background:#f4f9fc}
 .sr-derived-row .sr-ar-value strong{color:#185476;font-size:14px;font-variant-numeric:tabular-nums}
 .sr-ar-input[data-numeric-kind]{font-variant-numeric:tabular-nums}
+
+
+/* Only two standardized register statuses: Current and Former. */
+.sr-toggle-status{border:1px solid #adcce0;border-radius:6px;background:#edf6fb;color:#215477;
+ font-size:10px;line-height:1.2;font-weight:750;padding:5px 8px;cursor:pointer;white-space:nowrap}
+.sr-toggle-status:hover,.sr-toggle-status:focus-visible{background:#dceef9;outline-color:#6396b7}
