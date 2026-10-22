@@ -56,7 +56,7 @@ test('member folios show only identity/contact particulars and current shares he
  const labels=register.blocks.filter(b=>b.type==='field').map(b=>b.label);
  assert.deepEqual(labels,[
   'Shareholder Name','Date of Birth','ID Type','Nationality/Origin',
-  'Identification No','Race','Occupation','Email Address',
+  'Identification No.','Race','Occupation','Email Address',
   'Address','Current Number of Shares Held'
  ]);
  const address=register.blocks.find(f=>f.type==='field'&&f.label==='Address');
