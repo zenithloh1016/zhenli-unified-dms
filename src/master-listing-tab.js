@@ -5,6 +5,7 @@
  * service-role credentials are required. Documents folders change only when the user requests synchronization on add or through Sync.
  */
 import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn} from './master-listing-data.js';
+import {previewRegisterParticularsZip,preserveRegisterParticulars} from './master-listing-register-particulars.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeText=value=>String(value??'').slice(0,15000);
@@ -19,7 +20,7 @@ const isMissing=error=>/object not found|not found|404|no such key/i.test(String
 export function createMasterListingTab({db,bucket='dms-private',getUser,getCompanies,openCompany,refreshCompanies,notify}){
  const state={userId:'',loaded:false,loading:false,saving:false,
   model:null,error:'',status:'',search:'',page:0,columnStart:0,fullScreen:false,editIndex:null,addOpen:false,addDraft:null,addCreateFolders:true,
-  source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,date1904:false,legacyDateCount:0,preview:null,
+  source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,date1904:false,legacyDateCount:0,preview:null,registerPreview:null,
   selectedFile:null};
  const storage=db?.storage?.from(bucket);
  const path=()=>getUser()?.id+'/master-listing/current.json';
@@ -28,7 +29,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
  let onRender=null;
  const afterRender=cb=>{onRender=cb;};
 
- const reset=()=>{Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,model:null,error:'',status:'',search:'',page:0,columnStart:0,fullScreen:false,editIndex:null,addOpen:false,addDraft:null,addCreateFolders:true,source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,date1904:false,legacyDateCount:0,preview:null,selectedFile:null});};
+ const reset=()=>{Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,model:null,error:'',status:'',search:'',page:0,columnStart:0,fullScreen:false,editIndex:null,addOpen:false,addDraft:null,addCreateFolders:true,source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,date1904:false,legacyDateCount:0,preview:null,registerPreview:null,selectedFile:null});};
  async function load(force=false){
   const user=getUser?.();
   if(!user?.id){reset();return;}
@@ -122,10 +123,33 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   if(!window.confirm('Import '+preview.rows.length+' companies and '+preview.columns.length+' columns into the Master Listing tab? '+(state.model?'This replaces the prior tab data, which will be backed up privately.':'This creates a new private listing.')+' Existing Documents folders and company details will not be changed.'))return;
   state.saving=true;state.error='';state.status='Saving all company fields privately…';onRender?.();
   try{
-   await saveModel(preview,{backup:true});
+   await saveModel(preserveRegisterParticulars(state.model,preview),{backup:true});
    state.sheets=[];state.preview=null;state.selectedFile=null;
    state.page=0;state.search='';
    state.status='Imported '+preview.rows.length+' companies with '+preview.columns.length+' editable columns into private DMS storage.';
+  }finally{state.saving=false;onRender?.();}
+ }
+ async function readRegisterBooks(file){
+  if(!state.model)throw Error('Import your Master Listing before loading Register Books.');
+  if(state.loading||state.saving)return;
+  state.loading=true;state.registerPreview=null;state.error='';
+  state.status='Reading selected Register Books locally…';onRender?.();
+  try{
+   state.registerPreview=await previewRegisterParticularsZip(file,state.model,{
+    onProgress:message=>{state.status=message;onRender?.();}
+   });
+   state.status='Review the two-column update before saving. '+state.registerPreview.matchedRows+' Master Listing company rows matched.';
+  }finally{state.loading=false;onRender?.();}
+ }
+ async function applyRegisterPreview(){
+  const proposal=state.registerPreview;
+  if(!proposal||!proposal.matchedRows)throw Error('No companies were matched; your Master Listing has not been changed.');
+  if(!window.confirm('Update Directors & Members and Beneficial Owners for '+proposal.matchedRows+' rows? A private Master Listing backup will be created. All other fields remain unchanged.'))return;
+  state.saving=true;state.error='';state.status='Backing up and saving updated Register Book particulars…';onRender?.();
+  try{
+   await saveModel(proposal.model,{backup:true});
+   state.registerPreview=null;
+   state.status='Saved Directors & Members and Beneficial Owners for '+proposal.matchedRows+' company rows. No other Master Listing fields were changed.';
   }finally{state.saving=false;onRender?.();}
  }
  async function saveEdit(form){
@@ -282,10 +306,12 @@ async function saveRepairedDates(){
    '<div class="content-header"><div><p class="eyebrow">STATUTORY COMPANY INFORMATION</p><h1>Master Listing</h1>'+
    '<p class="muted">Import an Excel workbook, keep all company-information columns, and edit each company inside this private DMS tab.</p></div>'+
    '<div class="header-buttons">'+(model?act(state.fullScreen?'Exit full screen ✕':'Full screen ⛶','ml-fullscreen','','secondary'):'')+
-   (model?act('Export CSV','ml-export','','secondary'):'')+act('+ Add Company','ml-add','','primary')+act('Import Excel','ml-upload','','secondary')+'</div></div>'+
+   (model?act('Export CSV','ml-export','','secondary'):'')+(model?act('Import Register Books','ml-register-upload','','secondary'):'')+act('+ Add Company','ml-add','','primary')+act('Import Excel','ml-upload','','secondary')+'</div></div>'+
    '<input id="ml-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>'+
+   '<input id="ml-register-file" type="file" accept=".zip,application/zip" hidden>'+
    (state.error?'<div class="alert" role="alert">'+esc(state.error)+'</div>':'')+
    (state.status?'<div class="info-strip" role="status">'+esc(state.status)+'</div>':'')+
+   (state.registerPreview?'<section class="ml-import-panel"><h3>Review Register Book update</h3><p>'+state.registerPreview.parsedBooks+' Register Books parsed · '+state.registerPreview.matchedRows+' company rows matched · '+state.registerPreview.missingCompanies.length+' listing rows without a matching Register Book.</p><p class="muted">Only Directors & Members and Beneficial Owners will be added or updated. Other cells and existing document folders remain unchanged. A private backup is saved first. '+(state.registerPreview.errors.length?'Some files could not be read ('+state.registerPreview.errors.length+'); these companies will not be updated.':'')+'</p><div class="ml-actions">'+act('Confirm Register Book update','ml-register-apply','','primary')+act('Cancel','ml-register-cancel','','secondary')+'</div></section>':'')+
    (model&&state.legacyDateCount?'<div class="ml-date-repair" role="status"><strong>'+state.legacyDateCount+' saved date serial(s) detected.</strong> They are shown as DD/MM/YYYY in date columns. '+act('Save corrected dates','ml-repair-dates','','primary')+'<p>Save a corrected copy with backup, or re-import the original Excel workbook to retain its precise date styles.</p></div>':'')+
    (state.sheets.length?'<section class="ml-import-panel"><h3>Review workbook before importing</h3>'+
     '<div class="ml-import-controls"><label>Worksheet<select id="ml-sheet">'+state.sheets.map((x,i)=>'<option value="'+i+'"'+(i===state.sheetIndex?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></label>'+
@@ -369,6 +395,9 @@ function renderEditor(){
   if(action==='ml-add'){state.addOpen=true;state.editIndex=null;state.addDraft=null;state.addCreateFolders=true;state.error='';onRender?.();return true;}
   if(action==='ml-close-add'){state.addOpen=false;state.addDraft=null;state.error='';onRender?.();return true;}
   if(action==='ml-upload'){document.getElementById('ml-file')?.click();return true;}
+  if(action==='ml-register-upload'){document.getElementById('ml-register-file')?.click();return true;}
+  if(action==='ml-register-cancel'){state.registerPreview=null;state.error='';onRender?.();return true;}
+  if(action==='ml-register-apply'){asyncRun(applyRegisterPreview);return true;}
   if(action==='ml-cancel'){state.sheets=[];state.preview=null;state.selectedFile=null;state.error='';onRender?.();return true;}
   if(action==='ml-confirm'){asyncRun(importSelected);return true;}
   if(action==='ml-edit'){state.editIndex=Number(id);onRender?.();return true;}
@@ -397,6 +426,11 @@ function renderEditor(){
   return false;
  }
  function onChange(target,readWorkbook){
+  if(target?.id==='ml-register-file'){
+   const file=target.files?.[0];target.value='';
+   if(file)Promise.resolve().then(()=>readRegisterBooks(file)).catch(fail);
+   return true;
+  }
   if(target?.id==='ml-file'){
    const file=target.files?.[0];target.value='';
    if(file)readFile(file,readWorkbook).catch(fail);return true;
