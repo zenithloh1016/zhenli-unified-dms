@@ -104,3 +104,58 @@ test('preserved original files panel remains available in Statutory Registers',a
  assert.equal(Array.isArray(tab.state.originalDocs),true);
  assert.match(tab.render(),/Statutory Registers|Register of Directors/);
 });
+
+
+test('sparse source cells become empty strings without moving statutory columns',()=>{
+ const source=[];
+ source[0]='Director name';
+ source[3]='Appointment date';
+ source[6]='Cessation date';
+ const rows=[source,['ALPHA DIRECTOR',,,'20/10/2026',,,'']];
+ const sheet=sanitizeSheet('Register of Directors',rows);
+ assert.deepEqual(sheet.rows[0],['Director name','','','Appointment date','','','Cessation date']);
+ assert.deepEqual(sheet.rows[1],['ALPHA DIRECTOR','','','20/10/2026','','','']);
+ assert.equal(Object.hasOwn(sheet.rows[0],1),true);
+ const book=makeRegisterBook(companies[0],{path:'Register Book_ALPHA SDN BHD.xlsx',sheets:[sheet]});
+ assert.doesNotThrow(()=>validateRegisterBook(book));
+ assert.equal(book.sheets[0].rows[1][3],'20/10/2026');
+});
+
+test('ZIP preview validates an actual Excel workbook with sparse populated cells',async()=>{
+ const {zipSync,strToU8}=await import('fflate');
+ const {DOMParser}=await import('@xmldom/xmldom');
+ const oldParser=globalThis.DOMParser;globalThis.DOMParser=DOMParser;
+ try{
+  const x='<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+
+   '<row r="1"><c r="A1" t="inlineStr"><is><t>Company Name:</t></is></c>'+
+   '<c r="B1" t="inlineStr"><is><t>ALPHA SDN BHD</t></is></c></row>'+
+   '<row r="2"><c r="A2" t="inlineStr"><is><t>Company No.:</t></is></c>'+
+   '<c r="B2" t="inlineStr"><is><t>202601234567</t></is></c></row>'+
+   '</sheetData></worksheet>';
+  const reg='<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+
+   '<row r="1"><c r="A1" t="inlineStr"><is><t>Name</t></is></c><c r="E1" t="inlineStr"><is><t>Date of Appointment</t></is></c></row>'+
+   '<row r="2"><c r="A2" t="inlineStr"><is><t>Example Director</t></is></c><c r="E2" t="inlineStr"><is><t>20/10/2026</t></is></c></row>'+
+   '<row r="3"><c r="A3" s="1"/><c r="B3" s="1"/></row>'+
+   '</sheetData></worksheet>';
+  const wb='<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'+
+   '<sheet name="Master" sheetId="1" r:id="rId1"/>'+
+   '<sheet name="Register of Directors" sheetId="2" r:id="rId2"/></sheets></workbook>';
+  const rel='<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+   '<Relationship Id="rId1" Target="worksheets/sheet1.xml"/>'+
+   '<Relationship Id="rId2" Target="worksheets/sheet2.xml"/></Relationships>';
+  const bookBytes=zipSync({
+   'xl/workbook.xml':strToU8(wb),
+   'xl/_rels/workbook.xml.rels':strToU8(rel),
+   'xl/worksheets/sheet1.xml':strToU8(x),
+   'xl/worksheets/sheet2.xml':strToU8(reg)
+  });
+  const outer=zipSync({'Register Book_ALPHA SDN BHD.xlsx':bookBytes});
+  const file=new Blob([outer]);file.name='Company Register Books.zip';
+  const {previewStatutoryZip}=await import('../src/statutory-register-data.js');
+  const result=await previewStatutoryZip(file,companies);
+  assert.equal(result.matched,1,JSON.stringify(result.rows.map(r=>r.error)));
+  const data=result.rows[0].sheets.find(s=>s.name==='Register of Directors');
+  assert.deepEqual(data.rows[1],['Example Director','','','','20/10/2026']);
+  assert.equal(result.unmatched,0);
+ }finally{globalThis.DOMParser=oldParser;}
+});
