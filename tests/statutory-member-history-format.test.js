@@ -46,7 +46,7 @@ test('two active shareholders plus former history all show with correctly format
  const section=buildGroupedRegister(b,0);
  assert.equal(section.blocks.filter(x=>x.type==='group').length,2);
  const active=section.blocks.filter(x=>x.type==='record'&&x.status==='Current');
- const former=section.blocks.filter(x=>x.type==='record'&&x.status==='Former / History');
+ const former=section.blocks.filter(x=>x.type==='record'&&x.status==='Former / Ceased');
  assert.equal(active.length,2);assert.equal(former.length,1);
  assert(formerMemberRecords(b,[0]).some(x=>x.record.title==='FORMER THREE'));
  assert.equal(section.blocks.filter(x=>x.type==='metric'&&x.value==='50.00%').length,2);
