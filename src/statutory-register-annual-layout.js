@@ -23,7 +23,9 @@ function recordsToBlocks(records,sheetIndex,showBlanks,{separateHistory=true,kin
    row:record.row,sheetIndex,status:record.status==='former'?
     (kind==='charges'?'Discharged / Former':'Former / Ceased'):
     record.status==='current'?'Current / Active':'Status Not Recorded'});
-  const visible=(record.fields||[]).filter(f=>showBlanks||hasText(f.value));
+  const visible=(record.fields||[]).filter(f=>showBlanks||hasText(f.value)||
+   (kind==='charges'&&/^date of (?:discharge|satisfaction|release)$/i.test(f.label)));
+
   if(visible.length)result.push(...visible.map(f=>mappedField(f,sheetIndex)));
   else result.push({type:'note',text:'No particulars recorded.'});
  };
