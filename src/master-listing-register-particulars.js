@@ -51,7 +51,9 @@ function membersFrom(rows){
   const name=firstLine(field(rows[i],1));
   if(!name||name.length>140)continue;
   let ceased='',shares='';
-  for(const r of rows.slice(i,i+15)){
+  for(let j=i+1;j<Math.min(rows.length,i+25);j++){
+   const r=rows[j];
+   if(/^name\s*:?\s*$/i.test(field(r,0)))break;
    if(/date ceased to be a member/i.test(field(r,6)))ceased=field(r,7);
    if(/total shares held/i.test(field(r,6)))shares=field(r,7);
   }
