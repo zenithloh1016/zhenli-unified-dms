@@ -377,3 +377,41 @@ body.zh-ar-fullscreen-open{overflow:hidden}
  .sd-workspace .header-buttons{width:100%}
  .sd-workspace .header-buttons .btn{flex:1}
 }
+
+
+/* Dedicated Register Book library: responsive company directory and ZIP entry. */
+.rb-workspace{min-width:0}
+.rb-workspace .content-header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.rb-workspace .content-header h1{margin:3px 0 9px}
+.rb-workspace .content-header .muted{margin:0;line-height:1.5;max-width:700px}
+.rb-workspace .header-buttons{display:flex;gap:8px;flex-wrap:wrap}
+.rb-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}
+.rb-metrics>div{display:flex;flex-direction:column;gap:8px;background:#fff;padding:18px;border:1px solid #dae5ec;border-radius:12px}
+.rb-metrics strong{font-size:24px;line-height:1;color:#193f64}
+.rb-metrics span{font-size:12px;color:#577187}
+.rb-help{font-size:13px;line-height:1.6;color:#365570;background:#f6fafd;border:1px solid #d5e4ef;border-radius:10px;padding:13px 16px;margin:0 0 18px}
+.rb-error{border:1px solid #e2b1b1;background:#fff4f4;color:#8a4040;padding:12px;border-radius:8px;margin-bottom:14px}
+.rb-search-label{display:block;font-size:12px;font-weight:700;color:#47617d;margin:10px 0 7px}
+#rb-search{display:block;width:100%;min-height:42px;padding:10px 12px;border:1px solid #cadbe7;background:#fff;border-radius:10px;color:#243d54;font:inherit}
+.rb-results-heading{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:19px 0 10px;color:#54708a;font-size:12px}
+.rb-results-heading strong{color:#274b6b;font-size:14px}
+.rb-table-scroll{overflow:auto;background:#fff;border:1px solid #dae5ed;border-radius:12px;max-height:min(70vh,760px)}
+.rb-table{border-collapse:separate;border-spacing:0;width:100%;min-width:720px;font-size:12px}
+.rb-table th,.rb-table td{text-align:center;vertical-align:middle;padding:13px 12px;border-bottom:1px solid #ebf0f5}
+.rb-table th{position:sticky;top:0;z-index:1;background:#eaf2f8;color:#294c6c;white-space:nowrap}
+.rb-table tbody tr:nth-child(even){background:#fafcff}
+.rb-table .rb-company{text-align:left;min-width:210px;font-weight:700;color:#234b67;overflow-wrap:anywhere}
+.rb-table .btn{font-size:12px;white-space:nowrap}
+.rb-empty{text-align:center!important;color:#60798e;padding:35px!important}
+.rb-pager{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:13px 0;color:#52728b;font-size:12px}
+.rb-footnote{font-size:12px;line-height:1.6;margin:12px 0}
+@media(max-width:650px){
+ .rb-workspace .content-header h1{font-size:26px}
+ .rb-workspace .header-buttons{width:100%}
+ .rb-workspace .header-buttons .btn{flex:1}
+ .rb-metrics{gap:7px}
+ .rb-metrics>div{padding:13px 10px}
+ .rb-metrics strong{font-size:20px}
+ .rb-metrics span{font-size:11px}
+ .rb-pager{justify-content:center}
+}
