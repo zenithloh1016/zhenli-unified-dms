@@ -8,10 +8,17 @@ export function renderStatutoryRegisterDocument(book,sheetIndex,{showBlanks=fals
   if(block.type==='metric')return '<div class="sr-ar-row sr-derived-row">'+
     '<span class="sr-ar-label"><span>'+esc(block.label)+'</span></span>'+
     '<span class="sr-ar-value"><strong>'+esc(block.value)+'</strong></span></div>';
-  if(block.type==='record')return '<div class="sr-ar-record-heading"><strong>'+esc(block.title)+'</strong>'+
-   (block.status?'<span class="sr-ar-status">'+esc(block.status)+'</span>':'')+
-   '<button type="button" class="sr-delete-entry" data-action="sr-delete-entry" data-id="'+
-    block.sheetIndex+':'+block.row+'" aria-label="Delete entry '+esc(block.title)+'">Delete Entry</button></div>';
+  if(block.type==='record'){
+   const changesAllowed=/^Register of /i.test(section.title)&&
+    !/^Register of (?:Members|(?:Share )?Transfers|(?:Share )?Allotments)\b/i.test(section.title);
+   const target=block.status==='Former'?'current':'former';
+   return '<div class="sr-ar-record-heading"><strong>'+esc(block.title)+'</strong>'+
+    (block.status?'<span class="sr-ar-status">'+esc(block.status)+'</span>':'')+
+    (changesAllowed?'<button type="button" class="sr-toggle-status" data-action="sr-set-status" data-id="'+
+     block.sheetIndex+':'+block.row+':'+target+'">'+(target==='former'?'Mark Former':'Mark Current')+'</button>':'')+
+    '<button type="button" class="sr-delete-entry" data-action="sr-delete-entry" data-id="'+
+     block.sheetIndex+':'+block.row+'" aria-label="Delete entry '+esc(block.title)+'">Delete Entry</button></div>';
+  }
   if(block.type==='note')return '<p class="sr-ar-note">'+esc(block.text)+'</p>';
   return '<div class="sr-ar-row'+(empty(block.value)?' sr-ar-blank':'')+'">'+
    '<span class="sr-ar-label"><span>'+esc(block.label)+'</span>'+

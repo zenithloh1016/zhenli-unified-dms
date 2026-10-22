@@ -46,7 +46,7 @@ test('two active shareholders plus former history all show with correctly format
  const section=buildGroupedRegister(b,0);
  assert.equal(section.blocks.filter(x=>x.type==='group').length,2);
  const active=section.blocks.filter(x=>x.type==='record'&&x.status==='Current');
- const former=section.blocks.filter(x=>x.type==='record'&&x.status==='Former / Ceased');
+ const former=section.blocks.filter(x=>x.type==='record'&&x.status==='Former');
  assert.equal(active.length,2);assert.equal(former.length,1);
  assert(formerMemberRecords(b,[0]).some(x=>x.record.title==='FORMER THREE'));
  assert.equal(section.blocks.filter(x=>x.type==='metric'&&x.value==='50.00%').length,2);
@@ -55,7 +55,7 @@ test('two active shareholders plus former history all show with correctly format
  assert(section.blocks.some(x=>x.type==='field'&&x.value==='RM2,000,000'));
  assert(section.blocks.some(x=>x.type==='field'&&x.label==='Date Ceased to be a Member'));
  const html=renderStatutoryRegisterDocument(b,0);
- assert(html.includes('Former Members (History)'));
+ assert(html.includes('Former'));
  assert(html.includes('50.00%'));
  assert(html.includes('100,000'));
  assert(html.includes('RM1,000,000'));
@@ -94,7 +94,7 @@ test('PDF includes former history, share counts, consideration and percentage',a
  try{
   const pdf=await buildStatutoryRegistersPdf(book(),{sheetIndex:0});
   assert((await pdf.text()).startsWith('%PDF'));
-  assert(recorded.includes('Former Members (History)'));
+  assert(recorded.includes('Former'));
   assert(recorded.includes('50.00%'));
   assert(recorded.includes('100,000'));
   assert(recorded.includes('RM1,000,000'));

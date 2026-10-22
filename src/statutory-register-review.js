@@ -37,7 +37,10 @@ export function registerLabel(name){
  };
  const standardized=replacements[bare.toLowerCase()]||
   (/^register\b/i.test(bare)?'Other Records — '+bare:bare);
- return 'Register of '+(standardized||'Other Records')+imported;
+ // A newer imported edition is another version of the SAME statutory register.
+ // Expose just one canonical tab; preserve underlying source sheets privately.
+ return 'Register of '+(standardized||'Other Records')+
+  (/^(?:share )?(?:transfer|transfers|allotment|allotments)$/i.test(bare)?imported:'');
 }
 export function normalizeRegisterName(name){
  const input=tidy(name);
@@ -284,13 +287,19 @@ export function ensureChargeRegister(book){
 }
 
 /** Existing Member folio files are grouped behind one Register of Members tab. */
+export function isChronologicalRegister(name){
+ const label=registerLabel(name);
+ return label!=='Company Details'&&/^Register of /i.test(label)&&
+  !/^Register of (?:Managers|(?:Share )?Transfers|(?:Share )?Allotments)(?:\b|$)/i.test(label);
+}
 export function visibleRegisterIndices(book){
  const indices=[],seen=new Set();
  for(let i=0;i<(book?.sheets||[]).length;i++){
   const sheet=book.sheets[i];
   if(isManagerRegister(sheet.name))continue;
   const label=registerLabel(sheet.name);
-  if(label==='Register of Members'){
+  // Group successive imports of the same historical register into one tab.
+  if(isChronologicalRegister(sheet.name)){
    if(seen.has(label))continue;
    seen.add(label);
   }
@@ -301,9 +310,42 @@ export function visibleRegisterIndices(book){
 export function registerGroupIndices(book,index){
  const sheet=book?.sheets?.[index];
  if(!sheet)return [];
- if(registerLabel(sheet.name)==='Register of Members')
-  return (book.sheets||[]).map((s,i)=>registerLabel(s.name)==='Register of Members'?i:-1).filter(i=>i>=0);
+ if(isChronologicalRegister(sheet.name))
+  return (book.sheets||[]).map((s,i)=>registerLabel(s.name)===registerLabel(sheet.name)?i:-1).filter(i=>i>=0);
  return [index];
+}
+/** An explicit saved display classification never destroys original cessation data. */
+export function registerRecordStatus(book,si,record){
+ const saved=book?.recordStatuses?.[si+':'+record.row];
+ if(saved==='former'||saved==='current')return saved;
+ if(record.status==='former')return 'former';
+ // Absence of a cessation value is the provisional active presentation when
+ // a register has no separate status column. It is not independent SSM proof.
+ return 'current';
+}
+const nonEmpty=x=>String(x??'').trim()&&!/^(?:-|n\/a|nil|none)$/i.test(String(x).trim());
+/** Deduplicate imported revisions of the same appointment while retaining
+ * distinct appointments of a reappointed director or secretary. */
+export function latestRegisterRecords(book,indices){
+ const history=new Map();
+ for(const sheetIndex of indices){
+  const sheet=book?.sheets?.[sheetIndex];
+  if(!sheet)continue;
+  const desc=describeStatutorySheet(sheet);
+  for(const record of desc.records||[]){
+   const fields=record.fields||[];
+   const id=fields.find(f=>/\b(?:nric|passport|identity|identification(?: no\.?| number)?|registration (?:no|number))\b/i.test(f.label)&&nonEmpty(f.value));
+   const person=fields.find(f=>/^(?:director name|full name|name|chargee|name of chargee|registered no\.?)$/i.test(f.label)&&nonEmpty(f.value));
+   const identity=String(id?.value||person?.value||record.title||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+   const event=fields.find(f=>/^(?:date of appointment|date of becoming (?:bo|a beneficial owner)|date of registration|date of creation)$/i.test(f.label)&&nonEmpty(f.value));
+   const key=(identity||'ROW'+sheetIndex+':'+record.row)+'|'+String(event?.value||'').trim();
+   const item={...record,sourceSheetIndex:sheetIndex,
+    status:registerRecordStatus(book,sheetIndex,record)};
+   if(history.has(key))history.delete(key);
+   history.set(key,item);
+  }
+ }
+ return [...history.values()];
 }
 
 /** One label/field can be renamed without modifying imported worksheet headers. */

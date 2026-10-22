@@ -60,7 +60,7 @@ test('member folios show only identity/contact particulars and current shares he
  assert(labels.includes('Identification No.'));
  assert(labels.includes('Address'));
  assert(labels.some(x=>/consideration/i.test(x)));
- assert(register.blocks.some(x=>x.type==='group'&&x.title==='Former Members (History)'));
+ assert(register.blocks.some(x=>x.type==='group'&&x.title==='Former'));
  assert(register.blocks.some(x=>x.type==='metric'&&x.value==='100.00%'));
  const address=register.blocks.find(f=>f.type==='field'&&f.label==='Address');
  assert.equal(address.value,'NO. 1 SAMPLE ROAD\\nIPO, PERAK'.replace('\\n','\n'));

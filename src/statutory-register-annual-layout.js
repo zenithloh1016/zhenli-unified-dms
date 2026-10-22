@@ -5,7 +5,7 @@ import {formatStatutoryNumber,numericKind,parseStatutoryNumber} from './statutor
  * All edit coordinates map to privately stored statutory data; Excel's
  * sheet layout is never displayed and is never required for PDF export.
  */
-import {describeStatutorySheet,registerLabel,isManagerRegister,isMemberPersonalOrSharesLabel,registerGroupIndices,visibleRegisterIndices,getRegisterFieldOverrides} from './statutory-register-review.js';
+import {describeStatutorySheet,registerLabel,isManagerRegister,isMemberPersonalOrSharesLabel,registerGroupIndices,visibleRegisterIndices,getRegisterFieldOverrides,isChronologicalRegister,latestRegisterRecords} from './statutory-register-review.js';
 
 export const STATUTORY_DOCUMENT_COLORS={
  ink:'#243b4d',navy:'#193f64',blue:'#245f80',light:'#eaf3f8',
@@ -19,32 +19,25 @@ function mappedField(item,sheetIndex){
 function recordsToBlocks(records,sheetIndex,showBlanks,{separateHistory=true,kind=''}={}){
  const result=[];
  const renderRecord=record=>{
+  const si=Number.isInteger(record.sourceSheetIndex)?record.sourceSheetIndex:sheetIndex;
+  const rawStatus=record.status==='former'?'Former':record.status==='current'?'Current':'';
   result.push({type:'record',title:record.title||'Record '+(result.length+1),
-   row:record.row,sheetIndex,status:record.status==='former'?
-    (kind==='charges'?'Discharged / Former':'Former / Ceased'):
-    record.status==='current'?'Current / Active':'Status Not Recorded'});
+   row:record.row,sheetIndex:si,status:separateHistory?rawStatus:''});
   const visible=(record.fields||[]).filter(f=>showBlanks||hasText(f.value)||
    (kind==='charges'&&/^date of (?:discharge|satisfaction|release)$/i.test(f.label)));
-
-  if(visible.length)result.push(...visible.map(f=>mappedField(f,sheetIndex)));
+  if(visible.length)result.push(...visible.map(f=>mappedField(f,si)));
   else result.push({type:'note',text:'No particulars recorded.'});
  };
  if(!separateHistory){
   for(const record of records||[])renderRecord(record);
   return result;
  }
- const groups=[
-  {status:'current',title:'Current / Active'},
-  {status:'former',title:kind==='charges'?'Discharged / Former (History)':'Former / Ceased (History)'},
-  {status:'unknown',title:'Status Not Recorded — Verify'}
- ];
- for(const group of groups){
-  const items=(records||[]).filter(record=>record.status===group.status||
-   (group.status==='unknown'&&!['current','former'].includes(record.status)));
-  result.push({type:'group',title:group.title});
+ for(const group of ['Current','Former']){
+  const items=(records||[]).filter(record=>
+   group==='Former'?record.status==='former':record.status!=='former');
+  result.push({type:'group',title:group});
   if(items.length){for(const record of items)renderRecord(record);}
-  else result.push({type:'note',text:'No '+(group.status==='current'?'current':
-   group.status==='former'?'former':'unverified')+' entries recorded.'});
+  else result.push({type:'note',text:'No '+group.toLowerCase()+' entries recorded.'});
  }
  return result;
 }
@@ -128,7 +121,7 @@ function memberPersonBlocks(item,{showBlanks=false,former=false,total=0}={}){
  const shares=record.shareField||record.fields.find(f=>
   /^(?:current number of shares held|total shares held|shares held|shareholding)$/i.test(f.label));
  blocks.push({type:'record',sheetIndex,row:record.row,title:record.title,
-  status:former?(record.status==='former'?'Former / Ceased':'No Current Shares'):'Current'});
+  status:former?'Former':'Current'});
  blocks.push({...mappedField(name,sheetIndex),label:'Shareholder Name'});
  const personal=record.fields.filter(f=>isPersonalField(f)&&f!==shares);
  const addr=personal.find(f=>/^address$/i.test(f.label));
@@ -169,12 +162,12 @@ function memberDisplayBlocks(book,indices,options={}){
  const current=currentMemberRecords(book,indices);
  const former=formerMemberRecords(book,indices);
  const total=current.reduce((sum,item)=>sum+(parseStatutoryNumber(item.record.shareField?.value)||0),0);
- const blocks=[{type:'group',title:'Current Members'}];
+ const blocks=[{type:'group',title:'Current'}];
  if(current.length){
   for(const item of current)blocks.push(...memberPersonBlocks(item,{...options,total}));
   blocks.push({type:'note',text:'Shareholding percentages are calculated against the total positive current holdings recorded in this register, not independently verified issued share capital.'});
  }else blocks.push({type:'note',text:'No current shareholders with verified positive shares are recorded. Review recent SSM returns and share transfers.'});
- blocks.push({type:'group',title:'Former Members (History)'});
+ blocks.push({type:'group',title:'Former'});
  if(former.length){
   for(const item of former)blocks.push(...memberPersonBlocks(item,{...options,former:true}));
  }else blocks.push({type:'note',text:'No former shareholder records are available in the imported register.'});
@@ -185,6 +178,8 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
   throw Error('Select a valid statutory register.');
  const sheet=book.sheets[sheetIndex];
  if(isManagerRegister(sheet.name))throw Error('Register of Managers is not shown in Statutory Registers.');
+ if(isChronologicalRegister(sheet.name)&&registerLabel(sheet.name)!=='Register of Members')
+  return buildGroupedRegister(book,sheetIndex,{showBlanks});
  const details=describeStatutorySheet(sheet);
  const result={sheetIndex,title:registerLabel(sheet.name),sourceName:sheet.name,blocks:[]};
  const fields=items=>(items||[]).filter(f=>showBlanks||hasText(f.value))
@@ -265,11 +260,35 @@ function finishDisplay(book,result){
 
 /** The first Member tab presents all numbered source folios under one register. */
 export function buildGroupedRegister(book,sheetIndex,options={}){
- const members=registerGroupIndices(book,sheetIndex);
- if(!members.length)throw Error('Register not available.');
- if(registerLabel(book.sheets[sheetIndex].name)==='Register of Members'){
-  return finishDisplay(book,{sheetIndex:members[0],title:'Register of Members',
-   sourceName:book.sheets[members[0]].name,blocks:memberDisplayBlocks(book,members,options)});
+ const indices=registerGroupIndices(book,sheetIndex);
+ if(!indices.length)throw Error('Register not available.');
+ const title=registerLabel(book.sheets[indices[0]].name);
+ if(title==='Register of Members')
+  return finishDisplay(book,{sheetIndex:indices[0],title,
+   sourceName:book.sheets[indices[0]].name,blocks:memberDisplayBlocks(book,indices,options)});
+ if(isChronologicalRegister(book.sheets[sheetIndex].name)){
+  const kind=/^register of charges$/i.test(title)?'charges':'';
+  const rows=latestRegisterRecords(book,indices);
+  if(rows.length)return finishDisplay(book,{
+   sheetIndex:indices[0],title,sourceName:book.sheets[indices[0]].name,
+   blocks:recordsToBlocks(rows,indices[0],options.showBlanks||false,{kind})});
+  const hasMeaningful=indices.some(i=>{
+   const d=describeStatutorySheet(book.sheets[i]);
+   return d.kind==='unstructured'&&(book.sheets[i].rows||[]).some(row=>
+    (row||[]).some(v=>String(v??'').trim()&&
+     !/^(?:n\/a|nil|none|-|not applicable)$/i.test(String(v).trim())));
+  });
+  if(kind==='charges'&&!hasMeaningful)return finishDisplay(book,{
+   sheetIndex:indices[0],title,blocks:[{type:'note',text:'N/A — No charge record'}]});
+  if(hasMeaningful){
+   const blocks=[{type:'group',title:'Current'}];
+   for(const i of indices)blocks.push(...genericEntries(book.sheets[i].rows||[],i,options));
+   blocks.push({type:'group',title:'Former'});
+   blocks.push({type:'note',text:'No former entries recorded.'});
+   return finishDisplay(book,{sheetIndex:indices[0],title,blocks});
+  }
+  return finishDisplay(book,{sheetIndex:indices[0],title,
+   blocks:recordsToBlocks([],indices[0],false)});
  }
  return buildIndependentRegister(book,sheetIndex,options);
 }
