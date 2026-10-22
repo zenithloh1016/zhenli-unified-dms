@@ -932,6 +932,13 @@ document.addEventListener('keydown',event=>{
 });
 ROOT.addEventListener('input',e=>{
  if(e.target.matches?.('.rb-cell')){registerBookUI.updateCell(e.target);return;}
+ if(e.target.id==='sr-review-search'){
+  const pos=e.target.selectionStart??e.target.value.length;
+  registerBookUI.searchReview(e.target.value);
+  const input=ROOT.querySelector('#sr-review-search');
+  input?.focus();input?.setSelectionRange(pos,pos);
+  return;
+ }
  if(e.target.id==='rb-search'){
    const pos=e.target.selectionStart??e.target.value.length;
    registerBookUI.search(e.target.value);
