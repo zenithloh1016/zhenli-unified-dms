@@ -415,3 +415,39 @@ body.zh-ar-fullscreen-open{overflow:hidden}
  .rb-metrics span{font-size:11px}
  .rb-pager{justify-content:center}
 }
+
+
+/* Editable Statutory Registers workspace */
+.rb-workspace .rb-editor{border-top:1px solid #d9e6f0;padding-top:18px}
+.rb-editor-top{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:12px}
+.rb-editor-top h2{color:#163c61;font-size:21px;margin:0 0 6px}
+.rb-editor-top .muted{margin:0}
+.rb-editor-actions,.rb-sheet-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:12px 0}
+.rb-dirty{margin-left:auto;color:#3c6780;font-size:12px;font-weight:700}
+.rb-sheet-tabs{display:flex;gap:7px;overflow:auto;padding:10px 0 12px;scrollbar-width:thin}
+.rb-sheet-tab{flex-shrink:0;max-width:290px;border:1px solid #cddce9;background:#f4f8fc;color:#305b7d;border-radius:8px;padding:10px 12px;white-space:nowrap;font:inherit;font-size:12px;cursor:pointer}
+.rb-sheet-tab.active{background:#193f64;color:#fff;border-color:#193f64}
+.rb-sheet-tools .muted{font-size:12px}
+.rb-edit-help{margin:12px 0;font-size:12px;line-height:1.5}
+.rb-grid-scroll{max-height:min(70vh,780px);width:100%;overflow:auto;border:1px solid #d7e4ef;border-radius:10px;background:#fff}
+.rb-grid{border-collapse:separate;border-spacing:0;min-width:max-content;font-size:12px}
+.rb-grid th{position:sticky;top:0;z-index:2;text-align:center;background:#eaf2f8;color:#294c6c;padding:10px 12px;border:1px solid #e3edf3}
+.rb-grid tbody th{left:0;position:sticky;z-index:1;background:#f2f7fc;font-weight:700}
+.rb-grid td{padding:3px;border:1px solid #e6eef4;background:#fff;min-width:180px;vertical-align:top}
+.rb-grid .rb-cell{display:block;width:100%;min-height:59px;min-width:175px;max-width:280px;padding:8px 9px;border:1px solid transparent;border-radius:5px;background:transparent;color:#233e52;font:12px/1.5 Arial,sans-serif;resize:vertical;white-space:pre-wrap;overflow-wrap:anywhere}
+.rb-grid .rb-cell:focus{background:#f4faff;outline:2px solid #6295be;outline-offset:-2px}
+.rb-import-preview{margin:16px 0;padding:16px;border:1px solid #d5e3ed;background:#fff;border-radius:12px}
+.rb-import-preview h3{margin:0 0 9px;color:#1c4567}
+.rb-import-preview .muted{font-size:12px}
+.rb-preview-rows{max-height:380px;overflow:auto;margin:14px 0;border-top:1px solid #e1eaf1}
+.rb-preview-row{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #e5edf3;font-size:12px;overflow-wrap:anywhere}
+.rb-preview-row strong{flex:1 1 220px;color:#31516b}
+.rb-preview-row span{flex:1 1 220px;color:#526f85}
+@media(max-width:650px){
+ .rb-editor-top{align-items:flex-start;gap:9px}
+ .rb-editor-top h2{font-size:17px}
+ .rb-editor-actions .btn,.rb-sheet-tools .btn{flex:1}
+ .rb-dirty{width:100%;margin-left:0}
+ .rb-grid td{min-width:150px}
+ .rb-grid .rb-cell{min-width:145px}
+}
