@@ -1,17 +1,21 @@
-import {buildIndependentRegister} from './statutory-register-annual-layout.js';
+import {buildGroupedRegister} from './statutory-register-annual-layout.js';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const empty=v=>!String(v??'').trim();
 export function renderStatutoryRegisterDocument(book,sheetIndex,{showBlanks=false}={}){
- const section=buildIndependentRegister(book,sheetIndex,{showBlanks});
+ const section=buildGroupedRegister(book,sheetIndex,{showBlanks});
  const parts=section.blocks.map(block=>{
   if(block.type==='record')return '<div class="sr-ar-record-heading"><strong>'+esc(block.title)+'</strong>'+
    (block.status?'<span class="sr-ar-status">'+esc(block.status)+'</span>':'')+'</div>';
   if(block.type==='note')return '<p class="sr-ar-note">'+esc(block.text)+'</p>';
-  return '<label class="sr-ar-row'+(empty(block.value)?' sr-ar-blank':'')+'">'+
-   '<span class="sr-ar-label">'+esc(block.label)+'</span>'+
+  return '<div class="sr-ar-row'+(empty(block.value)?' sr-ar-blank':'')+'">'+
+   '<span class="sr-ar-label"><span>'+esc(block.label)+'</span>'+
+    '<button type="button" class="sr-edit-field" data-action="sr-edit-field" data-id="'+
+     block.sheetIndex+':'+block.row+':'+block.col+'" title="Edit field label">Edit Field</button></span>'+
    '<span class="sr-ar-value"><textarea class="rb-cell sr-ar-input" data-s="'+block.sheetIndex+
-    '" data-r="'+block.row+'" data-c="'+block.col+'" maxlength="15000" rows="'+(String(block.value).length>160?'3':'2')+
-    '" aria-label="'+esc(section.title+' · '+block.label)+'">'+esc(block.value)+'</textarea></span></label>';
+    '" data-r="'+block.row+'" data-c="'+block.col+'"'+
+    (block.composite?' data-merge-address="true"':'')+
+    ' maxlength="15000" rows="'+(String(block.value).length>100||block.composite?'4':'2')+
+    '" aria-label="'+esc(section.title+' · '+block.label)+'">'+esc(block.value)+'</textarea></span></div>';
  }).join('');
  return '<article class="sr-ar-paper sr-register-paper" aria-label="'+esc(section.title)+' statutory register">'+
   '<header class="sr-ar-document-header"><div class="sr-ar-topline"></div>'+
