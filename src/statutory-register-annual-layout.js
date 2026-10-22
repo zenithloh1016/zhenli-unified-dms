@@ -151,10 +151,38 @@ function memberPersonBlocks(item,{showBlanks=false,former=false,total=0}={}){
     value:formatStatutoryNumber('Percentage',(amount/total*100).toFixed(8))});
   }
  }
- if(record.considerationField){
-  const amount=record.considerationField;
-  blocks.push({...mappedField(amount,sheetIndex),
-   label:'Latest Recorded Share Consideration ('+(amount.nature||'Transaction')+')'});
+ // Acquisition consideration is not the same as transfer consideration.
+ // Totals are derived (read-only), never linked to a single editable Excel
+ // cell: a member can have many share movements with different amounts.
+ const ledger=record.ledgerTotals;
+ if(ledger){
+  if(ledger.acquisitionValueCount>0){
+   blocks.push({type:'metric',
+    label:former?'Total Share Consideration (Historical Acquisitions)':
+     'Total Share Consideration (Acquisitions)',
+    value:formatStatutoryNumber('Share Consideration',
+     ledger.acquisitionConsideration)});
+   if(ledger.acquisitionValueCount<ledger.acquisitionCount)
+    blocks.push({type:'note',text:'Some acquisitions have no consideration recorded; the displayed acquisition amount is a partial total.'});
+  }
+  if(former){
+   if(ledger.transferCount>0){
+    blocks.push({type:'metric',label:'Total Number of Shares Transferred',
+     value:formatStatutoryNumber('Number of Shares Transferred',
+      ledger.transferredShares)});
+    if(ledger.transferValueCount>0){
+     blocks.push({type:'metric',label:'Total Share Consideration (Transfers)',
+      value:formatStatutoryNumber('Share Consideration',
+       ledger.transferConsideration)});
+     if(ledger.transferValueCount<ledger.transferCount)
+      blocks.push({type:'note',text:'Some share transfers have no recorded consideration; the displayed transfer amount is a partial total.'});
+    }else{
+     blocks.push({type:'note',text:'Transfer consideration is not recorded in the source ledger. Verify the relevant share transfer instruments.'});
+    }
+   }else{
+    blocks.push({type:'note',text:'No share transfer transaction was recorded for this former member in the imported ledger. Verify the transfer history.'});
+   }
+  }
  }
  return blocks;
 }
