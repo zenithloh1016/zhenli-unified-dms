@@ -12,8 +12,7 @@ import {BO_FOLDER_NAME,BO_FOLDER_SORT_ORDER,missingBeneficialOwnerFolders} from 
 import {CONSTITUTION_FOLDER_NAME,CONSTITUTION_FOLDER_SORT_ORDER,missingConstitutionFolders} from './constitution-folders.js';
 import {WORKING_RESOLUTION_FOLDER_NAME,WORKING_RESOLUTION_FOLDER_SORT_ORDER,missingWorkingResolutionFolders} from './working-resolution-folders.js';
 import {CHARGES_FOLDER_NAME,CHARGES_FOLDER_SORT_ORDER,missingChargesFolders} from './charges-folders.js';
-import {REGISTER_BOOK_FOLDER_NAME,REGISTER_BOOK_FOLDER_SORT_ORDER,STANDARD_FOLDER_COUNT,missingRegisterBookFolders} from './register-book-folders.js';
-import {previewRegisterZip} from './register-book-zip.js';
+import {STANDARD_FOLDER_COUNT,isExistingRegisterBookFolder} from './register-book-folders.js';
 import {createRegisterBookTab} from './register-book-tab.js';
 import './style.css';
 import {installHubBridge} from './integrated-modules.js';
@@ -66,7 +65,7 @@ const masterListingUI=createMasterListingTab({
 });
 masterListingUI.afterRender(()=>render());
 const registerBookUI=createRegisterBookTab({db,getUser:()=>state.user,getCompanies:()=>state.companies});
-registerBookUI.afterRender(()=>{if(state.tab==='register-book')render();});
+registerBookUI.afterRender(()=>{if(state.tab==='statutory-registers')render();});
 let deadlineLastCheck=0;
 async function reloadStatutoryDeadlines(force=false){
   if(!state.user||state.tab!=='statutory-deadlines')return;
@@ -298,41 +297,6 @@ async function ensureChargesFolders({force=false}={}){
   return {created,existing,failed};
 }
 
-const registerBookVerifiedCompanyIds=new Set();
-let registerBookVerifiedUser=null;
-async function ensureRegisterBookFolders({force=false}={}){
- const user=state.user;if(!user?.id)return {created:0,existing:0,failed:0};
- if(registerBookVerifiedUser!==user.id){registerBookVerifiedUser=user.id;registerBookVerifiedCompanyIds.clear();}
- if(force)registerBookVerifiedCompanyIds.clear();
- const pending=state.companies.filter(x=>!registerBookVerifiedCompanyIds.has(x.id));
- let created=0,existing=0,failed=0;
- for(let i=0;i<pending.length;i+=80){
-  const group=pending.slice(i,i+80);
-  const {data,error}=await db.from('folders').select('company_id,name,parent_id')
-   .in('company_id',group.map(c=>c.id)).is('parent_id',null).ilike('name',REGISTER_BOOK_FOLDER_NAME).limit(1000);
-  if(error)throw Error('Register Book folder check failed: '+error.message);
-  const missing=missingRegisterBookFolders(group,data||[]);
-  const missingIds=new Set(missing.map(c=>c.id));
-  for(const c of group)if(!missingIds.has(c.id)){registerBookVerifiedCompanyIds.add(c.id);existing++;}
-  for(let j=0;j<missing.length;j+=8){
-   const results=await Promise.all(missing.slice(j,j+8).map(async c=>{
-    const {error:e}=await db.from('folders').insert({
-     user_id:user.id,company_id:c.id,parent_id:null,
-     name:REGISTER_BOOK_FOLDER_NAME,sort_order:REGISTER_BOOK_FOLDER_SORT_ORDER
-    });
-    if(!e)return {id:c.id,created:true};
-    if(e.code==='23505')return {id:c.id,created:false};
-    return {id:c.id,error:e.message};
-   }));
-   for(const x of results){
-    if(x.error){failed++;console.warn('Register Book folder:',x.error);}
-    else{registerBookVerifiedCompanyIds.add(x.id);x.created?created++:existing++;}
-   }
-  }
- }
- return {created,existing,failed};
-}
-
 async function refresh() {
   await reloadCompanies();
   try{
@@ -351,10 +315,6 @@ async function refresh() {
     const charges=await ensureChargesFolders();
     if(charges.failed)state.notice='Charges folders could not be created for '+charges.failed+' companies. Tap Ensure Charges folders to retry.';
   }catch(error){console.warn(error);state.notice='Charges folders need attention: '+error.message;}
-  try{
-    const register=await ensureRegisterBookFolders();
-    if(register.failed)state.notice='Register Book folders could not be created for '+register.failed+' companies. Retry under Documents.';
-  }catch(error){console.warn(error);state.notice='Register Book folder setup needs attention: '+error.message;}
   await reloadContent();
   const {count,error} = await db.from('documents').select('id',{count:'exact',head:true});
   if(!error) state.totalDocs = count || 0;
@@ -370,104 +330,10 @@ function folderTrail() {
 }
 
 
-function renderRegisterZipModal(){
- const p=state.registerZipPreview;
- const files=p?.rows||[];
- const yes=files.filter(x=>x.company),no=files.filter(x=>!x.company);
- const line=x=>'<div class="rb-file-line"><span>'+esc(x.path)+'</span><span>'+
-  (x.company?'✓ '+esc(x.company.name):'⚠ '+esc(x.reason))+'</span></div>';
- return '<div class="modal-backdrop"><section class="modal rb-modal" role="dialog" aria-modal="true" aria-label="Import Register Books ZIP">'+
-  '<div class="modal-heading"><h3>Import Register Books ZIP</h3>'+action('✕','close-modal')+'</div>'+
-  '<p class="muted">Upload one ZIP containing PDF, Word or Excel Register Books for multiple companies. Files are matched to existing DMS company names or registration numbers. Only unambiguous matches will be imported into each company’s Register Book folder.</p>'+
-  '<p class="muted">This creates missing folders automatically. Existing documents are never overwritten. Unmatched files stay in your ZIP, not your DMS.</p>'+
-  '<div class="modal-actions">'+action('Choose ZIP archive','choose-register-zip','','secondary')+'</div>'+
-  (state.registerZipFilename?'<p><strong>Selected:</strong> '+esc(state.registerZipFilename)+'</p>':'')+
-  (state.registerZipStatus?'<div class="info-strip" role="status">'+esc(state.registerZipStatus)+'</div>':'')+
-  (p?'<div class="rb-summary"><strong>'+p.matched+' matched</strong><span>'+p.unmatched+' unmatched / ambiguous</span><span>'+p.ignored+' unsupported files skipped</span></div>'+
-   '<p class="muted">Review this list before uploading. '+yes.length+' matched files will be stored; '+no.length+' will remain untouched in the original ZIP.</p>'+
-   '<div class="rb-rows">'+yes.slice(0,80).map(line).join('')+
-   (yes.length>80?'<p>… and '+(yes.length-80)+' other matched files</p>':'')+
-   no.slice(0,80).map(line).join('')+
-   (no.length>80?'<p>… and '+(no.length-80)+' other unmatched files</p>':'')+'</div>'+
-   '<div class="modal-actions">'+action('Cancel','close-modal','','secondary')+
-   (yes.length?action('Import '+yes.length+' matched Register Books','run-register-zip','','primary'):'')+'</div>'
-   :'<div class="modal-actions">'+action('Cancel','close-modal','','secondary')+'</div>')+
-  '</section></div>';
-}
-function resetRegisterZip(){
- state.registerZipPreview=null;state.registerZipStatus='';state.registerZipFilename='';
-}
-async function runRegisterZipImport(){
- const p=state.registerZipPreview;
- if(!p?.matched)throw Error('No Register Books matched a company in the ZIP.');
- const rows=p.rows.filter(x=>x.company);
- const accepted=window.confirm('Save '+rows.length+' matched files to the corresponding companies’ Register Book folders? Existing documents will not be replaced. '+p.unmatched+' unmatched files will be skipped.');
- if(!accepted)return;
- const report=await ensureRegisterBookFolders({force:true});
- if(report.failed)throw Error('Could not create Register Book folders for '+report.failed+' companies. No ZIP files have been uploaded.');
- const ids=[...new Set(rows.map(r=>r.company.id))],folders=new Map();
- for(let i=0;i<ids.length;i+=80){
-  const {data,error}=await db.from('folders').select('id,company_id,name').in('company_id',ids.slice(i,i+80))
-   .is('parent_id',null).ilike('name',REGISTER_BOOK_FOLDER_NAME).limit(1000);
-  check(error);
-  for(const f of data||[])folders.set(f.company_id,f.id);
- }
- if(ids.some(id=>!folders.has(id)))throw Error('One or more company Register Book folders are missing. Please retry folder creation first.');
- const fingerprints=new Map();
- let saved=0,skipped=0;const failures=[];
- for(let i=0;i<rows.length;i++){
-  const row=rows[i],companyId=row.company.id,folderId=folders.get(companyId);
-  try{
-   let known=fingerprints.get(folderId);
-   if(!known){
-    const {data,error}=await db.from('documents').select('name,size_bytes').eq('folder_id',folderId).limit(1000);
-    check(error);
-    known=new Set((data||[]).map(x=>x.name+'|'+x.size_bytes));fingerprints.set(folderId,known);
-   }
-   const key=row.filename+'|'+row.bytes.length;
-   if(known.has(key)){skipped++;continue;}
-   const path=state.user.id+'/'+companyId+'/'+crypto.randomUUID();
-   const kind=/\.pdf$/i.test(row.filename)?'application/pdf':
-    /\.docx$/i.test(row.filename)?'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-    /\.xlsx$/i.test(row.filename)?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
-    'application/vnd.ms-excel';
-   const {error:uploadError}=await db.storage.from(BUCKET).upload(path,
-    new Blob([row.bytes],{type:kind}),{upsert:false,contentType:kind});
-   check(uploadError);
-   const {error:insertError}=await db.from('documents').insert({
-    user_id:state.user.id,company_id:companyId,folder_id:folderId,name:row.filename,
-    storage_path:path,size_bytes:row.bytes.length,mime_type:kind
-   });
-   if(insertError){
-    await db.storage.from(BUCKET).remove([path]).catch(()=>{});
-    throw insertError;
-   }
-   saved++;known.add(key);
-  }catch(error){failures.push(row.path+': '+(error?.message||String(error)));}
-  if((i+1)%4===0||i===rows.length-1){
-   state.registerZipStatus='Processed '+(i+1)+'/'+rows.length+': '+saved+
-    ' uploaded, '+skipped+' duplicates, '+failures.length+' failed.';
-   render();
-  }
- }
- await refresh();
- if(failures.length){
-  state.registerZipStatus='Uploaded '+saved+'; '+skipped+' duplicates skipped; '+failures.length+
-   ' failed. First errors: '+failures.slice(0,4).join(' | ')+'. You may retry; successful copies will not be replaced.';
-  state.notice='Register Book ZIP import partially completed. Review the error list and retry.';
-  render();return;
- }
- const note='Register Books: '+saved+' uploaded across '+ids.length+
-  ' matched companies; '+skipped+' duplicates skipped; '+p.unmatched+' unmatched files not uploaded.';
- resetRegisterZip();state.modal=null;
- toast(note);
-}
-
 function modalHTML() {
   const m = state.modal;
   if (!m) return '';
   if (m.kind === 'import') return renderImportModal();
-   if (m.kind === 'registerZip') return renderRegisterZipModal();
   const title = m.kind === 'company' ? 'Add company' : m.kind === 'folder' ? 'Create subfolder' : m.kind === 'rename' ? 'Rename' : 'Confirm permanent deletion';
   let body = '';
   if (['company','folder','rename'].includes(m.kind)) {
@@ -488,13 +354,13 @@ function renderAuth() {
 }
 
 function renderCompanyCard(company) {
-  const count = state.companyId === company.id ? state.folders.filter(f=>f.parent_id===null).length : STANDARD_FOLDER_COUNT;
+  const count = state.companyId === company.id ? state.folders.filter(f=>f.parent_id===null&&!isExistingRegisterBookFolder(f)).length : STANDARD_FOLDER_COUNT;
   return `<div class="company-card"><button class="company-open" data-action="open-company" data-id="${company.id}"><div class="company-symbol">${icon('folder')}</div><div class="company-name">${esc(company.name)}</div><div class="company-number">${esc(company.registration_no || 'No registration number entered')}</div><div class="company-foot">Standard folders ready <span>View folders →</span></div></button><div class="card-options">${action('Annual Return','prepare-annual-return',company.id,'secondary')}${action('Rename','rename-company', company.id)}${action('Delete','delete-company',company.id)}</div></div>`;
 }
 function renderCompanies() {
   const q=state.search.trim().toLowerCase();
   const matches=state.companies.filter(x=>`${x.name} ${x.registration_no||''}`.toLowerCase().includes(q));
-  return `<div class="content-header"><div><p class="eyebrow">CLIENT PORTFOLIO</p><h1>Companies</h1><p class="muted">${state.companies.length} companies • ${STANDARD_FOLDER_COUNT} standard folders per company</p></div><div class="header-buttons">${action('↑ Import Master Listing','import', '', 'secondary')}${action('↑ Import Register Books ZIP','register-zip','','secondary')}${action('Ensure BO folders','ensure-bo-folders','','secondary')}${action('Ensure Constitution folders','ensure-constitution-folders','','secondary')}${action('Ensure Working Resolution folders','ensure-working-resolution-folders','','secondary')}${action('Ensure Charges folders','ensure-charges-folders','','secondary')}${action('Ensure Register Book folders','ensure-register-folders','','secondary')}${action('+ Add company','new-company', '', 'primary')}</div></div>
+  return `<div class="content-header"><div><p class="eyebrow">CLIENT PORTFOLIO</p><h1>Companies</h1><p class="muted">${state.companies.length} companies • ${STANDARD_FOLDER_COUNT} standard folders per company</p></div><div class="header-buttons">${action('↑ Import Master Listing','import', '', 'secondary')}${action('Ensure BO folders','ensure-bo-folders','','secondary')}${action('Ensure Constitution folders','ensure-constitution-folders','','secondary')}${action('Ensure Working Resolution folders','ensure-working-resolution-folders','','secondary')}${action('Ensure Charges folders','ensure-charges-folders','','secondary')}${action('+ Add company','new-company', '', 'primary')}</div></div>
   <div class="searchbar"><span>⌕</span><input aria-label="Search companies" id="search" placeholder="Search by company name or registration number" value="${esc(state.search)}"/></div>
   ${matches.length ? `<div class="company-grid">${matches.map(renderCompanyCard).join('')}</div>` : `<div class="empty-state"><div>📁</div><h3>${q ? 'No matching companies' : 'Your company portfolio is empty'}</h3><p>${q ? 'Try another search term.' : 'Add a company or import your Excel Master Listing to create the standard folders automatically.'}</p></div>`}`;
 }
@@ -511,11 +377,11 @@ function documentCard(doc) {
 function renderFolder() {
   const company=currentCompany(); if (!company) return renderCompanies();
   const trail=folderTrail(), current=currentFolder();
-  const childFolders=state.folders.filter(f => f.parent_id === (current?.id || null));
+  const childFolders=state.folders.filter(f => f.parent_id === (current?.id || null) && !isExistingRegisterBookFolder(f));
   const docs=current ? state.documents.filter(d=>d.folder_id===current.id) : [];
   const crumbs = `<button type="button" data-action="home">Companies</button><span>›</span><button type="button" data-action="open-company" data-id="${company.id}">${esc(company.name)}</button>${trail.map(f=>`<span>›</span><button type="button" data-action="open-folder" data-id="${f.id}">${esc(f.name)}</button>`).join('')}`;
   return `<div class="breadcrumbs">${crumbs}</div><div class="content-header"><div><p class="eyebrow">${current?'FOLDER CONTENTS':'COMPANY DOCUMENTS'}</p><h1>${esc(current?.name||company.name)}</h1><p class="muted">${current ? `${childFolders.length} subfolders • ${docs.length} documents` : esc(company.registration_no||'Select a statutory category below')}</p></div><div class="header-buttons">${action('Generate Annual Return','prepare-annual-return',company.id,'secondary')}${action('+ New '+(current?'subfolder':'folder'),'new-folder','','secondary')}${current?action('↑ Upload documents','upload-trigger','','primary'):''}</div></div>
-  ${current?`<div class="upload-zone" id="dropzone" role="button" tabindex="0"><strong>↑ Upload documents here</strong><span>Choose PDFs, Word, Excel, images, JSON or ZIP. Max 50 MB per file; upload progress and errors shown.</span></div>`:`<div class="info-strip">Your ${STANDARD_FOLDER_COUNT} standard categories, including Beneficial Owners, Constitution, Working Resolution, Charges and Register Book, are shown below. Open a category to upload files or create nested folders.</div>`}
+  ${current?`<div class="upload-zone" id="dropzone" role="button" tabindex="0"><strong>↑ Upload documents here</strong><span>Choose PDFs, Word, Excel, images, JSON or ZIP. Max 50 MB per file; upload progress and errors shown.</span></div>`:`<div class="info-strip">Your ${STANDARD_FOLDER_COUNT} standard categories, including Beneficial Owners, Constitution, Working Resolution and Charges, are shown below. Open a category to upload files or create nested folders.</div>`}
   <section class="items"><div class="section-caption">FOLDERS <span>${childFolders.length}</span></div>${childFolders.map(folderCard).join('') || '<div class="empty-line">No subfolders yet.</div>'}
   ${current ? `<div class="section-caption">DOCUMENTS <span>${docs.length}</span></div>${docs.map(documentCard).join('') || '<div class="empty-line">No documents in this folder. Upload PDFs, Word documents, Excel files or images.</div>'}` : ''}</section>`;
 }
@@ -732,30 +598,22 @@ function render() {
   document.body.classList.toggle('zh-ar-fullscreen-open',!!(state.user && state.tab==='annual-return' && state.arFullscreen));
   if (!db) { ROOT.innerHTML=`<div class="auth-page"><div class="auth-card"><div class="auth-logo">Z</div><h1>Set up private workspace</h1><p>Connect a Supabase project to enable authenticated documents and synced company folders.</p><p class="muted">Follow START_HERE.md in the downloadable source package. The Task Hub and Signing code is already bundled.</p></div></div>`;return; }
   if (!state.user) {ROOT.innerHTML=renderAuth();return;}
-  const tabs = ['overview','documents','master-listing','register-book','statutory-deadlines','tasks','annual-return','signing'];
-  const label = {overview:'Overview',documents:'Documents','master-listing':'Master Listing','register-book':'Register Book','statutory-deadlines':'Statutory Deadlines',tasks:'Tasks','annual-return':'Annual Return',signing:'Signing'};
+  const tabs = ['overview','documents','master-listing','statutory-registers','statutory-deadlines','tasks','annual-return','signing'];
+  const label = {overview:'Overview',documents:'Documents','master-listing':'Master Listing','statutory-registers':'Statutory Registers','statutory-deadlines':'Statutory Deadlines',tasks:'Tasks','annual-return':'Annual Return',signing:'Signing'};
   ROOT.innerHTML = `<div class="app-shell"><header class="topbar"><div class="top-title">Document Management System</div><div class="top-right"><span class="online-dot"></span> Private workspace</div></header>
     <nav class="tabbar" aria-label="Main workspace navigation">${tabs.map(t=>`<button type="button" class="tab ${state.tab===t?'current':''}" data-action="tab-${t}" ${state.tab===t?'aria-current="page"':''}>${label[t]}</button>`).join('')}</nav>
-    <main class="main-content">${state.tab==='documents'?(state.companyId?renderFolder():renderCompanies()):state.tab==='overview'?renderOverview():state.tab==='master-listing'?masterListingUI.render():state.tab==='register-book'?registerBookUI.render():state.tab==='statutory-deadlines'?renderStatutoryDeadlines(masterListingUI.state.userId===state.user?.id?masterListingUI.model:null,{query:state.deadlineQuery,kind:state.deadlineKind,period:state.deadlinePeriod,loading:masterListingUI.state.loading,error:masterListingUI.state.error}):state.tab==='tasks'?renderTasks():state.tab==='annual-return'?renderAnnualReturn():renderSigning()}</main>
+    <main class="main-content">${state.tab==='documents'?(state.companyId?renderFolder():renderCompanies()):state.tab==='overview'?renderOverview():state.tab==='master-listing'?masterListingUI.render():state.tab==='statutory-registers'?registerBookUI.render():state.tab==='statutory-deadlines'?renderStatutoryDeadlines(masterListingUI.state.userId===state.user?.id?masterListingUI.model:null,{query:state.deadlineQuery,kind:state.deadlineKind,period:state.deadlinePeriod,loading:masterListingUI.state.loading,error:masterListingUI.state.error}):state.tab==='tasks'?renderTasks():state.tab==='annual-return'?renderAnnualReturn():renderSigning()}</main>
     <footer class="app-footer"><span>ZHENLI DMS V1.2 · Add Company · Web + Android</span><span>${esc(state.user.email || '')} · ${action('Sign out','sign-out')}</span></footer></div>
   ${state.notice ? `<div class="toast" role="status">${esc(state.notice)} ${action('✕','dismiss')}</div>` : ''}
   ${state.busy ? '<div class="busy-bar">Working… please keep this page open</div>' : ''}
   ${state.modal?.kind==='taskLink'?renderLinkModal():modalHTML()}
-  <input id="document-upload" type="file" multiple hidden /><input id="register-zip-input" type="file" accept=".zip,application/zip" hidden />`;
+  <input id="document-upload" type="file" multiple hidden />`;
   if(state.tab==='signing') signingUI.mount();
    if(state.tab==='annual-return'){
      ROOT.querySelector('#zh-annual-return-frame')?.addEventListener('load',()=>{sendAnnualReturnCompanyList();sendAnnualReturnCompany();},{once:true});
    }
 }
 
-async function openRegisterBookCompany(id){
-  if(!state.companies.some(c=>c.id===id))throw Error('This company is no longer in your DMS.');
-  state.tab='documents';state.companyId=id;state.folderId=null;state.search='';
-  await reloadContent();
-  const folder=state.folders.find(f=>f.parent_id===null && String(f.name||'').trim().toLowerCase()==='register book');
-  if(folder)state.folderId=folder.id;
-  else state.notice='Register Book folder not found yet. Use Ensure Register Book folders in Documents to create it.';
-}
 function openCompany(id){state.companyId=id;state.folderId=null;state.search='';busyDo(reloadContent);}
 function openFolder(id){state.folderId=id;render();}
 function getDocument(id){return state.documents.find(d=>d.id===id);}
@@ -863,7 +721,7 @@ async function runImport() {
     if(i===0 && failed.length===chunk.length){break;}
   }
   await refresh();
-  if(state.tab==='register-book')await registerBookUI.load(true);
+
   if(failures.length){
     state.importError=`Imported or verified ${done-failures.length} of ${done} attempted companies. ${failures.length} failed. ${failures.slice(0,3).join(' | ')}. Your selected data is preserved; fix the error and retry safely.`;
     state.importProgress=`Import paused. ${state.companies.length} companies are currently in your account.`;
@@ -879,9 +737,12 @@ ROOT.addEventListener('click', event=>{
   if(masterListingUI.onClick(a,id))return;
   if(signingUI.onClick(a,id,event))return;
   if(a==='rb-refresh'){busyDo(()=>registerBookUI.load(true));return;}
-  if(a==='rb-open'){busyDo(()=>openRegisterBookCompany(id));return;}
-  if(a==='rb-prev'){registerBookUI.changePage(-1);return;}
-  if(a==='rb-next'){registerBookUI.changePage(1);return;}
+  if(a==='sr-pick'){ROOT.querySelector('#sr-zip-input')?.click();return;}
+  if(a==='sr-open'){busyDo(()=>registerBookUI.openCompany(id));return;}
+  if(a==='sr-save'){busyDo(()=>registerBookUI.save());return;}
+  if(a==='sr-import'){busyDo(()=>registerBookUI.importZip());return;}
+  if(a==='sr-pdf'){busyDo(()=>registerBookUI.pdf());return;}
+  if(registerBookUI.command(a,id))return;
   if(a==='deadline-refresh'){reloadStatutoryDeadlines(true).catch(showError);return;}
   if(a==='deadline-open-master'){
     state.tab='master-listing';render();
@@ -899,14 +760,15 @@ ROOT.addEventListener('click', event=>{
   }
   if(a==='modal-bg' && event.target===button){state.modal=null;render();return;}
   if(a==='dismiss'){state.notice='';render();return;}
-  if(a==='close-modal' && !state.busy){state.modal=null;state.importData=null;state.importWorkbook=null;resetRegisterZip();render();return;}
+  if(a==='close-modal' && !state.busy){state.modal=null;state.importData=null;render();return;}
   if(state.busy) return;
   if(a.startsWith('tab-')){
     const nextTab=a.slice(4);
     // Drafts are saved as edits are made; no JSON export is needed before switching modules.
+    if(state.tab==='statutory-registers' && nextTab!=='statutory-registers' && !registerBookUI.canLeave())return;
     state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;if(state.tab!=='annual-return')state.arFullscreen=false;render();
     if(nextTab==='master-listing')masterListingUI.load().catch(showError);
-    if(nextTab==='register-book')registerBookUI.load().catch(showError);
+    if(nextTab==='statutory-registers')registerBookUI.load().catch(showError);
     if(nextTab==='statutory-deadlines')reloadStatutoryDeadlines(true).catch(showError);
     return;
   }
@@ -947,21 +809,6 @@ ROOT.addEventListener('click', event=>{
   if(a==='home'){state.tab='documents';state.companyId=null;state.folderId=null;state.search='';render();return;}
   if(a==='open-company'){openCompany(id);return;}
   if(a==='open-folder'){openFolder(id);return;}
-  if(a==='ensure-register-folders'){
-    busyDo(async()=>{
-      await reloadCompanies();
-      const report=await ensureRegisterBookFolders({force:true});
-      await reloadContent();
-      if(report.failed)throw Error('Could not create Register Book folders for '+report.failed+' companies.');
-      toast('Register Book folders ready: '+report.created+' created, '+report.existing+
-       ' already present. Existing company documents unchanged.');
-    });return;
-  }
-  if(a==='register-zip'){
-    resetRegisterZip();state.modal={kind:'registerZip'};render();return;
-  }
-  if(a==='choose-register-zip'){document.getElementById('register-zip-input')?.click();return;}
-  if(a==='run-register-zip'){busyDo(runRegisterZipImport);return;}
   if(a==='ensure-charges-folders'){
     busyDo(async()=>{
       await reloadCompanies();
@@ -1084,6 +931,7 @@ document.addEventListener('keydown',event=>{
    else if(event.key==='Escape'&&state.signingFullscreen){event.preventDefault();setSigningFullscreen(false);}
 });
 ROOT.addEventListener('input',e=>{
+ if(e.target.matches?.('.rb-cell')){registerBookUI.updateCell(e.target);return;}
  if(e.target.id==='rb-search'){
    const pos=e.target.selectionStart??e.target.value.length;
    registerBookUI.search(e.target.value);
@@ -1105,21 +953,8 @@ ROOT.addEventListener('change',e=>{
   if(masterListingUI.onChange(e.target,prepareExcelImport))return;
   if(signingUI.changed(e.target))return;
   if(e.target.id==='document-upload'){const files=[...e.target.files];e.target.value='';if(files.length)busyDo(()=>uploadFiles(files));}
-  if(e.target.id==='register-zip-input'){
-    const file=e.target.files?.[0];e.target.value='';if(!file)return;
-    if(state.modal?.kind!=='registerZip')return;
-    busyDo(async()=>{
-      resetRegisterZip();state.registerZipFilename=file.name;
-      const preview=await previewRegisterZip(file,state.companies,{onProgress:message=>{
-       state.registerZipStatus=message;render();
-      }});
-      state.registerZipPreview=preview;
-      state.registerZipStatus='Ready to import: '+preview.matched+
-       ' matched file(s), '+preview.unmatched+' unmatched/ambiguous. Review before confirming.';
-      render();
-    });
-    return;
-  }
+  if(e.target.id==='sr-zip-input'){const file=e.target.files?.[0];e.target.value='';if(file)busyDo(()=>registerBookUI.readZip(file));return;}
+  if(e.target.matches?.('.rb-cell')){registerBookUI.updateCell(e.target);return;}
   if(e.target.id==='excel-input'){
     const file=e.target.files[0];e.target.value='';if(!file)return;
     busyDo(async()=>{

@@ -1,7 +1,7 @@
-/** Standard root folder for each company. Never rename or move old files. */
+/** Legacy Register Book folders are archived (hidden), not deleted. Keep old files safe. */
 export const REGISTER_BOOK_FOLDER_NAME='Register Book';
 export const REGISTER_BOOK_FOLDER_SORT_ORDER=16;
-export const STANDARD_FOLDER_COUNT=16;
+export const STANDARD_FOLDER_COUNT=15;
 export function isExistingRegisterBookFolder(folder){
  return !!folder && folder.parent_id===null &&
   String(folder.name||'').trim().toLowerCase().replace(/\s+/g,' ')==='register book';
