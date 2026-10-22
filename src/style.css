@@ -620,3 +620,28 @@ body.zh-ar-fullscreen-open{overflow:hidden}
  .sr-field-actions{width:100%;justify-content:flex-end}
  .sr-ar-record-heading{gap:7px}
 }
+
+
+/* Private saved Statutory Registers version history and restore */
+.rb-history{max-width:1060px}
+.rb-history-current{display:flex;gap:10px;align-items:center;justify-content:space-between;
+ flex-wrap:wrap;border:1px solid #cbdcea;background:#f4f8fc;border-radius:10px;
+ padding:13px 15px;margin:14px 0 18px;font-size:13px}
+.rb-history-current strong{color:#23486a}
+.rb-history-current span{color:#58748b}
+.rb-history-list{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.rb-history-row{display:flex;justify-content:space-between;align-items:center;gap:14px;
+ flex-wrap:wrap;padding:12px 14px;border:1px solid #dbe6ee;border-radius:9px;background:white}
+.rb-history-row>div{display:flex;flex-direction:column;gap:5px;min-width:180px;flex:1}
+.rb-history-row strong{font-size:13px;color:#214767}
+.rb-history-row .muted{font-size:11px;word-break:break-all}
+.rb-history-preview{margin:18px 0;padding:18px;border:2px solid #9cbcd1;border-radius:12px;background:#fafcfe}
+.rb-history-preview h3{margin:0 0 12px;color:#1b4669;font-size:17px}
+.rb-history-preview p{font-size:13px;line-height:1.5;margin:8px 0}
+.rb-history-tags{display:flex;flex-wrap:wrap;gap:6px;margin:13px 0 18px}
+.rb-history-tags span{font-size:11px;padding:6px 9px;background:#edf3f9;border:1px solid #d4e3ee;
+ border-radius:6px;color:#285376}
+@media(max-width:600px){
+ .rb-history-row .btn{flex:1 1 100%;width:100%}
+ .rb-history-preview{padding:13px}
+}
