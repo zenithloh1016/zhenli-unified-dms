@@ -63,3 +63,22 @@ test('Excel re-import retains register fields when absent from replacement workb
  assert.equal(merged.rows[0].values[3],'Directors: X\nMembers: Y');
  assert.equal(merged.rows[0].values[4],'Z (30%)');
 });
+
+test('full consolidation columns stay separate on import and ZIP updates',()=>{
+ const legacy=buildMasterListing([
+  ['Company Name','Directors & Members','Beneficial Owners'],
+  ['ALPHA SDN BHD','Directors: OLD\\nMembers: OLD','OLD']
+ ],{nameColumn:0,registrationColumn:-1});
+ const imported=buildMasterListing([
+  ['Company Name','Current Directors','Director Count','Current Members','Member Count','Current Beneficial Owners','BO Count'],
+  ['ALPHA SDN BHD','NEW DIRECTOR','1','NEW MEMBER','1','NEW OWNER','1']
+ ],{nameColumn:0,registrationColumn:-1});
+ const preserved=preserveRegisterParticulars(legacy,imported);
+ assert.equal(preserved.columns.length,7,'old combined columns must not be restored');
+ const changed=mergeRegisterParticulars(preserved,[{company:'ALPHA SDN BHD',
+  directors:['ACTIVE DIRECTOR'],members:['ACTIVE MEMBER'],beneficialOwners:['BO NAME']}]);
+ assert.equal(changed.model.columns.length,7);
+ assert.deepEqual(changed.model.rows[0].values.slice(1),[
+  'ACTIVE DIRECTOR','1','ACTIVE MEMBER','1','BO NAME','1'
+ ]);
+});
