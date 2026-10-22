@@ -167,7 +167,7 @@ export function mergeRegisterBooks(oldBook, importedBook){
  const result=structuredClone(oldBook);
  let added=0,skipped=0;
  for(const sheet of importedBook.sheets){
-  if(result.sheets.some(s=>s.name===sheet.name&&JSON.stringify(s.rows)===JSON.stringify(sheet.rows))){
+  if(result.sheets.some(s=>(s.name===sheet.name||s.name.startsWith(sheet.name+' (Imported '))&&JSON.stringify(s.rows)===JSON.stringify(sheet.rows))){
    skipped++;continue;
   }
   let name=sheet.name;
@@ -176,6 +176,7 @@ export function mergeRegisterBooks(oldBook, importedBook){
    name=stem;let number=2;
    while(result.sheets.some(s=>s.name===name)){name=(stem+' '+number++).slice(0,120);}
   }
+  if(result.sheets.length>=100)throw Error('Import would exceed 100 worksheets; split the workbook. Existing saved data remains unchanged.');
   result.sheets.push({name,rows:sheet.rows.map(r=>r.slice())});
   added++;
  }
