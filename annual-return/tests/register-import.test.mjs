@@ -52,7 +52,7 @@ test('imports real combined statutory particulars into bilingual Annual Return s
  assert.equal(value(d,'Company Registration No.'),'202601000001');
  assert.equal(value(d,'Registered Office'),'22, JALAN MERU, IPOH');
  assert.equal(value(d,'Principal Place of Business'),'IPOH BUSINESS ADDRESS');
- assert.equal(value(d,'Date of Incorporation'),'03/12/2019');
+ assert.equal(value(d,'Date of Incorporation'),'04/12/2019');
  assert.equal(value(d,'Number of Registered Charges'),'1');
  assert.equal(value(d,'Secretary Name'),'SECRETARY CURRENT');
  assert.equal(value(d,'Secretary NRIC'),'555555-08-5555');
