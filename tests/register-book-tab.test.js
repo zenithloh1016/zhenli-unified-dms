@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRegisterBookTab} from '../src/register-book-tab.js';
-import {makeRegisterBook,sanitizeSheet,validateRegisterBook} from '../src/statutory-register-data.js';
+import {makeRegisterBook,mergeRegisterBooks,sanitizeSheet,validateRegisterBook} from '../src/statutory-register-data.js';
 
 const companies=[
  {id:'c1',name:'ALPHA SDN BHD',registration_no:'202601234567'},
@@ -16,7 +16,10 @@ function fixture(custom=companies){
    {data:blobs.get(path),error:null}:{data:null,error:{message:'Object not found',statusCode:404}},
   upload:async(path,blob)=>{blobs.set(path,blob);written.push(path);return {error:null};}
  };
- const db={storage:{from:()=>storage}};
+ const db={storage:{from:()=>storage},from(table){
+  const q={select(){return q;},eq(){return q;},is(){return q;},ilike(){return q;},order(){return q;},
+   limit:async()=>({data:[],error:null})};return q;
+ }};
  const tab=createRegisterBookTab({db,getUser:()=>({id:'u1'}),getCompanies:()=>custom});
  return {tab,blobs,written};
 }
@@ -78,4 +81,26 @@ test('directory pagination and worksheet data validations',()=>{
  assert(validateRegisterBook(book));
  assert.deepEqual(sanitizeSheet(' Directors ',[['Name','Date'],['Alice','01/01/2026'],['','']]).rows,
   [['Name','Date'],['Alice','01/01/2026']]);
+});
+
+test('repeat ZIP conversion preserves manually edited worksheets and skips identical originals',()=>{
+ const old=makeRegisterBook(companies[0]);
+ old.sheets[0].rows.push(['Changed by secretary','ID 123']);
+ const incoming=makeRegisterBook(companies[0],{path:'Register Book_ALP.xlsx',
+   sheets:[{name:'Register of Directors',rows:[['Name','ID'],['New Director','ID 888']]}]});
+ const merged=mergeRegisterBooks(old,incoming);
+ assert.equal(merged.added,1);
+ assert.equal(merged.skipped,0);
+ assert.equal(merged.book.sheets.length,old.sheets.length+1);
+ assert.deepEqual(merged.book.sheets[0].rows.at(-1),['Changed by secretary','ID 123']);
+ assert.match(merged.book.sheets.at(-1).name,/Imported/);
+ const repeated=mergeRegisterBooks(merged.book,incoming);
+ // Identical changed content must be recognized by original or imported section title.
+ assert.equal(repeated.book.sheets.length,merged.book.sheets.length);
+});
+test('preserved original files panel remains available in Statutory Registers',async()=>{
+ const {tab}=fixture();
+ await tab.openCompany('c1');
+ assert.equal(Array.isArray(tab.state.originalDocs),true);
+ assert.match(tab.render(),/Statutory Registers|Register of Directors/);
 });
