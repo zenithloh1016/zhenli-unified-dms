@@ -47,7 +47,8 @@ test('opens editable statutory register templates for a company',async()=>{
  assert.match(html,/EASY REVIEW/);
  tab.command('sr-mode-worksheet');
  const original=tab.render();
- assert.match(original,/Register of Directors/);
+ assert.match(original,/Original Worksheet/);
+ assert.match(original,/Identification No/);
  assert.match(original,/class="rb-cell"/);
 });
 test('saves edited register privately and reloads it',async()=>{
