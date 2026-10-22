@@ -12,10 +12,18 @@ const MAX_WORKBOOK=20*1024*1024,MAX_PDF=35*1024*1024;
 const MAX_ROWS=12000,MAX_COLS=250,MAX_CELLS=250000;
 export const normValue=v=>String(v??'').replace(/\u0000/g,'').slice(0,15000);
 export function sanitizeSheet(name,rows){
- const cleaned=(rows||[]).map(row=>Array.isArray(row)?row.slice(0,MAX_COLS).map(normValue):[]);
- if(cleaned.length>MAX_ROWS)throw Error('Worksheet has more than 12,000 rows.');
+ // Excel commonly omits blank cells entirely. readSheet() therefore returns
+ // sparse arrays such as ['Name', <hole>, 'Appointment date']. Array.map()
+ // skips holes, and for..of later sees undefined: every company then fails
+ // validateRegisterBook() with "Invalid worksheet cell." while saving.
+ // Array.from() visits each index and converts those *missing* cells to '',
+ // preserving Excel's original column positions and genuine values.
+ if((rows?.length||0)>MAX_ROWS)throw Error('Worksheet has more than 12,000 rows.');
+ const cleaned=Array.from(rows||[],row=>Array.isArray(row)
+  ?Array.from({length:Math.min(row.length,MAX_COLS)},(_,i)=>normValue(row[i]))
+  :[]);
  let end=cleaned.length;
- while(end && !cleaned[end-1]?.some(x=>x.trim()))end--;
+ while(end && !cleaned[end-1].some(x=>x.trim()))end--;
  const subset=cleaned.slice(0,end);
  if(subset.reduce((n,row)=>n+row.length,0)>MAX_CELLS)throw Error('Worksheet exceeds 250,000 cells.');
  return {name:String(name||'Register').slice(0,120),rows:subset};
@@ -29,7 +37,8 @@ export function validateRegisterBook(value){
    throw Error('Invalid worksheet name or rows.');
   for(const r of s.rows){
    if(!Array.isArray(r)||r.length>MAX_COLS)throw Error('Invalid worksheet columns.');
-   for(const c of r){if(typeof c!=='string'||c.length>15000)throw Error('Invalid worksheet cell.');}
+   for(let i=0;i<r.length;i++)if(typeof r[i]!=='string'||r[i].length>15000)
+    throw Error('Invalid worksheet cell in '+s.name+' at row '+(s.rows.indexOf(r)+1)+', column '+(i+1)+'.');
    cells+=r.length;
   }
  }
@@ -136,6 +145,9 @@ export async function previewStatutoryZip(file,companies,{onProgress=()=>{}}={})
    const company=found.company;
    // Never merge unrelated files into the same company's register silently.
    if(seen.has(company.id))throw Error('More than one source for this company; combine its worksheets in one Excel workbook.');
+   // Validate the final stored shape while previewing, not after the user
+   // confirms all 79 company imports. Failures stay attached to the exact file.
+   makeRegisterBook(company,{path,sheets:parsed.sheets});
    entry.company=company;entry.sheets=parsed.sheets;entry.status=ext==='pdf'?'PDF text converted to editable lines (verify layout)':ext==='docx'?'Word text converted to editable rows (verify layout)':'Excel worksheets converted to editable cells';
    seen.add(company.id);
   }catch(e){entry.error=e?.message||String(e);}
