@@ -4,6 +4,8 @@
  */
 import {previewStatutoryZip,makeRegisterBook,mergeRegisterBooks,validateRegisterBook,normValue} from './statutory-register-data.js';
 import {buildStatutoryRegistersPdf} from './statutory-register-pdf.js';
+import {renderReadableRegister} from './statutory-register-review-ui.js';
+import {registerLabel} from './statutory-register-review.js';
 import {browserDownload,saveOrShareFile} from './file-transfer.js';
 import {Capacitor} from '@capacitor/core';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
@@ -20,6 +22,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   userId:'',loaded:false,loading:false,saving:false,error:'',message:'',
   search:'',page:0,available:new Set(),selectedId:null,book:null,
   originalUpdatedAt:null,dirty:false,sheetIndex:0,rowPage:0,
+  reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:false,
   importPreview:null,importFilename:'',importing:false,originalDocs:[]
  };
  let renderHook=null;
@@ -30,7 +33,8 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  function reset(){
   Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,error:'',message:'',
    search:'',page:0,available:new Set(),selectedId:null,book:null,originalUpdatedAt:null,
-   dirty:false,sheetIndex:0,rowPage:0,importPreview:null,importFilename:'',importing:false,originalDocs:[]});
+   dirty:false,sheetIndex:0,rowPage:0,reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:false,
+    importPreview:null,importFilename:'',importing:false,originalDocs:[]});
  }
  function canLeave(){
   return !state.dirty||window.confirm('Your Statutory Registers have unsaved edits. Leave without saving?');
@@ -109,6 +113,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    if(getUser?.()?.id!==uid)return;
    state.selectedId=id;state.book=book;state.originalUpdatedAt=book.updatedAt;state.originalDocs=originalDocs;
    state.dirty=false;state.sheetIndex=0;state.rowPage=0;
+   state.reviewMode='review';state.reviewQuery='';state.reviewStatus='all';state.reviewPage=0;state.reviewExpanded='';state.showBlankFields=false;
    state.message=book.sourceFile==='Manual entry'?'No imported register yet. Editable statutory register templates are ready.':'Statutory registers loaded. Edit any cell, then select Save Changes.';
   }catch(error){state.error=String(error?.message||error);}
   finally{state.loading=false;notify();}
@@ -140,7 +145,10 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     act('Add Worksheet','sr-add-sheet')+
     '<span class="rb-dirty" id="sr-dirty">'+(state.dirty?'Unsaved changes':'All changes saved')+'</span></div>'+
    '<div class="rb-sheet-tabs">'+book.sheets.map((s,i)=>'<button type="button" class="rb-sheet-tab '+(i===state.sheetIndex?'active':'')+
-     '" data-action="sr-sheet" data-id="'+i+'">'+esc(s.name)+'</button>').join('')+'</div>'+
+     '" data-action="sr-sheet" data-id="'+i+'">'+esc(registerLabel(s.name))+'</button>').join('')+'</div>'+
+   '<div class="sr-mode-switch"><span class="sr-mode-intro">Display:</span>'+act('Easy Review','sr-mode-review','',state.reviewMode==='review'?'primary':'secondary')+
+    act('Original Worksheet','sr-mode-worksheet','',state.reviewMode==='worksheet'?'primary':'secondary')+'</div>'+
+   (state.reviewMode==='review'?renderReadableRegister(book,state.sheetIndex,state):
    (sheet?'<div class="rb-sheet-tools">'+
       act('+ Add Row','sr-add-row')+act('+ Add Column','sr-add-col')+act('Rename Worksheet','sr-rename-sheet')+
       '<span class="muted">'+sheet.rows.length+' rows · '+width+' columns</span></div>'+
@@ -157,7 +165,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
      '<div class="rb-pager"><span>Rows page '+(state.rowPage+1)+' / '+view.pages+'</span>'+
        '<button type="button" class="btn secondary" data-action="sr-prev" '+(state.rowPage===0?'disabled':'')+'>Previous</button>'+
        '<button type="button" class="btn secondary" data-action="sr-next" '+(state.rowPage>=view.pages-1?'disabled':'')+'>Next</button></div>'
-    :'<div class="rb-help">No worksheets yet. Select Add Worksheet to begin.</div>')+
+    :'<div class="rb-help">No worksheets yet. Select Add Worksheet to begin.</div>'))+
    (state.originalDocs.length?'<details class="rb-originals"><summary>Preserved original Register Book files ('+state.originalDocs.length+')</summary><p class="muted">Original files remain private although their former Documents folder is hidden.</p>'+state.originalDocs.map(d=>'<div class="rb-original-row"><span>'+esc(d.name)+'</span>'+act('Download Original','sr-original',d.id)+'</div>').join('')+'</details>':'')+
    '<p class="rb-footnote muted">These are editable working statutory register records. Verify all imported particulars against the original and relevant SSM filings before relying on them. Saved data is private to your DMS account.</p></div>';
  }
@@ -220,7 +228,21 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   if(action==='rb-prev'||action==='rb-next'){state.page=Math.max(0,state.page+(action==='rb-next'?1:-1));notify();return true;}
   if(action==='sr-prev'||action==='sr-next'){state.rowPage=Math.max(0,state.rowPage+(action==='sr-next'?1:-1));notify();return true;}
   if(action==='sr-sheet'){
-   const n=Number(id);if(Number.isInteger(n)&&n>=0&&n<(state.book?.sheets?.length||0)){state.sheetIndex=n;state.rowPage=0;notify();}return true;
+   const n=Number(id);if(Number.isInteger(n)&&n>=0&&n<(state.book?.sheets?.length||0)){
+    state.sheetIndex=n;state.rowPage=0;state.reviewPage=0;state.reviewQuery='';state.reviewStatus='all';state.reviewExpanded='';notify();
+   }return true;
+  }
+  if(action==='sr-mode-review'||action==='sr-mode-worksheet'){
+   state.reviewMode=action==='sr-mode-review'?'review':'worksheet';notify();return true;
+  }
+  if(action==='sr-review-filter'){
+   if(['all','current','former'].includes(id)){state.reviewStatus=id;state.reviewPage=0;state.reviewExpanded='';notify();}
+   return true;
+  }
+  if(action==='sr-toggle-record'){state.reviewExpanded=state.reviewExpanded===id?'':id;notify();return true;}
+  if(action==='sr-show-blank-fields'){state.showBlankFields=!state.showBlankFields;notify();return true;}
+  if(action==='sr-review-prev'||action==='sr-review-next'){
+   state.reviewPage=Math.max(0,state.reviewPage+(action==='sr-review-next'?1:-1));state.reviewExpanded='';notify();return true;
   }
   if(action==='sr-close'){closeCompany();return true;}
   if(action==='sr-cancel-import'){state.importPreview=null;state.importFilename='';notify();return true;}
@@ -229,14 +251,14 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    const sheet=state.book.sheets[state.sheetIndex],width=Math.max(1,...sheet.rows.map(r=>r.length));
    if(sheet.rows.length>=12000)throw Error('Maximum 12,000 rows in a worksheet.');
    sheet.rows.push(Array(Math.min(width,250)).fill(''));state.rowPage=Math.floor((sheet.rows.length-1)/ROW_PAGE);
-   state.dirty=true;notify();return true;
+   state.reviewMode='worksheet';state.dirty=true;notify();return true;
   }
   if(action==='sr-add-col'){
    const sheet=state.book.sheets[state.sheetIndex],width=Math.max(0,...sheet.rows.map(r=>r.length));
    if(width>=250)throw Error('Maximum 250 columns in a worksheet.');
    if(!sheet.rows.length)sheet.rows.push([]);
    for(const row of sheet.rows)row[width]='';
-   state.dirty=true;notify();return true;
+   state.reviewMode='worksheet';state.dirty=true;notify();return true;
   }
   if(action==='sr-delete-row'){
    if(!window.confirm('Remove this statutory register row? Save Changes to apply the removal.'))return true;
@@ -344,6 +366,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   }finally{state.saving=false;notify();}
  }
  function search(value){state.search=String(value||'');state.page=0;notify();}
+ function searchReview(value){state.reviewQuery=String(value||'');state.reviewPage=0;state.reviewExpanded='';notify();}
  return {state,afterRender,reset,canLeave,load,render,search,openCompany,closeCompany,updateCell,command,
-  readZip,importZip,save,pdf,downloadOriginal};
+  readZip,importZip,save,pdf,downloadOriginal,searchReview};
 }
