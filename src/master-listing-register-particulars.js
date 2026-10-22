@@ -152,7 +152,7 @@ export function compactRegisterColumns(model,{addMissing=true}={}){
    row.values[targets[2]]=legacyOwners[i];
  });
  validateMasterListing(copy);
- return {model:copy,removed: model.columns.length-copy.columns.length};
+ return {model:copy,removed: model.columns.length-keep.length};
 }
 function displayNames(values){
  return (values||[]).map(v=>String(v||'').replace(/\s+\(\d+(?:\.\d+)?%\)$/,'').trim())
