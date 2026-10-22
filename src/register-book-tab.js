@@ -5,7 +5,7 @@
 import {previewStatutoryZip,makeRegisterBook,mergeRegisterBooks,validateRegisterBook,normValue} from './statutory-register-data.js';
 import {buildStatutoryRegistersPdf} from './statutory-register-pdf.js';
 import {renderStatutoryRegisterDocument} from './statutory-register-annual-ui.js';
-import {registerLabel,registerKind,describeStatutorySheet} from './statutory-register-review.js';
+import {registerLabel,registerKind,describeStatutorySheet,isManagerRegister,normalizeRegisterName} from './statutory-register-review.js';
 import {browserDownload,saveOrShareFile} from './file-transfer.js';
 import {Capacitor} from '@capacitor/core';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
@@ -112,7 +112,9 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    const book=saved||makeRegisterBook(company);
    if(getUser?.()?.id!==uid)return;
    state.selectedId=id;state.book=book;state.originalUpdatedAt=book.updatedAt;state.originalDocs=originalDocs;
-   state.dirty=false;state.sheetIndex=0;state.showBlankFields=false;
+   state.dirty=false;
+   state.sheetIndex=Math.max(0,book.sheets.findIndex(s=>!isManagerRegister(s.name)));
+   state.showBlankFields=false;
    state.message=book.sourceFile==='Manual entry'?'No imported register yet. Editable statutory register templates are ready.':'Statutory registers loaded. Edit any cell, then select Save Changes.';
   }catch(error){state.error=String(error?.message||error);}
   finally{state.loading=false;notify();}
@@ -132,13 +134,13 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    '<div><h2>'+esc(company.name)+'</h2><p class="muted">'+esc(company.registration_no||'No registration number')+
    ' · '+esc(book.sourceFile||'Manually created records')+'</p></div></div>'+
    '<div class="rb-editor-actions">'+act('Save Changes','sr-save','','primary')+
-    (sheet?act('Export This Register PDF','sr-pdf','','secondary'):'')+
+    (sheet&&!isManagerRegister(sheet.name)?act('Export This Register PDF','sr-pdf','','secondary'):'')+
     act('Add Register','sr-add-sheet')+
     '<span class="rb-dirty" id="sr-dirty">'+(state.dirty?'Unsaved changes':'All changes saved')+'</span></div>'+
    '<div class="sr-registers-label">Choose a statutory register to view, edit or export:</div>'+
-   '<div class="rb-sheet-tabs">'+book.sheets.map((s,i)=>'<button type="button" class="rb-sheet-tab '+
+   '<div class="rb-sheet-tabs">'+book.sheets.map((s,i)=>isManagerRegister(s.name)?'':'<button type="button" class="rb-sheet-tab '+
      (i===state.sheetIndex?'active':'')+'" data-action="sr-sheet" data-id="'+i+'">'+esc(registerLabel(s.name))+'</button>').join('')+'</div>'+
-   (sheet?'<div class="sr-register-controls">'+
+   (sheet&&!isManagerRegister(sheet.name)?'<div class="sr-register-controls">'+
      '<strong>'+esc(name)+'</strong>'+
      act(registerKind(sheet.name)==='member'?'Add Member Folio':'Add Entry','sr-add-row')+
      act('Add Field','sr-add-col')+act('Rename Register','sr-rename-sheet')+
@@ -209,7 +211,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   if(action==='rb-prev'||action==='rb-next'){state.page=Math.max(0,state.page+(action==='rb-next'?1:-1));notify();return true;}
   if(action==='sr-sheet'){
    const n=Number(id);
-   if(Number.isInteger(n)&&n>=0&&n<(state.book?.sheets?.length||0)){
+   if(Number.isInteger(n)&&n>=0&&n<(state.book?.sheets?.length||0)&&!isManagerRegister(state.book.sheets[n].name)){
     state.sheetIndex=n;state.showBlankFields=false;notify();
    }return true;
   }
@@ -285,15 +287,15 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    if(state.book.sheets.length>=100)throw Error('Maximum 100 statutory registers.');
    const name=window.prompt('New statutory register name (for example, Register of Charges):');
    if(!name?.trim())return true;
-   const clean=normValue(name.trim());
-   if(state.book.sheets.some(s=>s.name.toLowerCase()===clean.toLowerCase()))throw Error('A register with this name already exists.');
+   const clean=normalizeRegisterName(name.trim());
+   if(state.book.sheets.some(s=>registerLabel(s.name).toLowerCase()===clean.toLowerCase()))throw Error('A register with this name already exists.');
    state.book.sheets.push({name:clean,rows:[['Name','Identification / Reference','Date','Particulars']]});
    state.sheetIndex=state.book.sheets.length-1;state.showBlankFields=true;state.dirty=true;notify();return true;
   }
   if(action==='sr-rename-sheet'){
    const sheet=state.book.sheets[state.sheetIndex];
    const name=window.prompt('Register name:',sheet.name);
-   if(name?.trim()){sheet.name=normValue(name.trim());state.dirty=true;notify();}
+   if(name?.trim()){sheet.name=normalizeRegisterName(name.trim());state.dirty=true;notify();}
    return true;
   }
   return false;
@@ -373,7 +375,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   try{
    const blob=await buildStatutoryRegistersPdf(state.book,{sheetIndex:state.sheetIndex,showBlanks:state.showBlankFields,onProgress:message=>{state.message=message;notify();}});
    const safe=String(state.book.companyName||'Company').replace(/[\\/:*?"<>|]/g,'_').slice(0,110);
-   const type=registerLabel(state.book.sheets[state.sheetIndex]?.name||'Statutory Register').replace(/[\\/:*?"<>|]/g,'_');
+   const type=registerLabel(state.book.sheets[state.sheetIndex]?.name||'Register of Other Records').replace(/[\\/:*?"<>|]/g,'_');
    const filename='Statutory Register_'+type+'_'+safe+'.pdf';
    if(Capacitor.isNativePlatform()){
     await savePdfToAndroidFiles(blob,filename);
