@@ -216,6 +216,7 @@ function finishDisplay(book,result){
  const removedFields=book?.removedFields||{};
  let skipEntry=false;
  result.blocks=result.blocks.filter(block=>{
+  if(block.type==='group'){skipEntry=false;return true;}
   if(block.type==='record'){
    skipEntry=removedEntries[block.sheetIndex+':'+block.row]===true;
    return !skipEntry;
