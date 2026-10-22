@@ -34,6 +34,14 @@ test('matches full names, normalized legal suffixes and registration numbers',()
  assert.equal(matchRegisterBook('Unknown client/Register Book.pdf',companies).company,null);
  assert.equal(matchRegisterBook('Register Book.pdf',companies,{headerName:'SILVERSPOONS SDN. BHD.',headerNumber:'202401051906'}).company?.id,'b');
  assert.equal(matchRegisterBook('FENG YUAN AGRICULTURE (M) SDN BHD.pdf',companies,{headerNumber:'202401051906'}).company,null);
+ assert.equal(matchRegisterBook('Register Book_ACE CORPORATION (M) SDN BHD.xlsx',companies,{
+   headerName:'ACE CORPORATION (M) SDN. BHD. (F.K.A. ACE CORPORATION SDN. BHD.)',
+   headerNumber:'202401000001'
+ }).company?.id,'c');
+ assert.equal(matchRegisterBook('Register Book_ACE CORPORATION (M) SDN BHD.xlsx',companies,{
+   headerName:'ACE CORPORATION (M) SDN. BHD. (F.K.A. ACE CORPORATION SDN. BHD.)',
+   headerNumber:'202301999999'
+ }).company,null);
 });
 test('preview ZIP matches known companies and leaves unrelated files untouched',async()=>{
  const zip=zipSync({

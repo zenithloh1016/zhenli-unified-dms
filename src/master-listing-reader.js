@@ -143,10 +143,19 @@ export async function openMasterListingWorkbook(file){
   const strings=zip['xl/sharedStrings.xml']
     ?els(xml(zip['xl/sharedStrings.xml'],'sharedStrings.xml'),'si').map(textNodes):[];
   const sheetNames=sheets.map(s=>s.name);
-  function readSheet(name){
+  function readSheet(name,{sparse=false}={}){
     const sheet=sheets.find(s=>s.name===name);
     if(!sheet)throw Error('Worksheet not found: '+name);
-    const doc=xml(zip[sheet.path],name);
+    // Statutory Register templates contain 15m+ style-only blank cells across a
+    // typical 79-workbook archive. Discard only <c .../> placeholders and now
+    // empty rows before DOM parsing, while retaining the original row references.
+    // Master Listing's regular reader is unchanged by default.
+    const source=zip[sheet.path];
+    if(!source)throw Error('Missing Excel worksheet data: '+name);
+    const content=sparse?strFromU8(source)
+      .replace(/<c\b[^>]*\/>/g,'')
+      .replace(/<row\b[^>]*>\s*<\/row>/g,''):null;
+    const doc=xml(sparse?new TextEncoder().encode(content):source,name);
     const data=first(doc,'sheetData');
     if(!data)throw Error('No readable cells in worksheet '+name+'.');
     const rows=[],cells=els(data,'row');

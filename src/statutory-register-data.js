@@ -43,14 +43,18 @@ const toFile=(bytes,name)=>({
 async function parseExcel(bytes,filename){
  if(bytes.byteLength<50||bytes.byteLength>MAX_WORKBOOK)throw Error('Excel workbook must be under 20 MB.');
  const book=await openMasterListingWorkbook(toFile(bytes,filename));
- const sheets=book.sheetNames.map(name=>sanitizeSheet(name,book.readSheet(name)));
+ // Read only populated cells. Existing register templates format up to 1,000
+ // blank rows per worksheet, so regular DOM parsing is unnecessarily heavy.
+ const sheets=book.sheetNames.map(name=>sanitizeSheet(name,book.readSheet(name,{sparse:true})));
  // Reject an empty or unrelated spreadsheet before it can replace a register.
  if(!sheets.some(s=>/register|master|share|directors?|members?|beneficial|charge|secretar|transfer|allot/i.test(s.name)))
   throw Error('No recognisable statutory register worksheets found.');
  const master=sheets.find(s=>/^master$/i.test(s.name));
  const row=master?.rows.find(r=>/^company name\s*:/i.test(r[0]||''));
+ const regRow=master?.rows.find(r=>/^company (?:no\.?|number|registration number)\s*:/i.test(r[0]||''));
  const headerName=row?String(row[1]||'').trim():'';
- return {sheets,headerName};
+ const headerNumber=regRow?String(regRow[1]||'').trim():'';
+ return {sheets,headerName,headerNumber};
 }
 async function parsePdf(bytes){
  if(bytes.byteLength>MAX_PDF)throw Error('PDF exceeds the 35 MB text-extraction limit.');
@@ -136,7 +140,10 @@ export async function previewStatutoryZip(file,companies,{onProgress=()=>{}}={})
    seen.add(company.id);
   }catch(e){entry.error=e?.message||String(e);}
   result.push(entry);
-  if(i%3===0||i===entries.length-1)onProgress('Converted '+(i+1)+' of '+entries.length+' files…');
+  if(i%3===0||i===entries.length-1)onProgress('Converted '+(i+1)+' of '+entries.length+' files; '+result.filter(r=>r.company).length+' matched…');
+  // Yield between files so the browser can repaint progress and release
+  // transient workbook DOMs even on lower-memory Android devices.
+  await new Promise(resolve=>setTimeout(resolve,0));
  }
  return {rows:result,matched:result.filter(r=>r.company).length,
   unmatched:result.filter(r=>!r.company).length,
