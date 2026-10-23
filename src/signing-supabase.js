@@ -28,6 +28,7 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     finally{loading=false;update();}
   }
   async function load(){
+    initialized=true; // Prevent an automatic retry loop when setup is incomplete.
     await run(async()=>{
       const r=await call("list");
       requests=r.requests||[];initialized=true;view="list";
