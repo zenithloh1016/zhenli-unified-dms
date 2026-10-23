@@ -383,6 +383,10 @@ async function handleAdmin(action,req,body) {
         audit:[{event:"reset_created",at:now(),sourceRequestId:r.id}]
       }).select("*").single());
       cloned=true;
+      // Render the new draft before touching original status so a link
+      // configuration problem can never revoke the source without providing a
+      // replacement draft to the DMS.
+      const freshPresentation=await presentation(fresh,true);
       // CAS refuses reset if anyone has signed or edited concurrently.
       // Completed originals stay completed; pending links become revoked.
       const nextStatus=["pending","draft"].includes(r.status)?"revoked":r.status;
@@ -394,7 +398,7 @@ async function handleAdmin(action,req,body) {
         .eq("updated_at",r.updated_at).select("id").maybeSingle();
       if(problem)throw Error(problem.message);
       if(!originalUpdated)throw Error("The original request changed during reset. Reload and retry.");
-      return {request:await presentation(fresh,true),
+      return {request:freshPresentation,
         sourceStatus:nextStatus,originalId:r.id};
     }catch(error){
       // Cleanup only NEW draft content. Never delete old PDFs or signatures.
