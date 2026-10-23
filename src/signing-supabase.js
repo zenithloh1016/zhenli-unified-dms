@@ -23,7 +23,7 @@ const pdfAsDataUrl = file => new Promise((resolve, reject) => {
 
 export function createSupabaseSigning({db,getCompanies,update}) {
   let view='list',requests=[],detail=null,busy=false,message='',error=false;
-  let initialized=false, signerCount=2, placementRows=[];
+  let initialized=false, signerCount=2, placementRows=[],totalRequests=0;
   let mailStatus={connected:false,senderEmail:'zhenlisecretary@gmail.com'};
   function feedback(text,isError=false){message=String(text||'');error=isError;update();}
 
@@ -93,7 +93,8 @@ export function createSupabaseSigning({db,getCompanies,update}) {
 
   async function list() {
     const [data,status]=await Promise.all([api('list'),api('mail-status')]);
-    requests=data.requests||[];mailStatus=status;view='list';detail=null;preview.reset();update();
+    requests=data.requests||[];totalRequests=Number(data.total??requests.length);
+    mailStatus=status;view='list';detail=null;preview.reset();update();
   }
   async function open(id) {
     const data=await api('detail',{requestId:id});
@@ -176,7 +177,7 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     const unsigned=r.signers.filter(s=>!s.signedAt).length;
     return '<div class="zs-toolbar">'+b('← Cancel and return','cancel-order')+'</div>'+
       '<section class="zs-panel"><h2>Edit signing order</h2>'+
-      '<p class="muted">Use Up / Down to change the order of signers who have NOT signed. Signed signers are permanently locked in place. Signature boxes and existing completed signatures will not be changed.</p>'+
+      '<p class="muted">Assign a signing position to each unsigned signer. Selecting a position automatically shifts the other unsigned signers. Signed signers are permanently locked in their original positions.</p>'+
       (r.status==='pending'
         ?'<p class="muted">Pending request: changes take effect immediately, but do not trigger a new invitation. Use Resend invitation when ready to notify the next signer.</p>':'')+
       (unsigned<2?'<p class="zs-message">Only '+unsigned+
@@ -186,7 +187,10 @@ export function createSupabaseSigning({db,getCompanies,update}) {
         '<div><b class="ns-order-position">'+(i+1)+'. '+e(s.name)+'</b>'+
         '<small>'+e(s.email)+' · '+(s.signedAt?'Already signed — order locked':'Not signed')+'</small></div>'+
         '<div class="zs-edit-signer-actions">'+(s.signedAt?'<span class="zs-tag">Signed</span>':
-        b('↑ Up','order-up')+b('↓ Down','order-down'))+'</div></div>').join('')+
+        '<label>Signing position <select name="orderPosition" aria-label="Signing position for '+e(s.name)+'">'+
+        r.signers.map((candidate,pos)=>!candidate.signedAt
+          ?'<option value="'+(pos+1)+'"'+(i===pos?' selected':'')+'>'+(pos+1)+'</option>':'').join('')+
+        '</select></label> '+b('↑ Up','order-up')+b('↓ Down','order-down'))+'</div></div>').join('')+
       '</div><div class="zs-actions">'+b('Save signing order','save-order','','primary')+'</div>'+
       '<p class="fineprint">This operation retains the original signer IDs and does not invalidate existing bearer links. Only the allowed signing sequence changes.</p>'+
       '</section>';
@@ -225,9 +229,12 @@ export function createSupabaseSigning({db,getCompanies,update}) {
   }
   function listView(){
     return '<div class="zs-toolbar">'+b('+ New signing request','new','','primary')+
-      b('Refresh requests','refresh')+'</div>'+
+      b('Refresh requests','refresh')+
+      (totalRequests?b('Delete all signing requests','delete-all','','danger'):'')+'</div>'+
+      (totalRequests?'<p class="fineprint">Delete all removes all '+totalRequests+
+      ' signing requests from your active list and revokes outstanding links. Signed PDFs and audit evidence are retained securely.</p>':'')+
       mailInfo()+
-      '<section class="zs-panel"><h2>Signing requests <span class="zs-count">'+requests.length+'</span></h2>'+
+      '<section class="zs-panel"><h2>Signing requests <span class="zs-count">'+totalRequests+'</span></h2>'+
       '<div class="zs-table-wrap"><table class="zs-table"><thead><tr>'+
       '<th>Company / subject</th><th>Status</th><th>Signed</th><th>PDFs</th><th>Created</th><th></th>'+
       '</tr></thead><tbody>'+
@@ -331,10 +338,34 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       };
     });
   }
+  function syncOrderPositions(root) {
+    [...root.children].forEach((row,index)=>{
+      const signer=detail?.signers.find(x=>x.id===row.dataset.nsOrderId);
+      const label=row.querySelector('.ns-order-position');
+      if(label&&signer)label.textContent=(index+1)+'. '+signer.name;
+      const select=row.querySelector('[name="orderPosition"]');
+      if(select)select.value=String(index+1);
+    });
+  }
   function onClick(action,id,ev) {
     if(!action?.startsWith('ns-'))return false;
     action=action.slice(3);
     if(action==='refresh') {work(list);return true;}
+    if(action==='delete-all'){
+      if(totalRequests<1)return true;
+      const count=totalRequests;
+      if(!confirm('Delete ALL '+count+' signing requests from the active list? Outstanding signing links will be revoked. Completed signatures, PDFs and audit evidence will be retained securely. This cannot be undone from the DMS interface.'))return true;
+      const typed=prompt('To confirm deletion of all '+count+' signing requests, type DELETE ALL exactly:');
+      if(typed!=='DELETE ALL'){
+        feedback('Deletion cancelled. Type DELETE ALL exactly to confirm.',true);return true;
+      }
+      work(async()=>{
+        const result=await api('delete-all',{expectedCount:count,confirmation:typed});
+        await list();
+        feedback(result.deleted+' signing request(s) removed from the active list. Outstanding links revoked. Signed records and audit evidence retained.');
+      });
+      return true;
+    }
     if(action==='mail-settings'){view='mail';message='';error=false;update();return true;}
     if(action==='mail-generate'){
       const input=document.getElementById('ns-relay-secret');
@@ -385,11 +416,7 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       if(targetSigner?.signedAt)return true; // Locked signed prefix
       if(action==='order-up')root.insertBefore(item,target);
       else root.insertBefore(target,item);
-      [...root.children].forEach((el,index)=>{
-        const label=el.querySelector('.ns-order-position');
-        const s=detail?.signers.find(x=>x.id===el.dataset.nsOrderId);
-        if(label&&s)label.textContent=(index+1)+'. '+s.name;
-      });
+      syncOrderPositions(root);
       return true;
     }
     if(action==='save-order'){
@@ -538,6 +565,23 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     return true;
   }
   function changed(input) {
+    if(input?.name==='orderPosition' && view==='order'){
+      const root=document.getElementById('ns-order-signers');
+      const row=input.closest?.('[data-ns-order-id]');
+      if(!root||!row)return true;
+      const targetIndex=Number(input.value)-1;
+      const locked=detail?.signers.filter(s=>s.signedAt).length||0;
+      if(!Number.isInteger(targetIndex)||targetIndex<locked||
+          targetIndex>=root.children.length){
+        feedback('Signed signers cannot be moved. Choose an available unsigned signing position.',true);
+        return true;
+      }
+      const arranged=[...root.children].filter(x=>x!==row);
+      arranged.splice(targetIndex,0,row);
+      arranged.forEach(x=>root.appendChild(x));
+      syncOrderPositions(root);
+      return true;
+    }
     if(input?.id!=='ns-upload-pdf')return false;
     const files=[...input.files];input.value='';
     if(!files.length)return true;
