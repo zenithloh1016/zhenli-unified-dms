@@ -1,6 +1,6 @@
-// Same ZHENLI Task Hub UI as the bundled DMS and former hosted copy.
+// Same original ZHENLI Task Hub interface as the DMS, hosted independently.
 // This page is hosted on GitHub Pages and loads all private task state from
-// Supabase using the SAME authenticated account as the DMS, never EdgeOne.
+// Supabase using the SAME authenticated account as the DMS.
 import {createClient} from '@supabase/supabase-js';
 import {installHubBridge} from './integrated-modules.js';
 
@@ -31,7 +31,7 @@ function info(message){
 }
 function authPage(){
   return '<main class="zh-login"><form id="zh-cloud-login" autocomplete="on">'+
-    '<h1>ZHENLI Task Hub</h1><p>Private Supabase workspace. Use the same login as ZHENLI Unified DMS. This replaces the hosted Tencent EdgeOne Task Hub.</p>'+
+    '<h1>ZHENLI Task Hub</h1><p>Private Supabase workspace. Use the same login as ZHENLI Unified DMS. All tasks and companies use your private Supabase workspace.</p>'+
     (lastError?'<p class="zh-error" role="alert">'+escapeHtml(lastError)+'</p>':'')+
     '<label>Email<input name="email" type="email" required autocomplete="username"></label>'+
     '<label>Password<input name="password" type="password" required autocomplete="current-password"></label>'+
@@ -41,7 +41,7 @@ function authPage(){
 }
 function cloudPage(){
   return '<main class="zh-cloud"><header class="zh-toolbar"><div><h1>ZHENLI | Task Hub</h1>'+
-    '<small>Same Task Hub · Private Supabase cloud storage · No Tencent EdgeOne</small></div>'+
+    '<small>Same Task Hub · Private Supabase cloud storage</small></div>'+
     '<div class="zh-actions"><span style="font-size:12px;color:#607a90">'+escapeHtml(currentUser?.email||'')+'</span>'+
     '<a class="zh-btn" href="'+escapeHtml(dmsUrl)+'">Open DMS</a>'+
     '<button type="button" class="zh-btn" id="zh-signout">Sign out</button></div></header>'+
