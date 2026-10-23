@@ -273,7 +273,7 @@ export function mergeDocumentCompanies(model,companies){
   rows.push({id:'doc-'+crypto.randomUUID(),values});
   names.add(n);if(r)registrations.add(r);added++;
  }
- const updated=added?{...model,rows}:model;
+ const updated=added?sortMasterListingCompanies({...model,rows}).model:model;
  validateMasterListing(updated);
  return {model:updated,added,existing,invalid};
 }
@@ -319,4 +319,30 @@ export function removeDeletedDocumentCompany(model,deleted,remaining=[]){
  if(!candidates.length)return {model,removed:0,reason:'No matching Master Listing entry'};
  if(candidates.length>1)throw Error('Multiple Master Listing entries match; no row was removed.');
  return {...removeMasterListingRow(model,candidates[0].id),reason:'Removed the matching company'};
+}
+
+
+/** Sort companies by name while keeping every imported field with its company. */
+export function sortMasterListingCompanies(model){
+ validateMasterListing(model);
+ const items=model.rows.map((row,index)=>({row,index}));
+ items.sort((a,b)=>{
+  const nameA=normal(a.row.values[model.nameColumn]);
+  const nameB=normal(b.row.values[model.nameColumn]);
+  return nameA.localeCompare(nameB,'en',{sensitivity:'base',numeric:true})||a.index-b.index;
+ });
+ const ordinal=model.columns.findIndex((_,i)=>isListingOrdinalColumn(model,i));
+ let changed=false;
+ const rows=items.map(({row,index},i)=>{
+  const serial=String(i+1);
+  if(index===i&&(ordinal<0||row.values[ordinal]===serial))return row;
+  changed=true;
+  if(ordinal<0||row.values[ordinal]===serial)return row;
+  const values=row.values.slice();
+  values[ordinal]=serial;
+  return {...row,values};
+ });
+ const result=changed?{...model,rows}:model;
+ validateMasterListing(result);
+ return {model:result,changed};
 }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createMasterListingTab} from '../src/master-listing-tab.js';
-import {removeDeletedDocumentCompany} from '../src/master-listing-data.js';
+import {removeDeletedDocumentCompany,sortMasterListingCompanies} from '../src/master-listing-data.js';
 import {readFileSync} from 'node:fs';
 
 function makeWorkspace({documentsError=null}={}){
@@ -180,4 +180,55 @@ test('Deleting ordinary folders does not change Master Listing and manual remova
  assert.match(tab,/action==='ml-remove'/);
  assert.match(tab,/act\('Remove row','ml-remove'/);
  assert.match(source,/db\.from\('folders'\)\.delete\(\)\.eq\('id',m\.id\)/);
+});
+
+
+test('New Documents companies are placed alphabetically and No. is sequential',async()=>{
+ const x=makeWorkspace();
+ await x.ui.syncDocumentCompanies([
+  {name:'ZENITH SDN BHD',registration_no:'202601000003'},
+  {name:'ALPHA SDN BHD',registration_no:'202601000001'},
+  {name:'BRAVO SDN BHD',registration_no:'202601000002'}
+ ]);
+ assert.deepEqual(x.saved.rows.map(r=>r.values[1]),['ALPHA SDN BHD','BRAVO SDN BHD','ZENITH SDN BHD']);
+ assert.deepEqual(x.saved.rows.map(r=>r.values[0]),['1','2','3']);
+ assert.deepEqual(x.saved.rows.map(r=>r.values[2]),['202601000001','202601000002','202601000003']);
+ assert.equal(x.rpcs.length,0);
+});
+
+test('Alphabetical insert retains existing company dates and imported particulars',async()=>{
+ const x=makeWorkspace();
+ await x.ui.load();x.ui.onClick('ml-add');
+ await submitAndDrain(x.ui,x.form({1:'ZULU SDN BHD',2:'202611111111',3:'21/10/2026',4:'31/12/2026'},false));
+ const original=x.ui.model.rows[0];
+ const result=await x.ui.syncDocumentCompanies([{name:'ALPHA SDN BHD',registration_no:'202622222222'}]);
+ assert.equal(result.added,1);
+ assert.deepEqual(x.saved.rows.map(r=>r.values[1]),['ALPHA SDN BHD','ZULU SDN BHD']);
+ assert.deepEqual(x.saved.rows.map(r=>r.values[0]),['1','2']);
+ assert.equal(x.saved.rows[1].id,original.id);
+ assert.equal(x.saved.rows[1].values[3],'21/10/2026');
+ assert.equal(x.saved.rows[1].values[4],'31/12/2026');
+ assert.ok(x.uploads.some(u=>u.path.includes('/history/')));
+});
+
+test('Manual Master Listing Add Company also inserts alphabetically',async()=>{
+ const x=makeWorkspace();
+ await x.ui.load();x.ui.onClick('ml-add');
+ await submitAndDrain(x.ui,x.form({1:'YELLOW SDN BHD',2:'202601234567'},false));
+ x.ui.onClick('ml-add');
+ await submitAndDrain(x.ui,x.form({1:'BLUE SDN BHD',2:'202609876543'},false));
+ assert.deepEqual(x.saved.rows.map(r=>r.values[1]),['BLUE SDN BHD','YELLOW SDN BHD']);
+ assert.deepEqual(x.saved.rows.map(r=>r.values[0]),['1','2']);
+ assert.equal(x.ui.state.page,0);
+});
+
+test('Sorting existing ordered rows is stable and does not mutate particulars',()=>{
+ const model={version:1,nameColumn:1,registrationColumn:2,
+  columns:[{label:'No.'},{label:'Company Name'},{label:'Registration No.'},{label:'Financial Year End'}],
+  rows:[{id:'a',values:['1','Alpha Sdn Bhd','202601234567','31/12/2026']},
+        {id:'b',values:['2','Bravo Sdn Bhd','202607654321','30/09/2026']}]};
+ const result=sortMasterListingCompanies(model);
+ assert.equal(result.changed,false);
+ assert.equal(result.model,model);
+ assert.deepEqual(model.rows.map(r=>r.values[3]),['31/12/2026','30/09/2026']);
 });

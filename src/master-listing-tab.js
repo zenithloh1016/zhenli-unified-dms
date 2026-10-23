@@ -4,7 +4,7 @@
  * Supabase Storage under the user's own prefix. No new database table or
  * service-role credentials are required. Documents folders change only when the user requests synchronization on add or through Sync.
  */
-import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeMasterListingRow,removeDeletedDocumentCompany} from './master-listing-data.js';
+import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeMasterListingRow,removeDeletedDocumentCompany,sortMasterListingCompanies} from './master-listing-data.js';
 import {previewRegisterParticularsZip,preserveRegisterParticulars,compactRegisterColumns,REGISTER_PARTICULARS_COLUMNS} from './master-listing-register-particulars.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -228,10 +228,12 @@ async function saveAddedCompany(form){
  if(!details.name)throw Error('Company name is required.');
  state.saving=true;state.error='';state.status='Saving the added company and backing up the listing…';onRender?.();
  try{
-  await saveModel(updated,{backup:true});
+  const ordered=sortMasterListingCompanies(updated).model;
+  await saveModel(ordered,{backup:true});
   state.addOpen=false;state.addDraft=null;state.search='';
-  state.page=Math.floor(rowIndex/(state.fullScreen?40:PER_PAGE));
-  state.status=details.name+' added to Master Listing without changing existing rows.';
+  const sortedIndex=ordered.rows.findIndex(item=>item.id===row.id);
+  state.page=Math.floor(sortedIndex/(state.fullScreen?40:PER_PAGE));
+  state.status=details.name+' added alphabetically to Master Listing. Other company details retained.';
   if(createFolders){
    const match=(getCompanies?.()||[]).find(c=>
     companyKey(c.name)===nameKey||(regKey&&registrationKey(c.registration_no)===regKey));
@@ -290,7 +292,7 @@ async function saveRepairedDates(){
   state.saving=true;state.error='';state.status='Adding '+result.added+' Documents companies to Master Listing…';onRender?.();
   try{
    await saveModel(result.model,{backup:true});
-   state.status='Master Listing updated automatically: '+result.added+' new companies, '+result.existing+' existing. All prior details retained.';
+   state.status='Master Listing updated alphabetically: '+result.added+' new companies, '+result.existing+' existing. All prior details retained.';
    return {added:result.added,existing:result.existing,invalid:result.invalid};
   }finally{state.saving=false;onRender?.();}
  }
