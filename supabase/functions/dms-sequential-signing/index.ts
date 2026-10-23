@@ -166,8 +166,23 @@ async function sendRelayRequest(relay,payload) {
     throw Error("Gmail sender identity does not match zhenlisecretary@gmail.com");
   return result;
 }
+// Use the uploaded PDF's filename as the invitation email title rather than
+// the generic company name. Only the first title is shown when multiple PDFs
+// are attached, with a count for the other documents. Never derive subjects
+// from a signer-supplied value or an HTML file.
+function invitationDocumentTitle(r) {
+  const documents=Array.isArray(r.documents)?r.documents:[];
+  const title=documents.length?String(documents[0]?.name||""):"";
+  const cleaned=title.replace(/\.pdf$/i,"")
+    .replace(/[\x00-\x1f\x7f]+/g," ").replace(/\s+/g," ").trim();
+  const fallback=String(r.subject||"Document for signing")
+    .replace(/[\x00-\x1f\x7f]+/g," ").replace(/\s+/g," ").trim();
+  const more=documents.length>1?" (+"+(documents.length-1)+" more document"+(documents.length>2?"s":"")+")":"";
+  return (cleaned||fallback).slice(0,Math.max(1,160-more.length))+more;
+}
 async function sendInvite(r,s) {
   if(!s)return "no pending signer";
+  const documentTitle=invitationDocumentTitle(r);
   // Owner-authenticated connection to Gmail's send-only MailApp service.
   // An invalid/not-yet-installed relay must never prevent manual link sharing.
   const {data:relay,error:relayError}=await relayTable().select("*").eq("owner_id",r.owner_id)
@@ -177,7 +192,7 @@ async function sendInvite(r,s) {
     try{
       const result=await sendRelayRequest(relay,{
         kind:"send",to:s.email,name:s.name,company:r.company,subject:r.subject,
-        note:safe(r.note,1000),link:await signerLink(r,s)
+        documentTitle,note:safe(r.note,1000),link:await signerLink(r,s)
       });
       return result.accepted
         ? "accepted by Gmail ("+result.sender+"); inbox delivery is not guaranteed"
@@ -192,9 +207,9 @@ async function sendInvite(r,s) {
   if(from.trim().toLowerCase()!==(r.sender_email||defaultSenderEmail).toLowerCase())
     return "manual — requested sender "+defaultSenderEmail+" is not an authenticated sending identity";
   const link=await signerLink(r,s);
-  const subject="ZHENLI | Document signature required: "+r.company;
+  const subject="ZHENLI | Signature required: "+documentTitle;
   const text="Dear "+s.name+",\n\nYou have a document requiring your electronic signature.\nCompany: "+
-    r.company+"\nSubject: "+r.subject+"\n\nSecure signing link:\n"+link+
+    r.company+"\nDocument: "+documentTitle+"\nSubject: "+r.subject+"\n\nSecure signing link:\n"+link+
     "\n\nThis link is individual and expires "+r.expires_at+". Do not forward it.\n\n"+
     safe(r.note,1000)+"\n\nZHENLI CONSULTANCY SERVICES SDN BHD";
   try {

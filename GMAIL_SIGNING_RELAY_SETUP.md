@@ -16,3 +16,18 @@ This uses the account **zhenlisecretary@gmail.com** to automatically invite each
 **Security:** The public script URL is not a public mail API. It requires an HMAC-SHA256 signature, a timestamp no older than five minutes, a random nonce and a matching ZHENLI DMS signing URL. Relay secrets do not appear in frontend source, browser storage, email messages or the GitHub repository. The script never receives uploaded PDFs or signature images.
 
 **Note:** Gmail MailApp acceptance does not guarantee delivery into recipients' Inbox; spam filters and Google's daily email quotas still apply. Source: [Google Web apps deployment](https://developers.google.com/apps-script/guides/web), [Script Properties](https://developers.google.com/apps-script/guides/properties), and [MailApp](https://developers.google.com/apps-script/reference/mail/mail-app).
+## Automatic email subject follows the uploaded PDF title
+
+For new invitations sent by the Gmail relay, the subject is automatically
+**ZHENLI | Signature required: [uploaded PDF document title]**.
+The title is derived from the **first uploaded PDF filename**, with the trailing
+`.pdf` removed. When more than one PDF is attached, the subject indicates the
+number of additional documents, e.g. **ZHENLI | Signature required: Directors Written Resolution (+2 more documents)**.
+If the PDF filename is unavailable, the existing signing-request subject is used.
+This applies to the first invitation, sequential invitations and **Resend invitation**.
+
+**If you previously deployed the Google Apps Script relay**, replace the existing
+`Code.gs` with the latest [SequentialSigningGmailRelay.gs](google-apps-script/SequentialSigningGmailRelay.gs),
+then open **Deploy → Manage deployments → Edit → Version: New version → Deploy**.
+Updating GitHub alone does not update a separately deployed Apps Script web app.
+Existing signed PDFs and signing request records remain unchanged.

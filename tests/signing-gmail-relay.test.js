@@ -28,7 +28,8 @@ vm.runInContext(source,context,{filename:'SequentialSigningGmailRelay.gs'});
 const payload={
   kind:'send',
   to:'test@example.com',name:'Test Signer',company:'TEST SDN BHD',
-  subject:'Resolution',note:'Review before signing',
+  subject:'Resolution',documentTitle:'Board Resolution - Acceptance of Banking Facilities',
+  note:'Review before signing',
   link:'https://zenithloh1016.github.io/zhenli-unified-dms/sign/?token='+
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.'+
     'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.'+'c'.repeat(64)
@@ -53,6 +54,9 @@ test('one signed message accepted and repeat blocked',()=>{
   assert.equal(sent.length,1);
   assert.equal(sent[0].to,'test@example.com');
   assert.match(sent[0].body,/Secure individual signing link/);
+  assert.equal(sent[0].subject,
+    'ZHENLI | Signature required: Board Resolution - Acceptance of Banking Facilities');
+  assert.match(sent[0].body,/Document: Board Resolution - Acceptance of Banking Facilities/);
   assert.equal(exec(makeRequest(payload)).ok,false);
   assert.equal(sent.length,1);
 });
@@ -63,4 +67,15 @@ test('rejects untrusted links, missing HMAC and different account',()=>{
   const unsigned={postData:{contents:JSON.stringify({payload,nonce:'8'.repeat(32),timestamp:Date.now(),signature:'0'.repeat(64)})}};
   assert.equal(exec(unsigned).ok,false);
   assert.equal(sent.length,1);
+});
+
+test('cleans line breaks from document titles used in Gmail subject',()=>{
+  const titlePayload={...payload,documentTitle:'Board Resolution\r\nBcc: unwanted@example.com'};
+  assert.equal(exec(makeRequest(titlePayload,'7'.repeat(32))).accepted,true);
+  assert.equal(sent.at(-1).subject,'ZHENLI | Signature required: Board Resolution Bcc: unwanted@example.com');
+});
+test('legacy relay payload falls back to request subject if documentTitle is unavailable',()=>{
+  const {documentTitle,...older}=payload;
+  assert.equal(exec(makeRequest(older,'9'.repeat(32))).accepted,true);
+  assert.equal(sent.at(-1).subject,'ZHENLI | Signature required: Resolution');
 });
