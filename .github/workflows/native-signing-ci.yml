@@ -4,6 +4,8 @@ on:
     paths:
       - 'supabase/functions/dms-sequential-signing/**'
       - 'supabase/native-sequential-signing.sql'
+      - 'google-apps-script/SequentialSigningGmailRelay.gs'
+      - 'tests/signing-gmail-relay.test.js'
       - 'src/signing-supabase.js'
       - 'src/signing-public.js'
       - 'sign/**'
@@ -22,3 +24,7 @@ jobs:
         run: |
           node --check src/signing-supabase.js
           node --check src/signing-public.js
+      - name: Check Gmail relay syntax and run secure delivery tests
+        run: |
+          node --check --input-type=commonjs < google-apps-script/SequentialSigningGmailRelay.gs
+          node --test tests/signing-gmail-relay.test.js
