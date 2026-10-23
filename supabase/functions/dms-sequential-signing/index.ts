@@ -28,6 +28,7 @@ async function signingSecret() {
     throw Error("Private signing key is unavailable; check native signing database setup");
   return data.secret;
 }
+const defaultSenderEmail = "zhenlisecretary@gmail.com";
 const maxPdf = 3 * 1024 * 1024;
 const maxSign = 300 * 1024;
 const now = () => new Date().toISOString();
@@ -131,6 +132,7 @@ async function presentation(r,includeLinks=false) {
     signedAt:s.signedAt||null,link:includeLinks?await signerLink(r,s):undefined
   })));
   return {id:r.id,company:r.company,subject:r.subject,note:r.note,status:r.status,
+    senderEmail:r.sender_email||defaultSenderEmail,
     expiresAt:r.expires_at,createdAt:r.created_at,signers,documents:r.documents.map(d=>({
       id:d.id,name:d.name,pages:d.pages,ready:!!d.finalPath
     })),boxes:r.boxes,audit:r.audit};
@@ -138,7 +140,10 @@ async function presentation(r,includeLinks=false) {
 async function sendInvite(r,s) {
   if(!s)return "no pending signer";
   const key=env("RESEND_API_KEY"),from=env("SIGNING_FROM_EMAIL");
-  if(!key||!from)return "manual — verified sender not configured";
+  if(!key||!from)return "manual — "+defaultSenderEmail+" is not connected to an email delivery service";
+  // Never label a message as sent by an unverified Gmail address.
+  if(from.trim().toLowerCase()!==(r.sender_email||defaultSenderEmail).toLowerCase())
+    return "manual — requested sender "+defaultSenderEmail+" is not an authenticated sending identity";
   const link=await signerLink(r,s);
   const subject="ZHENLI | Document signature required: "+r.company;
   const text="Dear "+s.name+",\n\nYou have a document requiring your electronic signature.\nCompany: "+
@@ -202,11 +207,60 @@ async function handleAdmin(action,req,body) {
     if(![7,14,30,60].includes(days))throw Error("Choose 7, 14, 30 or 60 days");
     const date=new Date(Date.now()+days*86400000).toISOString();
     const r=rowError(await table().insert({owner_id:user,company,subject,note,
-      signers,expires_at:date,audit:[{event:"created",at:now()}]}).select("*").single());
+      sender_email:defaultSenderEmail,signers,expires_at:date,
+      audit:[{event:"created",at:now()}]}).select("*").single());
     return {request:await presentation(r,true)};
   }
   const r=await owned(body.requestId,user);
   if(action==="detail")return {request:await presentation(r,true)};
+  if(action==="edit"){
+    // Drafts can be edited normally. An activated request is editable only
+    // before its first signature: editing returns it to draft and rotates ALL
+    // signer IDs, revoking old bearer links while preserving the original PDFs.
+    if(!["draft","pending"].includes(r.status) || r.signers.some(s=>s.signedAt))
+      throw Error("Only drafts and requests without signed documents can be edited");
+    const company=safe(body.company),subject=safe(body.subject),note=safe(body.note,1000);
+    if(company.length<2||subject.length<2)throw Error("Company and subject are required");
+    const requested=body.signers;
+    if(!Array.isArray(requested)||!requested.length||requested.length>15)
+      throw Error("Enter 1–15 sequential signers");
+    const ids=new Set(),byId=new Map(r.signers.map(s=>[s.id,s]));
+    const mapped=new Map();
+    const signers=requested.map((sg,index)=>{
+      const priorId=String(sg.id||"");
+      if(priorId&&(!byId.has(priorId)||ids.has(priorId)))
+        throw Error("Invalid or duplicate original signer ID");
+      if(priorId)ids.add(priorId);
+      const name=safe(sg.name,180),email=safe(sg.email,250).toLowerCase();
+      if(!name||!validEmail(email))throw Error("All signers need valid names and emails");
+      const newId=r.status==="pending"?uuid():(priorId||uuid());
+      if(priorId)mapped.set(priorId,newId);
+      return {id:newId,position:index+1,name,email,signedAt:null,signaturePath:null};
+    });
+    const days=body.days===null||body.days===undefined||body.days===""?0:Number(body.days);
+    if(![0,7,14,30,60].includes(days))throw Error("Expiry renewal must be 7, 14, 30 or 60 days");
+    const expiry=days?new Date(Date.now()+days*86400000).toISOString():r.expires_at;
+    const boxes=r.boxes.filter(b=>mapped.has(b.signerId))
+      .map(b=>({...b,signerId:mapped.get(b.signerId)}));
+    const reset=r.status==="pending";
+    const change={
+      company,subject,note,signers,boxes,status:"draft",expires_at:expiry,
+      sender_email:defaultSenderEmail,updated_at:now(),
+      audit:[...(r.audit||[]),{
+        event:"details_edited",at:now(),previousStatus:r.status,
+        oldLinksRevoked:reset,signerCount:signers.length
+      }]
+    };
+    // CAS prevents an in-flight signature, activation or another editor from
+    // being overwritten by a stale full-row update.
+    const {data:updated,error:problem}=await table().update(change)
+      .eq("id",r.id).eq("owner_id",user).eq("status",r.status)
+      .eq("updated_at",r.updated_at).select("*").maybeSingle();
+    if(problem)throw Error(problem.message);
+    if(!updated)throw Error("Request changed while editing. Reload before saving.");
+    return {request:await presentation(updated,true),linksRevoked:reset};
+  }
+
   if(action==="document"){
     const d=r.documents.find(x=>x.id===body.documentId);if(!d)throw Error("Document missing");
     const b=rowError(await bucket().download(d.finalPath||d.path));
