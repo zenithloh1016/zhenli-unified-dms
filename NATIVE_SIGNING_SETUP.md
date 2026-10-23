@@ -27,13 +27,15 @@ signatures, Blob objects, SMTP sender settings, audit history, or DMS files.
    `supabase/native-sequential-signing.sql`. This adds an isolated table, a
    **private** bucket `dms-native-signing`, and a restricted atomic-signature RPC.
    It does not change your existing DMS tables or `dms-private` bucket.
-3. Create a random signing secret of at least 32 characters, store it as an Edge Function
-   secret called `NATIVE_SIGNING_SECRET`. **Do not publish this secret or rotate it while
-   active requests remain**; rotation invalidates all outstanding links.
-4. Set `PUBLIC_SIGNING_URL` to your final public DMS signing page, for example
+3. The SQL migration generates and stores a random private token-signing key in
+   `dms_native_signing_config`. The Edge Function reads it using the built-in
+   service-role credential; **no key has to be pasted into ChatGPT or GitHub**.
+   Keep the row private and do not rotate it while requests remain active.
+4. `PUBLIC_SIGNING_URL` is optional and defaults to the deployed GitHub Pages
+   signing URL. Set `PUBLIC_SIGNING_URL` to your final public DMS signing page, for example
    `https://zenithloh1016.github.io/zhenli-unified-dms/sign/` after the web
    deployment. For best deliverability, use a verified custom HTTPS domain.
-5. Set `DMS_ALLOWED_ORIGINS` to the exact scheme + host of your DMS website,
+5. You may optionally set `DMS_ALLOWED_ORIGINS` to the exact scheme + host of your DMS website,
    e.g. `https://zenithloh1016.github.io` (add comma-separated
    `http://localhost:5173` for local tests; include your Android webview
    origin only when verified). Do not use `*`.
