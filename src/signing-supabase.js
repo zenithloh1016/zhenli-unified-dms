@@ -13,6 +13,7 @@ const stamp = value => {
   const date=new Date(value);
   return Number.isNaN(date.getTime())?'—':e(date.toLocaleString('en-MY'));
 };
+const DEFAULT_SENDER_EMAIL = "zhenlisecretary@gmail.com";
 const pdfAsDataUrl = file => new Promise((resolve, reject) => {
   const reader=new FileReader();
   reader.onerror=()=>reject(Error('Cannot read the selected PDF.'));
@@ -111,11 +112,42 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     rows.map(x=>'<option value="'+e(x.id)+'"'+(x.id===value?' selected':'')+'>'+
       e(x.label)+'</option>').join('')+'</select>';
 
-  function signerField(index){
-    return '<div class="zs-signer-input" data-ns-signer><b>'+index+'.</b>'+
-      '<label>Full name<input name="ns-name" maxlength="180" required placeholder="Signer name"></label>'+
-      '<label>Email<input type="email" name="ns-email" maxlength="250" required placeholder="Email address"></label>'+
-      b('Remove','remove-signer')+'</div>';
+  function signerField(index,person=null){
+    const editing=!!person;
+    return '<div class="zs-signer-input'+(editing?' zs-edit-signer':'')+
+      '" data-ns-signer data-signer-id="'+e(person?.id||'')+'"><b>'+index+'.</b>'+
+      '<label>Full name<input name="ns-name" maxlength="180" required placeholder="Signer name" value="'+e(person?.name||'')+'"></label>'+
+      '<label>Email<input type="email" name="ns-email" maxlength="250" required placeholder="Email address" value="'+e(person?.email||'')+'"></label>'+
+      (editing?'<div class="zs-edit-signer-actions">'+b('↑ Up','move-signer-up')+b('↓ Down','move-signer-down')+b('Remove','remove-signer')+'</div>':b('Remove','remove-signer'))+
+      '</div>';
+  }
+  const senderField=()=>'<label>Sender email address<input name="senderEmail" type="email" value="'+
+    DEFAULT_SENDER_EMAIL+'" readonly aria-readonly="true"></label>'+
+    '<p class="muted zs-span">Default invitation sender. Automatic email from this Gmail account requires a separately authenticated delivery connection; until then, copy signing links to send manually.</p>';
+  function editForm() {
+    const r=detail;
+    if(!r||!['draft','pending'].includes(r.status)||r.signers.some(s=>s.signedAt))
+      return '<section class="zs-panel"><p>Request details can no longer be edited.</p></section>';
+    const options=(getCompanies()||[]).map(x=>'<option value="'+e(x.name)+'"></option>').join('');
+    const resets=r.status==='pending';
+    return '<div class="zs-toolbar">'+b('← Cancel editing','cancel-edit')+'</div>'+
+      '<section class="zs-panel"><h2>Edit signing request</h2>'+
+      '<p class="muted">Edit company details, the signing message, expiry and sequential signers. Existing PDF documents and signature boxes are preserved for retained signers.</p>'+
+      (resets?'<p class="zs-message zs-error">This request is already activated. Saving changes will return it to Draft, revoke all previously issued signing links and require activation again. No signer has signed yet.</p>':'')+
+      '<form id="ns-edit"><div class="zs-formgrid">'+
+      '<label>Company name<input name="company" list="ns-edit-companies" maxlength="180" required value="'+e(r.company)+'"></label>'+
+      '<datalist id="ns-edit-companies">'+options+'</datalist>'+
+      '<label>Subject<input name="subject" maxlength="180" required value="'+e(r.subject)+'"></label>'+
+      senderField()+
+      '<label>Link validity<select name="days"><option value="" selected>Keep existing expiry</option>'+
+      [7,14,30,60].map(x=>'<option value="'+x+'">Renew '+x+' days</option>').join('')+
+      '</select></label>'+
+      '<label class="zs-span">Signing message<textarea name="note" rows="3" maxlength="1000">'+e(r.note||'')+'</textarea></label>'+
+      '</div><h3>Sequential signers</h3>'+
+      '<p class="muted">Move Up / Down to change signing order. Removing a signer also removes their signature boxes.</p>'+
+      '<div id="ns-edit-signers">'+r.signers.map((sg,i)=>signerField(i+1,sg)).join('')+'</div>'+
+      b('+ Add signer','add-signer')+
+      ' <button class="btn primary" type="submit">Save signing details</button></form></section>';
   }
   function newForm() {
     const options=(getCompanies()||[]).map(x=>'<option value="'+e(x.name)+'"></option>').join('');
@@ -126,7 +158,7 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       '<label>Company name<input name="company" list="ns-companies" maxlength="180" required placeholder="Choose a company"></label>'+
       '<datalist id="ns-companies">'+options+'</datalist>'+
       '<label>Subject<input name="subject" maxlength="180" required placeholder="Board resolution signing"></label>'+
-      '<label>Invitation delivery<input value="Manual link / verified email sender (when configured)" readonly aria-readonly="true"></label>'+
+      senderField()+
       '<label>Expiry (days)'+select(
         [7,14,30,60].map(n=>({id:String(n),label:String(n)})),'days','14')+'</label>'+
       '<label class="zs-span">Signing message<textarea name="note" rows="3" maxlength="1000" placeholder="Instructions to the signers"></textarea></label>'+
@@ -180,10 +212,14 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       (r.status!=='draft'&&r.status!=='revoked'?b('Copy signing link','copy',s.id):'')+'</div>').join('');
     return '<div class="zs-toolbar">'+b('← All requests','refresh')+
       b('Reload details','open',r.id)+
+      (['draft','pending'].includes(r.status)&&r.signers.every(s=>!s.signedAt)
+        ?b('✎ Edit signing details','edit',r.id,'primary'):'')+
       (r.status!=='completed'&&r.status!=='revoked'?b('Revoke signing links','revoke',r.id):'')+
       '</div><section class="zs-panel">'+
       '<div class="zs-details-heading"><div><h2>'+e(r.company)+'</h2>'+
       '<p class="muted">'+e(r.subject)+' · '+e(r.status)+' · Expires '+stamp(r.expiresAt)+'</p></div></div>'+
+      '<p class="muted">Default sender email: <b>'+e(r.senderEmail||DEFAULT_SENDER_EMAIL)+
+      '</b> · Automatic delivery requires an authenticated Gmail sender connection.</p>'+
       '<p class="muted">'+e(r.note||'No signing message')+'</p>'+
       '<h3>Documents ('+r.documents.length+')</h3>'+docs+
       (r.documents.length?'':'<p class="muted">No PDFs uploaded.</p>')+
@@ -244,20 +280,35 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     if(action==='new'){
       signerCount=2;view='new';message='';update();return true;
     }
+    if(action==='edit'){
+      if(!detail||detail.id!==id)return true;
+      if(!['draft','pending'].includes(detail.status)||detail.signers.some(s=>s.signedAt))
+        return feedback('Only drafts and requests without signatures can be edited.',true),true;
+      view='edit';message='';update();return true;
+    }
+    if(action==='cancel-edit'){view='detail';update();return true;}
     if(action==='add-signer'){
-      const root=document.getElementById('ns-signers');
+      const root=document.getElementById(view==='edit'?'ns-edit-signers':'ns-signers');
       if(!root)return true;
       if(root.children.length>=15){feedback('Maximum 15 sequential signers.',true);return true;}
-      root.insertAdjacentHTML('beforeend',signerField(root.children.length+1));
+      root.insertAdjacentHTML('beforeend',signerField(root.children.length+1,
+        view==='edit'?{}:null));
       signerCount=root.children.length;return true;
     }
-    if(action==='remove-signer'){
-      const root=document.getElementById('ns-signers');
-      if(!root)return true;
-      if(root.children.length<=1){feedback('At least one signer is required.',true);return true;}
-      const button=ev?.target?.closest('[data-action="ns-remove-signer"]');
-      button?.closest('[data-ns-signer]')?.remove();
-      [...root.children].forEach((element,i)=>{const num=element.querySelector('b');if(num)num.textContent=(i+1)+'.';});
+    if(action==='remove-signer'||action==='move-signer-up'||action==='move-signer-down'){
+      const root=document.getElementById(view==='edit'?'ns-edit-signers':'ns-signers');
+      const item=ev?.target?.closest('[data-ns-signer]');
+      if(!root||!item)return true;
+      if(action==='remove-signer'){
+        if(root.children.length<=1){feedback('At least one signer is required.',true);return true;}
+        item.remove();
+      } else if(action==='move-signer-up'&&item.previousElementSibling)
+        root.insertBefore(item,item.previousElementSibling);
+      else if(action==='move-signer-down'&&item.nextElementSibling)
+        root.insertBefore(item.nextElementSibling,item);
+      [...root.children].forEach((element,i)=>{
+        const num=element.querySelector('b');if(num)num.textContent=(i+1)+'.';
+      });
       signerCount=root.children.length;return true;
     }
     if(action==='copy'){work(()=>copyLink(id));return true;}
@@ -312,20 +363,34 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     return true;
   }
   function onSubmit(form) {
-    if(form?.id!=='ns-create')return false;
+    const editing=form?.id==='ns-edit';
+    if(form?.id!=='ns-create'&&!editing)return false;
     const data=new FormData(form);
-    const root=form.querySelector('#ns-signers');
+    const root=form.querySelector(editing?'#ns-edit-signers':'#ns-signers');
     const signers=[...(root?.querySelectorAll('[data-ns-signer]')||[])].map(row=>({
+      ...(editing?{id:row.dataset.signerId||''}:{}),
       name:row.querySelector('[name="ns-name"]')?.value.trim()||'',
       email:row.querySelector('[name="ns-email"]')?.value.trim()||''
     }));
+    if(editing&&detail?.status==='pending'&&!confirm(
+      'This request is activated. Saving will revoke ALL old signing links, return the request to Draft and require reactivation. Continue?'
+    ))return true;
     work(async()=>{
-      const created=await api('create',{
+      const values={
         company:data.get('company'),subject:data.get('subject'),note:data.get('note'),
-        days:Number(data.get('days')),signers
-      });
-      await open(created.request.id);
-      feedback('Draft created. Upload PDF documents and place the signature boxes.');
+        days:editing?(data.get('days')||null):Number(data.get('days')),signers
+      };
+      if(editing){
+        const updated=await api('edit',{requestId:detail.id,...values});
+        await open(updated.request.id);
+        feedback(updated.linksRevoked?
+          'Signing details saved. All old links are invalid. Check signature positions, then activate again and share the new links.':
+          'Signing details saved. Signature boxes for removed signers were cleared.');
+      } else {
+        const created=await api('create',values);
+        await open(created.request.id);
+        feedback('Draft created. Upload PDF documents and place the signature boxes.');
+      }
     });
     return true;
   }
@@ -357,7 +422,8 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       '<span class="zs-version">Supabase Signing · EdgeOne-compatible layout</span></div>'+
       (message?'<div class="zs-message'+(error?' zs-error':'')+'" role="status">'+e(message)+'</div>':'')+
       (busy?'<div class="zs-message">Connecting to private signing service…</div>':'')+
-      (view==='new'?newForm():view==='detail'&&detail?detailView():listView()),
+      (view==='new'?newForm():view==='edit'&&detail?editForm():
+        view==='detail'&&detail?detailView():listView()),
     mount:()=>{
       if(!initialized&&!busy){
         initialized=true;
