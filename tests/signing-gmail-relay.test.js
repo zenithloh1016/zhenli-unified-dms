@@ -8,6 +8,7 @@ const source=readFileSync(new URL('../google-apps-script/SequentialSigningGmailR
 const secret='4'.repeat(64);
 const sent=[],cache=new Map();
 const runtime={
+  console:{log:()=>{},error:()=>{}},
   Session:{getEffectiveUser:()=>({getEmail:()=> 'zhenlisecretary@gmail.com'})},
   MailApp:{getRemainingDailyQuota:()=>15,sendEmail:m=>sent.push(m)},
   PropertiesService:{getScriptProperties:()=>({getProperty:()=>secret})},
@@ -78,4 +79,13 @@ test('legacy relay payload falls back to request subject if documentTitle is una
   const {documentTitle,...older}=payload;
   assert.equal(exec(makeRequest(older,'9'.repeat(32))).accepted,true);
   assert.equal(sent.at(-1).subject,'ZHENLI | Signature required: Resolution');
+});
+
+test('standalone Gmail send-only self-test verifies account access and Gmail acceptance',()=>{
+  const previous=sent.length;
+  context.testGmailDeliveryToSelf();
+  assert.equal(sent.length,previous+1);
+  assert.equal(sent.at(-1).to,'zhenlisecretary@gmail.com');
+  assert.equal(sent.at(-1).subject,'ZHENLI DMS | Gmail Relay Delivery Test');
+  assert.doesNotMatch(sent.at(-1).body,/token=/);
 });
