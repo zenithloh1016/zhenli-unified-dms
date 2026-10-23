@@ -23,6 +23,7 @@ const ROOT = document.getElementById('app');
 const BUCKET = 'dms-private';
 const SIGNING_BASE = 'https://zhenli-sequential-signing.edgeone.cool/';
 const TASK_HUB_BUNDLED = new globalThis.URL('./task-hub/index.html', document.baseURI).href;
+const TASK_HUB_CLOUD = new globalThis.URL('./task-hub-cloud/index.html', document.baseURI).href;
 const ANNUAL_RETURN_BUNDLED = new globalThis.URL('./annual-return/index.html', document.baseURI).href;
 function allowedHttpsUrl(value, expectedHost = '') {
   const url = new globalThis.URL(String(value || '').trim());
@@ -34,8 +35,9 @@ function getSigningUrl() {
   catch { return SIGNING_BASE; }
 }
 function getTaskHubUrl() {
-  try { return allowedHttpsUrl(localStorage.getItem('zhenli:taskhub:external') || ''); }
-  catch { return TASK_HUB_BUNDLED; }
+  // Supabase is the only supported Task Hub provider. Ignore any legacy
+  // EdgeOne URL without removing a previous account's browser preferences.
+  return TASK_HUB_BUNDLED;
 }
 
 const rawSupabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || '').trim().replace(/^['"]|['"]$/g, '');
@@ -557,11 +559,17 @@ function setAnnualReturnFullscreen(open){
  shell?.querySelector('[data-action="'+(state.arFullscreen?'exit-ar-fullscreen':'open-ar-fullscreen')+'"]')?.focus({preventScroll:true});
 }
 function renderTasks(){
-  const active = getTaskHubUrl(); const external = active !== TASK_HUB_BUNDLED;
-  return `<div class="integration-heading"><div><p class="eyebrow">SECRETARIAL TASK MANAGER</p><h1>Task Hub</h1><p class="muted">Your original Task Hub source is included directly in this app. ${external ? 'Using your configured hosted site.' : 'Using the bundled local edition.'}</p></div>
-    <div class="header-buttons">${action('Full-screen view','open-tasks','','secondary')}${external?action('Open hosted site','launch-hosted-task','','secondary'):''}${action('Connection settings','task-settings','','primary')}</div></div>
-    <div class="integration-info">${external ? 'Hosted Task Hub data is managed by its original site.' : 'The bundled Task Hub syncs with your private DMS Supabase account after applying task_hub_sync.sql. Import your old EdgeOne Task Hub JSON backup once to migrate existing tasks.'}</div>
-    <div class="frame-shell ${state.taskFullscreen?'task-expanded':''}">${state.taskFullscreen?'<div class="frame-toolbar"><strong>Task Hub</strong><button type="button" class="btn secondary" data-action="exit-tasks">Exit full screen ✕</button></div>':''}<iframe id="zh-task-frame" class="integration-frame" title="ZHENLI Secretarial Task Hub" src="${esc(active)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
+  // Reuse the original Task Hub implementation in the signed-in DMS iframe.
+  // Standalone is served on this same GitHub Pages origin; both read and
+  // write the existing row-level-secured Supabase task_hub_state records.
+  return `<div class="integration-heading"><div><p class="eyebrow">SECRETARIAL TASK MANAGER</p><h1>Task Hub</h1>
+    <p class="muted">The original Task Hub interface, connected directly to your private Supabase account. No Tencent EdgeOne dependency.</p></div>
+    <div class="header-buttons">${action('Full-screen view','open-tasks','','secondary')}${action('Open standalone Task Hub','launch-cloud-task','','primary')}</div></div>
+    <div class="integration-info">Supabase cloud sync is enabled using your existing DMS login and private Task Hub records.
+      Task creation, company tasks, checklists, recurring tasks, Kanban, calendar and Master Listing import all use the same original layout.
+      Previously saved data is retained. For any tasks still held only on Tencent EdgeOne, export its JSON backup and import it here once after first exporting a current backup.</div>
+    <div class="frame-shell ${state.taskFullscreen?'task-expanded':''}">${state.taskFullscreen?'<div class="frame-toolbar"><strong>Task Hub</strong><button type="button" class="btn secondary" data-action="exit-tasks">Exit full screen ✕</button></div>':''}
+    <iframe id="zh-task-frame" class="integration-frame" title="ZHENLI Secretarial Task Hub · Supabase" src="${esc(TASK_HUB_BUNDLED)}" loading="lazy" referrerpolicy="same-origin"></iframe></div>`;
 }
 // ZHENLI_SIGNING_COOKIE_SAFE_LAUNCH_V1_2
 // ZHENLI_SIGNING_DIRECT_LAUNCH_V1_3
@@ -806,8 +814,8 @@ ROOT.addEventListener('click', event=>{
   if(a==='open-tasks'||a==='exit-tasks'){
     state.taskFullscreen = a==='open-tasks';render();return;
   }
-  if(a==='open-signing'||a==='launch-hosted-task'){
-    const url=a==='open-signing'?getSigningUrl():getTaskHubUrl();
+  if(a==='open-signing'||a==='launch-hosted-task'||a==='launch-cloud-task'){
+    const url=a==='open-signing'?getSigningUrl():TASK_HUB_CLOUD;
     if(a==='open-signing'){
       const time = new globalThis.URL(url).searchParams.get('eo_time');
       if(time && /^\d{10}$/.test(time) && Number(time)*1000 < Date.now()){
