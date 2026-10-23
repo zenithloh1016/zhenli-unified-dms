@@ -24,6 +24,7 @@ const pdfAsDataUrl = file => new Promise((resolve, reject) => {
 export function createSupabaseSigning({db,getCompanies,update}) {
   let view='list',requests=[],detail=null,busy=false,message='',error=false;
   let initialized=false, signerCount=2, placementRows=[];
+  let mailStatus={connected:false,senderEmail:'zhenlisecretary@gmail.com'};
   function feedback(text,isError=false){message=String(text||'');error=isError;update();}
 
   async function api(action,params={}) {
@@ -91,8 +92,8 @@ export function createSupabaseSigning({db,getCompanies,update}) {
   });
 
   async function list() {
-    const data=await api('list');
-    requests=data.requests||[];view='list';detail=null;preview.reset();update();
+    const [data,status]=await Promise.all([api('list'),api('mail-status')]);
+    requests=data.requests||[];mailStatus=status;view='list';detail=null;preview.reset();update();
   }
   async function open(id) {
     const data=await api('detail',{requestId:id});
@@ -168,9 +169,42 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       ' <button class="btn primary" type="submit"'+(busy?' disabled':'')+
       '>Create draft signing request</button></form></section>';
   }
+  function mailInfo() {
+    return '<section class="zs-panel"><h3>Gmail signing invitations</h3><p class="muted">'+
+      (mailStatus.connected
+        ? 'Connected: <b>zhenlisecretary@gmail.com</b> — the relay is authorized to submit invitations. Inbox delivery is not guaranteed.'
+        : 'Not connected: <b>zhenlisecretary@gmail.com</b> — invitations must be copied and shared manually until Gmail is authorized.')+
+      '</p>'+b('Gmail invitation settings','mail-settings','','primary')+'</section>';
+  }
+  function mailForm(){
+    const script='https://github.com/zenithloh1016/zhenli-unified-dms/blob/main/google-apps-script/SequentialSigningGmailRelay.gs';
+    const guide='https://github.com/zenithloh1016/zhenli-unified-dms/blob/main/GMAIL_SIGNING_RELAY_SETUP.md';
+    return '<div class="zs-toolbar">'+b('← Return to signing requests','refresh')+'</div>'+
+      '<section class="zs-panel"><h2>Connect Gmail for automatic signing invitations</h2>'+
+      '<p class="muted">Sender account: <b>zhenlisecretary@gmail.com</b>. This setup only sends invitation links; it does not read emails or access PDF files.</p>'+
+      '<p>1. Sign in as <b>zhenlisecretary@gmail.com</b> at '+
+      '<a href="https://script.google.com/home/start" target="_blank" rel="noopener noreferrer">Google Apps Script</a> and create a new project.</p>'+
+      '<p>2. Copy the <a href="'+script+'" target="_blank" rel="noopener noreferrer">ZHENLI Gmail Relay Code.gs</a> into the script editor.</p>'+
+      '<p>3. Generate a new secret below and copy it. Under <b>Project Settings → Script Properties</b>, set the property name <code>ZHENLI_RELAY_SECRET</code> to that secret. Never paste it into GitHub.</p>'+
+      '<p>4. Select the <code>authorizeSender</code> function, press Run and allow send-mail access. Deploy → New deployment → Web app; choose <b>Execute as: Me</b> and <b>Who has access: Anyone</b>. Copy the Web app URL ending in <code>/exec</code>.</p>'+
+      '<p>5. Paste the URL and the same secret below, then choose <b>Test & connect Gmail relay</b>.</p>'+
+      '<p class="muted">See the <a href="'+guide+'" target="_blank" rel="noopener noreferrer">full setup instructions</a>. The public Apps Script endpoint checks a cryptographic signature for every request.</p>'+
+      '<div class="zs-actions">'+b('Generate new 64-character secret','mail-generate')+
+      ' '+b('Copy secret','mail-copy')+'</div>'+
+      '<form id="ns-mail-connect" autocomplete="off" class="zs-formgrid">'+
+      '<label class="zs-span">Google Apps Script Web app URL (/exec)'+
+      '<input name="scriptUrl" type="url" required placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off"></label>'+
+      '<label class="zs-span">Shared relay secret (64 hex characters)'+
+      '<input name="sharedSecret" id="ns-relay-secret" type="password" minlength="64" maxlength="64" pattern="[a-f0-9]{64}" required autocomplete="off"></label>'+
+      '<button class="btn primary" type="submit">Test & connect Gmail relay</button></form>'+
+      (mailStatus.connected?'<div class="zs-actions">'+b('Disconnect Gmail relay','mail-disable')+'</div>':'')+
+      '<p class="fineprint">A connected relay sends invitations to each signer in turn. You may resend the current pending invitation after connecting. Google daily quotas and recipient spam filtering still apply.</p>'+
+      '</section>';
+  }
   function listView(){
     return '<div class="zs-toolbar">'+b('+ New signing request','new','','primary')+
       b('Refresh requests','refresh')+'</div>'+
+      mailInfo()+
       '<section class="zs-panel"><h2>Signing requests <span class="zs-count">'+requests.length+'</span></h2>'+
       '<div class="zs-table-wrap"><table class="zs-table"><thead><tr>'+
       '<th>Company / subject</th><th>Status</th><th>Signed</th><th>PDFs</th><th>Created</th><th></th>'+
@@ -215,7 +249,7 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       (['draft','pending'].includes(r.status)&&r.signers.every(s=>!s.signedAt)
         ?b('✎ Edit signing details','edit',r.id,'primary'):'')+
       (r.status!=='completed'&&r.status!=='revoked'?b('Revoke signing links','revoke',r.id):'')+
-      '</div><section class="zs-panel">'+
+      '</div>'+mailInfo()+'<section class="zs-panel">'+
       '<div class="zs-details-heading"><div><h2>'+e(r.company)+'</h2>'+
       '<p class="muted">'+e(r.subject)+' · '+e(r.status)+' · Expires '+stamp(r.expiresAt)+'</p></div></div>'+
       '<p class="muted">Default sender email: <b>'+e(r.senderEmail||DEFAULT_SENDER_EMAIL)+
@@ -276,6 +310,30 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     if(!action?.startsWith('ns-'))return false;
     action=action.slice(3);
     if(action==='refresh') {work(list);return true;}
+    if(action==='mail-settings'){view='mail';message='';error=false;update();return true;}
+    if(action==='mail-generate'){
+      const input=document.getElementById('ns-relay-secret');
+      if(!input)return true;
+      const bytes=new Uint8Array(32);crypto.getRandomValues(bytes);
+      input.value=[...bytes].map(x=>x.toString(16).padStart(2,'0')).join('');
+      input.type='text';input.focus();input.select();return true;
+    }
+    if(action==='mail-copy'){
+      const secret=document.getElementById('ns-relay-secret')?.value||'';
+      if(!/^[a-f0-9]{64}$/.test(secret))
+        return feedback('Generate a secret first.',true),true;
+      navigator.clipboard.writeText(secret).then(()=>{
+        const field=document.getElementById('ns-relay-secret');
+        if(field)field.type='password';
+      }).catch(()=>{const field=document.getElementById('ns-relay-secret');field?.select();});
+      return true;
+    }
+    if(action==='mail-disable'){
+      if(!confirm('Disable automatic Gmail invitations? Existing signing links and PDFs will remain unchanged.'))return true;
+      work(async()=>{await api('mail-disable');mailStatus={connected:false};
+        feedback('Gmail relay disconnected. Share pending signer links manually.');});
+      return true;
+    }
     if(action==='open'){work(()=>open(id));return true;}
     if(action==='new'){
       signerCount=2;view='new';message='';update();return true;
@@ -363,6 +421,21 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     return true;
   }
   function onSubmit(form) {
+    if(form?.id==='ns-mail-connect'){
+      const values=new FormData(form);
+      const scriptUrl=String(values.get('scriptUrl')||'').trim();
+      const sharedSecret=String(values.get('sharedSecret')||'').trim();
+      if(!/^[0-9a-f]{64}$/.test(sharedSecret)){
+        feedback('Generate or paste the exact 64-character relay secret.',true);return true;
+      }
+      work(async()=>{
+        const result=await api('mail-connect',{scriptUrl,sharedSecret});
+        mailStatus={connected:true,senderEmail:result.senderEmail};
+        view='list';feedback('Gmail authorized as '+result.senderEmail+
+          '. For active requests choose Resend invitation; next signers will receive automatic invites.');
+      });
+      return true;
+    }
     const editing=form?.id==='ns-edit';
     if(form?.id!=='ns-create'&&!editing)return false;
     const data=new FormData(form);
@@ -422,7 +495,7 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       '<span class="zs-version">Supabase Signing · EdgeOne-compatible layout</span></div>'+
       (message?'<div class="zs-message'+(error?' zs-error':'')+'" role="status">'+e(message)+'</div>':'')+
       (busy?'<div class="zs-message">Connecting to private signing service…</div>':'')+
-      (view==='new'?newForm():view==='edit'&&detail?editForm():
+      (view==='mail'?mailForm():view==='new'?newForm():view==='edit'&&detail?editForm():
         view==='detail'&&detail?detailView():listView()),
     mount:()=>{
       if(!initialized&&!busy){
