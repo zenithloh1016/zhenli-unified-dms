@@ -15,7 +15,7 @@ let queuedState = null;
 export function renderIntegratedView(section, companies=[]) {
   const signingLink = getSigningUrl();
   if (section === 'tasks') return `<section class="module-header"><div><p class="eyebrow">TASK MANAGEMENT</p><h1>Secretarial Task Hub V3</h1><p class="muted">Original Kanban, deadlines, recurrence, checklist, calendar and task workflow.</p></div><span class="module-chip">Private cloud sync</span></section>
-    <div class="module-notice">Your Task Hub data syncs with your Supabase account after installing the included SQL setup. To restore tasks from your original EdgeOne website, use its <strong>Export backup</strong>, then import that JSON file inside Task Hub here. Do not import a confidential backup into GitHub.</div>
+    <div class="module-notice">Your Task Hub uses the signed-in DMS Supabase account and existing private task records. Task creation, statutory deadlines, Kanban and company lists stay synchronized. Export a backup before importing other workspace data.</div>
     <iframe id="zh-task-frame" title="ZHENLI Secretarial Task Hub" loading="eager" src="${esc(TASK_PAGE)}" class="task-hub-frame" allow="web-share"></iframe>`;
   if (section === 'signing') return `<section class="module-header"><div><p class="eyebrow">SIGNING WORKFLOW</p><h1>Sequential Signing</h1><p class="muted">Continue using your existing Tencent EdgeOne signing engine and private storage.</p></div><span class="module-chip">Existing EdgeOne service</span></section>
     <section class="integration-card"><h2>Keep your established signing process</h2><p>Create a request, upload PDFs, position signature boxes, activate sequential signers, send links, and download signed PDFs with audit records in your original signing deployment.</p>
@@ -29,7 +29,7 @@ export function renderIntegratedView(section, companies=[]) {
       <button type="button" data-action="zh-module" data-id="tasks" class="module-tile"><span>📋</span><strong>Secretarial Task Hub</strong><small>Kanban, AR/AFS deadlines and recurring tasks</small></button>
       <button type="button" data-action="zh-module" data-id="signing" class="module-tile"><span>✍️</span><strong>Sequential Signing</strong><small>Original Tencent EdgeOne workflow</small></button>
     </div>
-    <div class="module-notice">The DMS document database is synchronized through Supabase. Task Hub also synchronizes after the additional SQL migration is installed. Sequential Signing continues on the existing EdgeOne service.</div>`;
+    <div class="module-notice">DMS documents and Task Hub records both use private Supabase storage. The separate Tencent EdgeOne sequential-signing provider remains available until you choose to retire it.</div>`;
 }
 
 export function getSigningUrl() {
