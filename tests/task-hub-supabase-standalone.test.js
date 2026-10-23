@@ -24,11 +24,15 @@ test('standalone Task Hub is a built Vite route with same original interface in 
 });
 test('DMS Task Hub defaults to bundled same-origin Supabase and opens independent cloud page',()=>{
   assert.match(dms,/const TASK_HUB_CLOUD = new globalThis\.URL\('\.\/task-hub-cloud\/index\.html'/);
-  assert.match(dms,/function getTaskHubUrl\(\) \{[\s\S]*?return TASK_HUB_BUNDLED/);
+  assert.match(dms,/const TASK_HUB_BUNDLED = new globalThis\.URL\('\.\/task-hub\/index\.html'/);
+  assert.doesNotMatch(dms,/function getTaskHubUrl\(/);
+  assert.doesNotMatch(dms,/renderLinkModal|task-link-form|task-settings|reset-task-link|launch-hosted-task|zhenli:taskhub:external|taskLink/);
   assert.match(dms,/action\('Open standalone Task Hub','launch-cloud-task'/);
   assert.match(dms,/id="zh-task-frame"/);
   assert.match(dms,/a==='launch-cloud-task'/);
   assert.doesNotMatch(dms.slice(dms.indexOf('function renderTasks()'),dms.indexOf('// ZHENLI_SIGNING_COOKIE_SAFE_LAUNCH')),/getTaskHubUrl\(\)|edgeone\.cool|Connection settings/);
+  assert.match(dms,/Existing Tencent EdgeOne/,'separate EdgeOne signing remains available');
+  assert.match(dms,/TASK_HUB_CLOUD/);
 });
 test('task create, edit, checklists, recurring tasks, calendar and backup remain original',()=>{
   assert.match(taskHub,/function openTask\(id=null/);
