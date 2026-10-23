@@ -559,7 +559,7 @@ function renderTasks(){
   // write the existing row-level-secured Supabase task_hub_state records.
   return `<div class="integration-heading"><div><p class="eyebrow">SECRETARIAL TASK MANAGER</p><h1>Task Hub</h1>
     <p class="muted">Your company-secretarial Task Hub is connected directly to your private Supabase account.</p></div>
-    <div class="header-buttons">${action('Full-screen view','open-tasks','','secondary')}${action('Open standalone Task Hub','launch-cloud-task','','primary')}</div></div>
+    <div class="header-buttons">${action('Full-screen view','open-tasks','','secondary')}</div></div>
     <div class="integration-info">Supabase cloud sync is enabled using your existing DMS login and private Task Hub records.
       Task creation, company tasks, checklists, recurring tasks, Kanban, calendar and Master Listing import all use the same original layout.
       Previously saved tasks and company records are retained. Export a Task Hub JSON backup before replacing or importing any records.</div>
