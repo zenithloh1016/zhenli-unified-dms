@@ -21,6 +21,25 @@ function authorizeSender() {
   if(available<1)throw new Error('No sending quota is currently available.');
   return 'Authorized '+identity+'; remaining recipients: '+available;
 }
+/**
+ * Run manually in the Apps Script editor while logged into the Gmail sender.
+ * This tests Google's MailApp authorization without sending any customer
+ * documents or signed links. It must never be used as a public web endpoint.
+ */
+function testGmailDeliveryToSelf() {
+  const identity=String(Session.getEffectiveUser().getEmail()||'').toLowerCase();
+  if(identity!==ZHENLI_SENDER)
+    throw new Error('Open and run this project as '+ZHENLI_SENDER);
+  if(MailApp.getRemainingDailyQuota()<1)
+    throw new Error('Gmail daily sending quota exhausted');
+  MailApp.sendEmail({
+    to:ZHENLI_SENDER,
+    subject:'ZHENLI DMS | Gmail Relay Delivery Test',
+    body:'This is a harmless email delivery test from your own ZHENLI Signing Gmail Relay. No signing links or documents are included.',
+    name:'ZHENLI CONSULTANCY SERVICES SDN BHD'
+  });
+  console.log('Test email accepted by MailApp for '+ZHENLI_SENDER+'. Check Inbox / Spam to confirm actual delivery.');
+}
 function relayJson_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
@@ -106,6 +125,9 @@ function doPost(event) {
       return relayJson_({ok:true,accepted:true,sender:ZHENLI_SENDER});
     } finally {lock.releaseLock();}
   } catch(err) {
-    return relayJson_({ok:false,error:String(err&&err.message||'Relay rejected request').slice(0,160)});
+    const reason=String(err&&err.message||'Relay rejected request').slice(0,160);
+    // Do not print request bodies or bearer links. View in Apps Script > Executions.
+    console.error('ZHENLI Gmail Relay refusal: '+reason);
+    return relayJson_({ok:false,error:reason});
   }
 }
