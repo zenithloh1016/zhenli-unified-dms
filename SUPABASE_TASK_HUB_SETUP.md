@@ -1,6 +1,6 @@
 # Supabase Direct Task Hub — ZHENLI Unified DMS
 
-This replaces the former hosted Tencent EdgeOne Task Hub without rebuilding or changing its user interface. **Supabase** is the private data backend; **GitHub Pages** serves the static interface, just like the DMS website. Tencent EdgeOne is not used for Task Hub hosting or storage.
+The **Supabase Task Hub is the only Task Hub option inside ZHENLI DMS**. **Supabase** stores private task and company records; **GitHub Pages** serves the original interface. There is no external Task Hub URL setting or Tencent EdgeOne Task Hub connection.
 
 ## Access
 
@@ -14,9 +14,9 @@ The original Task Hub's task creation and editing, owner/assignee, priority, due
 
 The current Supabase project already has `task_hub_state` with row-level security enabled and task data populated. This feature does not alter or delete those rows or change existing Task Hub record formats. No new SQL migration or second data store is needed.
 
-## Moving any tasks still held only on EdgeOne
+## Backup and restore
 
-If the old standalone Tencent EdgeOne page holds tasks that have not yet been synchronized to DMS, open the old site and **Export backup JSON**. In the new Supabase Task Hub, first **Export backup JSON** of the existing Supabase tasks. Then use **Import backup** for the old JSON only after reviewing the difference: the old Task Hub's built-in import **replaces** the current Task Hub tasks and companies, rather than merging. Never import a confidential backup into the public GitHub repository.
+Use **Settings → Export backup JSON** inside the Supabase Task Hub to retain a local backup. Before importing any backup JSON, export the current Supabase tasks first: the existing **Import backup** action replaces the current Task Hub's tasks and companies rather than merging them. Never upload confidential task records to a public GitHub repository.
 
 ## How cloud synchronization works
 
@@ -28,6 +28,10 @@ If the old standalone Tencent EdgeOne page holds tasks that have not yet been sy
 
 The direct URL `/task-hub/` now redirects to the authenticated standalone Task Hub when opened outside DMS, preventing accidental unsynced local-only editing.
 
-**Operational caution:** This is cloud-synced application state; it is not multi-user realtime collaborative editing. Avoid simultaneously editing the same Task Hub under the same login in different tabs/devices without refreshing, and export regular JSON backups. The existing one-row JSON storage architecture remains unchanged and independent of EdgeOne.
+**Operational caution:** This is cloud-synced application state; it is not multi-user realtime collaborative editing. Avoid simultaneously editing the same Task Hub under the same login in different tabs/devices without refreshing, and export regular JSON backups. The existing one-row JSON storage architecture remains unchanged and does not depend on any external Task Hub service.
 
 The Tencent EdgeOne **Sequential Signing** integration is a separate provider and is not changed by this Task Hub update.
+
+## Removed legacy Task Hub controls
+
+The obsolete hosted Task Hub URL field, remote hosted-site launcher, and Task Hub connection-settings dialog have been removed from the DMS interface and code. Old browser preferences are ignored. **This code update does not delete a separately hosted Tencent EdgeOne project or deployment**; that must be retired through its original provider account if one still exists. The separate EdgeOne *signing* provider remains unchanged.
