@@ -22,7 +22,7 @@ import {installHubBridge} from './integrated-modules.js';
 const ROOT = document.getElementById('app');
 const BUCKET = 'dms-private';
 const SIGNING_BASE = 'https://zhenli-sequential-signing.edgeone.cool/';
-const TASK_HUB_BUNDLED = new globalThis.URL('./task-hub/index.html', document.baseURI).href;
+const TASK_HUB_BUNDLED = new globalThis.URL('./task-hub/index.html', document.baseURI).href + '?v=20261023-status-refresh-v2';
 const TASK_HUB_CLOUD = new globalThis.URL('./task-hub-cloud/index.html', document.baseURI).href;
 const ANNUAL_RETURN_BUNDLED = new globalThis.URL('./annual-return/index.html', document.baseURI).href;
 function allowedHttpsUrl(value, expectedHost = '') {
