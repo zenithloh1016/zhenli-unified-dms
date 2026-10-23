@@ -22,12 +22,13 @@ test('standalone Task Hub is a built Vite route with same original interface in 
   assert.doesNotMatch(cloud,/edgeone\.cool/);
   assert.doesNotMatch(cloud,/SUPABASE_SERVICE_ROLE_KEY/);
 });
-test('DMS Task Hub defaults to bundled same-origin Supabase and opens independent cloud page',()=>{
+test('DMS Task Hub stays embedded in Supabase without a standalone launch button',()=>{
   assert.match(dms,/const TASK_HUB_CLOUD = new globalThis\.URL\('\.\/task-hub-cloud\/index\.html'/);
   assert.match(dms,/const TASK_HUB_BUNDLED = new globalThis\.URL\('\.\/task-hub\/index\.html'/);
   assert.doesNotMatch(dms,/function getTaskHubUrl\(/);
   assert.doesNotMatch(dms,/renderLinkModal|task-link-form|task-settings|reset-task-link|launch-hosted-task|zhenli:taskhub:external|taskLink/);
-  assert.match(dms,/action\('Open standalone Task Hub','launch-cloud-task'/);
+  assert.doesNotMatch(dms,/action\('Open standalone Task Hub','launch-cloud-task'/);
+  assert.match(dms,/action\('Full-screen view','open-tasks'/);
   assert.match(dms,/id="zh-task-frame"/);
   assert.match(dms,/a==='launch-cloud-task'/);
   assert.doesNotMatch(dms.slice(dms.indexOf('function renderTasks()'),dms.indexOf('// ZHENLI_SIGNING_COOKIE_SAFE_LAUNCH')),/getTaskHubUrl\(\)|edgeone\.cool|Connection settings/);
@@ -52,4 +53,14 @@ test('standalone redirect cannot replace embedded Task Hub and same credentials 
   assert.match(cloud,/persistSession:true/);
   assert.match(cloud,/detectSessionInUrl:false/);
   assert.match(cloud,/db\.auth\.signOut/);
+});
+
+test('Task Hub offers five requested active statuses and retains completed task archive',()=>{
+  const statuses=taskHub.match(/const STATUSES = \[([\s\S]*?)\];/);
+  assert.ok(statuses, 'status options should exist');
+  const names=[...statuses[1].matchAll(/name:'([^']+)'/g)].map(match=>match[1]);
+  assert.deepEqual(names,['To do','Waiting CTC','Waiting client','Waiting SSM','Waiting auditor']);
+  assert.match(taskHub,/const isDone = t => t.status==='done'/);
+  assert.match(taskHub,/const workflowStatus = id =>/);
+  assert.match(taskHub,/status:old&&isDone\(old\)\?'done':workflowStatus/);
 });
