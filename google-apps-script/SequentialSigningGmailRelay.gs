@@ -70,6 +70,8 @@ function doPost(event) {
     const name=String(payload.name||'').trim().slice(0,180);
     const company=String(payload.company||'').trim().slice(0,250);
     const subject=String(payload.subject||'').trim().slice(0,250);
+    const documentTitle=String(payload.documentTitle||subject)
+      .replace(/[\x00-\x1f\x7f]+/g,' ').replace(/\s+/g,' ').trim().slice(0,160);
     const note=String(payload.note||'').trim().slice(0,1000);
     const link=String(payload.link||'');
     if(!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(to)||!name||!company||!subject)
@@ -90,14 +92,14 @@ function doPost(event) {
       if(MailApp.getRemainingDailyQuota()<1)throw new Error('Daily email quota exhausted.');
       const body='Dear '+name+',\n\n'+
         'Please review and electronically sign the company document.\n\n'+
-        'Company: '+company+'\nSubject: '+subject+'\n\n'+
+        'Company: '+company+'\nDocument: '+documentTitle+'\nSubject: '+subject+'\n\n'+
         'Secure individual signing link:\n'+link+'\n\n'+
         'This link is personal. Please do not forward it.\n\n'+
         (note?note+'\n\n':'')+
         'Thank you.\nZHENLI CONSULTANCY SERVICES SDN BHD';
       MailApp.sendEmail({
         to:to,
-        subject:'ZHENLI | Document signature required: '+company,
+        subject:'ZHENLI | Signature required: '+documentTitle,
         body:body,
         name:'ZHENLI CONSULTANCY SERVICES SDN BHD'
       });
