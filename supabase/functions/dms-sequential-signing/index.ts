@@ -352,8 +352,8 @@ async function handleAdmin(action,req,body) {
     if(r.status==="finalizing")throw Error("Finish PDF finalization before resetting this request");
     const newId=uuid();
     const {signers,map}=resetSignerMapping(r);
-    const uploaded=[];
-    const documents=[];
+    const uploaded: string[]=[];
+    const documents: any[]=[];
     let cloned=false;
     try {
       for(const d of r.documents){
