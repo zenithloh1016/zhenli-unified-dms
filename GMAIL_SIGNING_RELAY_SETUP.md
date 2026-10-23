@@ -31,3 +31,14 @@ This applies to the first invitation, sequential invitations and **Resend invita
 then open **Deploy → Manage deployments → Edit → Version: New version → Deploy**.
 Updating GitHub alone does not update a separately deployed Apps Script web app.
 Existing signed PDFs and signing request records remain unchanged.
+
+## Troubleshooting: invitation email is not accepted
+
+1. Check that the PDF actually belongs to the company before resending.
+2. Replace the **entire** Apps Script `Code.gs` with the latest [relay source](google-apps-script/SequentialSigningGmailRelay.gs), then Save. Do not paste individual snippets that may omit required constants.
+3. Select **testGmailDeliveryToSelf**, click **Run**, and complete the Google authorization prompt if asked. This sends only a harmless test message **to zhenlisecretary@gmail.com** (no customer PDF or signing link). If it fails, inspect the execution error under Apps Script **Executions**; this isolates sender permissions or quota.
+4. If the harmless test succeeds, go to **Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy**. Updating the editor without this step leaves the DMS calling the old script version. Keep the existing /exec URL and existing Script Property secret.
+5. Back in DMS, choose the relevant **pending** signing request and select **Resend invitation** only after you have checked its attached document. The DMS response reports the exact relay error when Gmail refuses. In Apps Script **Executions**, the latest `doPost` run will also show a **ZHENLI Gmail Relay refusal** message without printing confidential signing links.
+6. If Google reports that MailApp accepted the message but the recipient cannot find it, check the recipient's Spam/Junk folder and the sender account's Sent Mail. MailApp acceptance cannot guarantee recipient Inbox delivery.
+
+The `authorizeSender` function only checks the effective account and available quota; it does **not** prove a message can be sent. The `testGmailDeliveryToSelf` function exercises the real MailApp sending permission.
