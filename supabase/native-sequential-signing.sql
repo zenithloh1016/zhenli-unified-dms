@@ -83,3 +83,18 @@ revoke all on function public.dms_native_accept_signature(uuid,text,text)
   from public, anon, authenticated;
 grant execute on function public.dms_native_accept_signature(uuid,text,text)
   to service_role;
+
+-- Private configuration table: the service role can read the signing key; no
+-- browser account (even an authenticated DMS user) can retrieve it.
+-- Generate the key in Postgres and never return it to clients.
+create table if not exists public.dms_native_signing_config (
+  id boolean primary key default true check (id = true),
+  secret text not null check (length(secret) >= 64),
+  created_at timestamptz not null default now()
+);
+alter table public.dms_native_signing_config enable row level security;
+revoke all on public.dms_native_signing_config from public, anon, authenticated;
+grant select on public.dms_native_signing_config to service_role;
+insert into public.dms_native_signing_config (id, secret)
+values (true, encode(gen_random_bytes(32),'hex'))
+on conflict (id) do nothing;
