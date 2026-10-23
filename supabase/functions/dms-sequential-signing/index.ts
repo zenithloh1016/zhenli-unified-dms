@@ -18,6 +18,16 @@ const admin = createClient(supaUrl, serviceKey(), { auth: { persistSession:false
 const table = () => admin.from("dms_native_sign_requests");
 const bucket = () => admin.storage.from("dms-native-signing");
 const secret = env("NATIVE_SIGNING_SECRET");
+// If no Edge Function secret has been configured, use the randomly generated,
+// service-role-only signing key from the same project database.
+async function signingSecret() {
+  if (secret.length >= 32) return secret;
+  const {data,error} = await admin.from("dms_native_signing_config")
+    .select("secret").eq("id",true).single();
+  if (error || !data?.secret || data.secret.length<64)
+    throw Error("Private signing key is unavailable; check native signing database setup");
+  return data.secret;
+}
 const maxPdf = 3 * 1024 * 1024;
 const maxSign = 300 * 1024;
 const now = () => new Date().toISOString();
@@ -34,8 +44,7 @@ const isUuid = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{
 const fail = (message, status=400) => ({error:String(message), status});
 const rowError = (r) => { if (r.error) throw Error(r.error.message); return r.data; };
 function publicLinkBase() {
-  const val = env("PUBLIC_SIGNING_URL");
-  if (!val) throw Error("PUBLIC_SIGNING_URL is not configured");
+  const val = env("PUBLIC_SIGNING_URL") || "https://zenithloh1016.github.io/zhenli-unified-dms/sign/";
   const u = new URL(val);
   if (u.protocol !== "https:" || u.username || u.password || u.hash || u.search ||
       !(/\/sign\/?$/.test(u.pathname) || /\/sign\/index\.html$/.test(u.pathname))) {
@@ -72,7 +81,7 @@ function bytesResponse(bytes, origin) {
   }});
 }
 async function signerMac(id,sid) {
-  const key = await crypto.subtle.importKey("raw",enc.encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+  const key = await crypto.subtle.importKey("raw",enc.encode(await signingSecret()),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
   return secureHex(await crypto.subtle.sign("HMAC",key,enc.encode("ZHENLI_NATIVE_V1:"+id+":"+sid)));
 }
 async function createToken(r,s) {return r.id+"."+s.id+"."+await signerMac(r.id,s.id);}
@@ -311,7 +320,7 @@ Deno.serve(async (req) => {
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors(origin)});
   if(req.method!=="POST")return json({error:"Method not allowed"},405,origin);
   if(origin&&!allowedOrigins().includes(origin))return json({error:"Unrecognised website origin"},403,origin);
-  if(secret.length<32||!supaUrl||!serviceKey())return json({error:"Native signing backend is not configured"},503,origin);
+  if(!supaUrl||!serviceKey())return json({error:"Native signing backend is not configured"},503,origin);
   try {
     const raw=await req.text();
     if(raw.length>5*1024*1024) return json({error:"Request too large"},413,origin);
