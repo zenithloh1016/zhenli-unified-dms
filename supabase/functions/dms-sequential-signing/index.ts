@@ -66,7 +66,7 @@ function json(data,status=200,origin="") {
 }
 function bytesResponse(bytes, origin) {
   return new Response(bytes,{headers:{
-    ...cors(origin),"Content-Type":"application/pdf","Cache-Control":"no-store, private",
+    ...cors(origin),"Content-Type":"application/octet-stream","Cache-Control":"no-store, private",
     "Referrer-Policy":"no-referrer","X-Content-Type-Options":"nosniff",
     "Content-Disposition":"inline; filename=\"signing-document.pdf\""
   }});
