@@ -39,6 +39,7 @@ test('DMS UI reorders only unsigned signers and resets to a separate preserved d
   const rows=['s1','s2','s3'].map(x=>({
     dataset:{nsOrderId:x},querySelector:()=>label()
   }));
+  const originalSigner2=rows[1]; // preserve identity as the mock DOM mutates child order
   const root={children:rows,insertBefore(item,target){
     const from=this.children.indexOf(item);this.children.splice(from,1);
     this.children.splice(this.children.indexOf(target),0,item);
@@ -64,16 +65,16 @@ test('DMS UI reorders only unsigned signers and resets to a separate preserved d
   assert.match(detail,/Reset signing request/);
   ui.onClick('ns-order',id);
   assert.match(ui.render(),/Already signed — order locked/);
-  ui.onClick('ns-order-up','',{target:{closest:()=>rows[1]}});
+  ui.onClick('ns-order-up','',{target:{closest:()=>originalSigner2}});
   assert.deepEqual(root.children.map(x=>x.dataset.nsOrderId),['s1','s2','s3'],
     'signed signer may not be displaced');
-  ui.onClick('ns-order-down','',{target:{closest:()=>rows[1]}});
+  ui.onClick('ns-order-down','',{target:{closest:()=>originalSigner2}});
   assert.deepEqual(root.children.map(x=>x.dataset.nsOrderId),['s1','s3','s2']);
   assert.match(ui.render(),/Signing position/,'direct position dropdown is present');
-  ui.changed({name:'orderPosition',value:'2',closest:()=>rows[1]});
+  ui.changed({name:'orderPosition',value:'2',closest:()=>originalSigner2});
   assert.deepEqual(root.children.map(x=>x.dataset.nsOrderId),['s1','s2','s3'],
     'selecting numeric position directly repositions the signer');
-  ui.changed({name:'orderPosition',value:'3',closest:()=>rows[1]});
+  ui.changed({name:'orderPosition',value:'3',closest:()=>originalSigner2});
   assert.deepEqual(root.children.map(x=>x.dataset.nsOrderId),['s1','s3','s2']);
   ui.onClick('ns-save-order');await tick();
   const order=calls.find(x=>x.action==='admin-order');
