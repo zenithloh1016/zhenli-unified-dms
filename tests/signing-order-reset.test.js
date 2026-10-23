@@ -73,7 +73,8 @@ test('reset clones private PDFs, preserves old signed record and revokes old pen
   const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
   const handler=new AsyncFunction('action','r','user','table','bucket','rowError','uuid',
     'resetSignerMapping','presentation','now','maxPdf','defaultSenderEmail','hash','TextDecoder',
-    resetSnippet[1]+'\n return {unexpected:true};');
+    resetSnippet[1].replace('const uploaded: string[]=[];','const uploaded=[];')
+      .replace('const documents: any[]=[];','const documents=[];')+'\n return {unexpected:true};');
   const response=await handler('reset',original,original.owner_id,table,bucket,rowError,uuid,
     r=>{const map=new Map();const fresh=r.signers.map((s,i)=>{
       const id=uuid();map.set(s.id,id);return {...s,id,position:i+1,signedAt:null,signaturePath:null};
