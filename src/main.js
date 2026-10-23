@@ -34,11 +34,6 @@ function getSigningUrl() {
   try { return allowedHttpsUrl(sessionStorage.getItem('zhenli:signing:session') || SIGNING_BASE, 'zhenli-sequential-signing.edgeone.cool'); }
   catch { return SIGNING_BASE; }
 }
-function getTaskHubUrl() {
-  // Supabase is the only supported Task Hub provider. Ignore any legacy
-  // EdgeOne URL without removing a previous account's browser preferences.
-  return TASK_HUB_BUNDLED;
-}
 
 const rawSupabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || '').trim().replace(/^['"]|['"]$/g, '');
 const parsedSupabaseUrl = rawSupabaseUrl ? new globalThis.URL(rawSupabaseUrl) : null;
@@ -563,11 +558,11 @@ function renderTasks(){
   // Standalone is served on this same GitHub Pages origin; both read and
   // write the existing row-level-secured Supabase task_hub_state records.
   return `<div class="integration-heading"><div><p class="eyebrow">SECRETARIAL TASK MANAGER</p><h1>Task Hub</h1>
-    <p class="muted">The original Task Hub interface, connected directly to your private Supabase account. No Tencent EdgeOne dependency.</p></div>
+    <p class="muted">Your company-secretarial Task Hub is connected directly to your private Supabase account.</p></div>
     <div class="header-buttons">${action('Full-screen view','open-tasks','','secondary')}${action('Open standalone Task Hub','launch-cloud-task','','primary')}</div></div>
     <div class="integration-info">Supabase cloud sync is enabled using your existing DMS login and private Task Hub records.
       Task creation, company tasks, checklists, recurring tasks, Kanban, calendar and Master Listing import all use the same original layout.
-      Previously saved data is retained. For any tasks still held only on Tencent EdgeOne, export its JSON backup and import it here once after first exporting a current backup.</div>
+      Previously saved tasks and company records are retained. Export a Task Hub JSON backup before replacing or importing any records.</div>
     <div class="frame-shell ${state.taskFullscreen?'task-expanded':''}">${state.taskFullscreen?'<div class="frame-toolbar"><strong>Task Hub</strong><button type="button" class="btn secondary" data-action="exit-tasks">Exit full screen ✕</button></div>':''}
     <iframe id="zh-task-frame" class="integration-frame" title="ZHENLI Secretarial Task Hub · Supabase" src="${esc(TASK_HUB_BUNDLED)}" loading="lazy" referrerpolicy="same-origin"></iframe></div>`;
 }
@@ -603,12 +598,6 @@ function setSigningFullscreen(open){
   shell?.querySelector('[data-action="'+actionName+'"]')?.focus({preventScroll:true});
 }
 
-function renderLinkModal() {
-  return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="Task Hub connection settings"><div class="modal-heading"><h3>Task Hub connection</h3>${action('✕','close-modal')}</div>
-    <p class="muted">The original Task Hub is included in this package. To use your separate live EdgeOne deployment instead, paste its actual HTTPS address.</p>
-    <form id="task-link-form"><label class="input-label">Task Hub website URL<input name="taskLink" type="url" value="${esc(localStorage.getItem('zhenli:taskhub:external') || '')}" placeholder="https://your-task-hub.edgeone.cool/"></label><div class="modal-actions">${action('Use bundled Task Hub','reset-task-link','','secondary')}<button class="btn primary" type="submit">Save URL</button></div></form>
-    <p class="fineprint">Existing tasks from a different EdgeOne origin do not automatically transfer. Use the Task Hub Export/Import function before switching.</p></section></div>`;
-}
 function render() {
   document.body.classList.toggle('zh-signing-fullscreen-open',!!(state.user && state.tab==='signing' && state.signingFullscreen));
   document.body.classList.toggle('zh-ar-fullscreen-open',!!(state.user && state.tab==='annual-return' && state.arFullscreen));
@@ -622,7 +611,7 @@ function render() {
     <footer class="app-footer"><span>ZHENLI DMS V1.2 · Add Company · Web + Android</span><span>${esc(state.user.email || '')} · ${action('Sign out','sign-out')}</span></footer></div>
   ${state.notice ? `<div class="toast" role="status">${esc(state.notice)} ${action('✕','dismiss')}</div>` : ''}
   ${state.busy ? '<div class="busy-bar">Working… please keep this page open</div>' : ''}
-  ${state.modal?.kind==='taskLink'?renderLinkModal():modalHTML()}
+  ${modalHTML()}
   <input id="document-upload" type="file" multiple hidden />`;
   if(state.tab==='signing') (state.signingProvider==='supabase'?signingSupabaseUI:signingUI).mount();
    if(state.tab==='annual-return'){
@@ -808,13 +797,11 @@ ROOT.addEventListener('click', event=>{
     if(state.tab==='signing')setSigningFullscreen(a==='open-signing-fullscreen');
     return;
   }
-  if(a==='task-settings'){state.modal={kind:'taskLink'};render();return;}
-  if(a==='reset-task-link'){localStorage.removeItem('zhenli:taskhub:external');state.modal=null;render();return;}
   if(a==='clear-signing'){sessionStorage.removeItem('zhenli:signing:session');render();return;}
   if(a==='open-tasks'||a==='exit-tasks'){
     state.taskFullscreen = a==='open-tasks';render();return;
   }
-  if(a==='open-signing'||a==='launch-hosted-task'||a==='launch-cloud-task'){
+  if(a==='open-signing'||a==='launch-cloud-task'){
     const url=a==='open-signing'?getSigningUrl():TASK_HUB_CLOUD;
     if(a==='open-signing'){
       const time = new globalThis.URL(url).searchParams.get('eo_time');
@@ -905,12 +892,6 @@ ROOT.addEventListener('submit',event=>{
     event.preventDefault();
     const input=event.target.elements.signingLink.value;
     try { sessionStorage.setItem('zhenli:signing:session', allowedHttpsUrl(input, 'zhenli-sequential-signing.edgeone.cool'));render(); }
-    catch(e){toast(e.message)}
-    return;
-  }
-  if(event.target.id==='task-link-form'){
-    event.preventDefault();
-    try {const url=allowedHttpsUrl(event.target.elements.taskLink.value);localStorage.setItem('zhenli:taskhub:external',url);state.modal=null;render();}
     catch(e){toast(e.message)}
     return;
   }
