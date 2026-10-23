@@ -74,13 +74,10 @@ function doPost(event) {
     const link=String(payload.link||'');
     if(!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(to)||!name||!company||!subject)
       throw new Error('Missing or invalid signer details.');
-    let url;
-    try{url=new URL(link);}catch(_){throw new Error('Invalid signing link.');}
-    const token=url.searchParams.get('token')||'';
-    if(url.protocol!=='https:'||url.origin!==ZHENLI_SIGNING_ORIGIN||
-       url.pathname!==ZHENLI_SIGNING_PATH||
-       !/^[a-f0-9-]{36}\.[a-f0-9-]{36}\.[a-f0-9]{64}$/.test(token)||
-       [...url.searchParams.keys()].length!==1)
+    // Apps Script V8 does not implement the browser URL class.
+    const prefix=ZHENLI_SIGNING_ORIGIN+ZHENLI_SIGNING_PATH+'?token=';
+    const token=link.startsWith(prefix)?link.slice(prefix.length):'';
+    if(!/^[a-f0-9-]{36}\.[a-f0-9-]{36}\.[a-f0-9]{64}$/.test(token))
       throw new Error('Invalid ZHENLI signing link.');
 
     const lock=LockService.getScriptLock();
