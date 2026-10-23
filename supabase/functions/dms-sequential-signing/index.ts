@@ -100,7 +100,7 @@ async function signerAccess(token) {
   if(p.length!==3 || !isUuid(p[0]) || !isUuid(p[1]) || !/^[0-9a-f]{64}$/.test(p[2]) ||
      !constantEqual(p[2],await signerMac(p[0],p[1])))throw Error("Invalid signing link");
   const r=rowError(await table().select("*").eq("id",p[0]).maybeSingle());
-  if(!r)throw Error("Signing request not found");
+  if(!r || r.deleted_at)throw Error("Signing request is unavailable");
   const s=r.signers.find(x=>x.id===p[1]);if(!s)throw Error("Invalid signer");
   return {r,s};
 }
@@ -118,7 +118,7 @@ async function who(req) {
 async function owned(id,user) {
   if(!isUuid(id))throw Error("Invalid request identifier");
   const r=rowError(await table().select("*").eq("id",id).eq("owner_id",user).maybeSingle());
-  if(!r)throw Error("Request not found in your DMS account");
+  if(!r || r.deleted_at)throw Error("Request not found in your active DMS signing list");
   return r;
 }
 async function write(r,changes) {
@@ -278,8 +278,25 @@ async function handleAdmin(action,req,body) {
   const user=await who(req);
   if(action==="list"){
     const rows=rowError(await table().select("id,company,subject,status,created_at,expires_at")
-      .eq("owner_id",user).order("created_at",{ascending:false}).limit(100));
-    return {requests:rows};
+      .eq("owner_id",user).is("deleted_at",null)
+      .order("created_at",{ascending:false}).limit(100));
+    const {count,error}=await table().select("id",{count:"exact",head:true})
+      .eq("owner_id",user).is("deleted_at",null);
+    if(error)throw Error(error.message);
+    return {requests:rows,total:count||0};
+  }
+  if(action==="delete-all"){
+    // This does not erase legally relevant signed records or PDF evidence.
+    // It removes requests from the active DMS UI, invalidates pending links
+    // and appends an audit event to each affected request.
+    if(body.confirmation!=="DELETE ALL")throw Error("Type DELETE ALL to confirm");
+    const expectedCount=Number(body.expectedCount);
+    if(!Number.isSafeInteger(expectedCount)||expectedCount<1)
+      throw Error("Select an existing set of requests before deletion");
+    const removed=rowError(await admin.rpc("dms_native_hide_all_sign_requests",{
+      p_owner_id:user,p_expected_count:expectedCount
+    }));
+    return {deleted:removed,evidencePreserved:true};
   }
   if(action==="mail-status"){
     const entry=rowError(await relayTable().select("enabled,verified_at,sender_email")
