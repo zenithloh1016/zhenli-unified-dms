@@ -16,6 +16,7 @@ function serviceKey() {
 }
 const admin = createClient(supaUrl, serviceKey(), { auth: { persistSession:false,autoRefreshToken:false } });
 const table = () => admin.from("dms_native_sign_requests");
+const relayTable = () => admin.from("dms_native_mail_relays");
 const bucket = () => admin.storage.from("dms-native-signing");
 const secret = env("NATIVE_SIGNING_SECRET");
 // If no Edge Function secret has been configured, use the randomly generated,
@@ -137,8 +138,54 @@ async function presentation(r,includeLinks=false) {
       id:d.id,name:d.name,pages:d.pages,ready:!!d.finalPath
     })),boxes:r.boxes,audit:r.audit};
 }
+// Only trust Google Apps Script's production /exec deployments; the
+// deployment must execute as the verified zhenlisecretary@gmail.com owner.
+function relayUrl(value) {
+  const url=new URL(safe(value,900));
+  if(url.protocol!=="https:"||url.origin!=="https://script.google.com"||
+     !/^\/macros\/s\/[A-Za-z0-9_-]{15,}\/exec$/.test(url.pathname)||
+     url.search||url.hash||url.username||url.password||url.port)
+    throw Error("Use a Google Apps Script production Web app /exec URL");
+  return url.toString();
+}
+async function sendRelayRequest(relay,payload) {
+  const timestamp=Date.now(),nonce=uuid().replace(/-/g,"");
+  const message=timestamp+"."+nonce+"."+JSON.stringify(payload);
+  const key=await crypto.subtle.importKey("raw",enc.encode(relay.relay_hmac_secret),
+    {name:"HMAC",hash:"SHA-256"},false,["sign"]);
+  const signature=secureHex(await crypto.subtle.sign("HMAC",key,enc.encode(message)));
+  const response=await fetch(relayUrl(relay.script_url),{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({timestamp,nonce,payload,signature}),
+    redirect:"follow",signal:AbortSignal.timeout(17000)
+  });
+  if(!response.ok)throw Error("Google Apps Script returned HTTP "+response.status);
+  const result=await response.json();
+  if(!result?.ok)throw Error("Gmail relay: "+safe(result?.error||"request refused",160));
+  if(result.sender!=="zhenlisecretary@gmail.com")
+    throw Error("Gmail sender identity does not match zhenlisecretary@gmail.com");
+  return result;
+}
 async function sendInvite(r,s) {
   if(!s)return "no pending signer";
+  // Owner-authenticated connection to Gmail's send-only MailApp service.
+  // An invalid/not-yet-installed relay must never prevent manual link sharing.
+  const {data:relay,error:relayError}=await relayTable().select("*").eq("owner_id",r.owner_id)
+    .eq("enabled",true).maybeSingle();
+  if(relayError)return "manual — Gmail relay configuration unavailable";
+  if(relay){
+    try{
+      const result=await sendRelayRequest(relay,{
+        kind:"send",to:s.email,name:s.name,company:r.company,subject:r.subject,
+        note:safe(r.note,1000),link:await signerLink(r,s)
+      });
+      return result.accepted
+        ? "accepted by Gmail ("+result.sender+"); inbox delivery is not guaranteed"
+        : "manual — Gmail relay did not confirm acceptance";
+    }catch(ex){
+      return "manual — "+safe(ex instanceof Error?ex.message:"Gmail relay unavailable",170);
+    }
+  }
   const key=env("RESEND_API_KEY"),from=env("SIGNING_FROM_EMAIL");
   if(!key||!from)return "manual — "+defaultSenderEmail+" is not connected to an email delivery service";
   // Never label a message as sent by an unverified Gmail address.
@@ -195,6 +242,35 @@ async function handleAdmin(action,req,body) {
       .eq("owner_id",user).order("created_at",{ascending:false}).limit(100));
     return {requests:rows};
   }
+  if(action==="mail-status"){
+    const entry=rowError(await relayTable().select("enabled,verified_at,sender_email")
+      .eq("owner_id",user).maybeSingle());
+    return {connected:!!entry?.enabled,senderEmail:"zhenlisecretary@gmail.com",
+      verifiedAt:entry?.enabled?entry.verified_at:null};
+  }
+  if(action==="mail-connect"){
+    const script_url=relayUrl(body.scriptUrl);
+    const relay_hmac_secret=safe(body.sharedSecret,128);
+    if(!/^[0-9a-f]{64}$/.test(relay_hmac_secret))
+      throw Error("Enter the exact 64-character secret saved in Apps Script Properties");
+    const result=await sendRelayRequest({script_url,relay_hmac_secret},{kind:"ping"});
+    if(!Number.isInteger(result.quotaRemaining))
+      throw Error("Gmail authorization check did not report remaining quota");
+    if(result.quotaRemaining<1)
+      throw Error("Gmail account is authenticated but the daily sending quota is exhausted");
+    rowError(await relayTable().upsert({
+      owner_id:user,script_url,relay_hmac_secret,enabled:true,
+      sender_email:"zhenlisecretary@gmail.com",
+      verified_at:now(),updated_at:now()
+    },{onConflict:"owner_id"}));
+    return {connected:true,senderEmail:"zhenlisecretary@gmail.com",
+      quotaRemaining:result.quotaRemaining};
+  }
+  if(action==="mail-disable"){
+    rowError(await relayTable().update({enabled:false,updated_at:now()}).eq("owner_id",user));
+    return {connected:false};
+  }
+
   if(action==="create"){
     const company=safe(body.company),subject=safe(body.subject),note=safe(body.note,1000);
     if(company.length<2||subject.length<2)throw Error("Company and subject are required");
