@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173e64">
+  <meta name="robots" content="noindex,nofollow">
+  <title>ZHENLI | Supabase Task Hub</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#192838;background:#f5f7fa}
+    *{box-sizing:border-box}body{margin:0}.zh-cloud{height:100dvh;min-height:100vh;display:flex;flex-direction:column}
+    .zh-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:#fff;border-bottom:1px solid #dce6ef}
+    .zh-toolbar h1{margin:0;font-size:17px;font-weight:750}.zh-toolbar small{color:#52718a;display:block;margin-top:3px}
+    .zh-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .zh-btn{cursor:pointer;font:inherit;font-size:13px;font-weight:650;border:1px solid #cad6e2;background:#fff;color:#173e64;border-radius:9px;padding:9px 12px}
+    .zh-btn.primary{background:#173e64;color:white;border-color:#173e64}.zh-btn:disabled{opacity:.55;cursor:wait}
+    #zh-task-frame{border:0;flex:1;width:100%;min-height:0;background:white}
+    .zh-login{min-height:100dvh;display:grid;place-items:center;padding:20px}
+    .zh-login form{width:min(100%,430px);padding:30px;border:1px solid #dce6ef;background:#fff;border-radius:16px;box-shadow:0 12px 28px #0b28500c}
+    .zh-login h1{font-size:24px;margin:0 0 6px}.zh-login p{font-size:14px;line-height:1.55;color:#58728a}
+    .zh-login label{display:block;font-size:13px;font-weight:650;margin:17px 0}
+    .zh-login input{width:100%;margin-top:7px;font:inherit;font-size:15px;padding:12px;border-radius:8px;border:1px solid #b9cadd}
+    .zh-login .zh-btn{width:100%;padding:12px}
+    .zh-error{color:#a32737!important;background:#fff0f1;padding:12px;border:1px solid #f3c7cc;border-radius:8px}
+    #zh-status{position:absolute;bottom:18px;left:18px;z-index:9;max-width:min(480px,90vw);background:#173e64;color:white;padding:12px 15px;border-radius:10px;box-shadow:0 8px 24px #0002;font-size:13px}
+    #zh-status[hidden]{display:none}
+  </style>
+  <script type="module" src="../src/task-hub-cloud.js"></script>
+</head>
+<body><div id="zh-task-cloud" aria-live="polite"></div></body>
+</html>
