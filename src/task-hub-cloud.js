@@ -55,7 +55,7 @@ function render(){
 }
 async function refreshUser(user){
   const id=user?.id||null;
-  if(id===lastMountedUser&&!connecting)return;
+  if(id===lastMountedUser && id!==null)return;
   currentUser=user||null;
   lastMountedUser=id;
   companies=[];
