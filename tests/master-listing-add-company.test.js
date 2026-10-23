@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createMasterListingTab} from '../src/master-listing-tab.js';
-import {removeDeletedDocumentCompany,sortMasterListingCompanies} from '../src/master-listing-data.js';
+import {removeDeletedDocumentCompany,sortMasterListingCompanies,reconcileDeletedDocumentRows} from '../src/master-listing-data.js';
 import {readFileSync} from 'node:fs';
 
 function makeWorkspace({documentsError=null}={}){
@@ -232,4 +232,61 @@ test('Sorting existing ordered rows is stable and does not mutate particulars',(
  assert.equal(result.changed,false);
  assert.equal(result.model,model);
  assert.deepEqual(model.rows.map(r=>r.values[3]),['31/12/2026','30/09/2026']);
+});
+
+
+test('Opening Master Listing removes the previously deleted mmm company without touching Documents',async()=>{
+ const x=makeWorkspace();
+ await x.ui.load();
+ x.ui.onClick('ml-add');
+ await submitAndDrain(x.ui,x.form({1:'mmm',2:'202602300001'},false));
+ x.ui.onClick('ml-add');
+ await submitAndDrain(x.ui,x.form({1:'RETAINED SDN BHD',2:'202602300002',3:'23/10/2026'},false));
+ const retained=x.saved.rows.find(r=>r.values[1]==='RETAINED SDN BHD');
+ const result=await x.ui.reconcileOrphanedCompanies([{name:'RETAINED SDN BHD',registration_no:'202602300002'}]);
+ assert.equal(result.removed,1);
+ assert.deepEqual(result.names,['mmm']);
+ assert.equal(x.saved.rows.length,1);
+ assert.equal(x.saved.rows[0].id,retained.id);
+ assert.equal(x.saved.rows[0].values[0],'1');
+ assert.equal(x.saved.rows[0].values[3],'23/10/2026');
+});
+
+test('Previously auto-added Documents-only company is cleaned when company is absent from register',async()=>{
+ const x=makeWorkspace();
+ await x.ui.syncDocumentCompanies([{name:'ORPHAN SDN BHD',registration_no:'202611111111'},
+  {name:'VALID SDN BHD',registration_no:'202622222222'}]);
+ const clean=await x.ui.reconcileOrphanedCompanies([{name:'VALID SDN BHD',registration_no:'202622222222'}]);
+ assert.equal(clean.removed,1);
+ assert.deepEqual(x.saved.rows.map(r=>r.values[1]),['VALID SDN BHD']);
+ assert.deepEqual(x.saved.rows.map(r=>r.values[0]),['1']);
+ assert.ok(x.uploads.some(u=>u.path.includes('/history/')));
+});
+
+test('Imported-only records remain even when no Documents company folder exists',()=>{
+ const model={version:1,nameColumn:1,registrationColumn:2,
+  columns:[{label:'No.'},{label:'Company Name'},{label:'Registration No.'}],
+  rows:[{id:'r0',values:['1','IMPORTED ONLY SDN BHD','202501234567']},
+        {id:'doc-123',values:['2','OLD FOLDER SDN BHD','202601234567']}]};
+ const result=reconcileDeletedDocumentRows(model,[]);
+ assert.equal(result.removed,1);
+ assert.deepEqual(result.model.rows.map(r=>r.values[1]),['IMPORTED ONLY SDN BHD']);
+ assert.equal(model.rows.length,2,'original model not mutated');
+});
+
+test('Current Documents company and missing registration remain matched after reconciliation',()=>{
+ const model={version:1,nameColumn:1,registrationColumn:2,
+  columns:[{label:'No.'},{label:'Company Name'},{label:'Registration No.'}],
+  rows:[{id:'doc-a',values:['1','CURRENT SDN BHD','N/A']}]};
+ const result=reconcileDeletedDocumentRows(model,[{name:'current sdn bhd',registration_no:''}]);
+ assert.equal(result.removed,0);
+ assert.equal(result.model,model);
+});
+
+test('No manual Remove row button remains, and entering Master Listing refreshes company sync',()=>{
+ const s=readFileSync(new URL('../src/master-listing-tab.js',import.meta.url),'utf8');
+ const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ assert.doesNotMatch(s,/act\('Remove row'/);
+ assert.doesNotMatch(s,/action==='ml-remove'/);
+ assert.match(main,/await masterListingUI\.reconcileOrphanedCompanies\(state\.companies\)/);
 });

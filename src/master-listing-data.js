@@ -346,3 +346,48 @@ export function sortMasterListingCompanies(model){
  validateMasterListing(result);
  return {model:result,changed};
 }
+
+
+/**
+ * Repair orphaned companies that were originally added via Documents.
+ * Existing Excel-imported companies are NOT removed merely because a Documents
+ * folder is absent. The named legacy test company "mmm" was explicitly
+ * requested for removal if it is no longer in Documents.
+ */
+export function reconcileDeletedDocumentRows(model,companies,{requestedNames=['mmm']}={}){
+ validateMasterListing(model);
+ if(!Array.isArray(companies))throw Error('A complete Documents company list is required.');
+ // An incomplete PostgREST page is unsafe for destructive reconciliation.
+ if(companies.length>=1000)throw Error('Too many Documents companies to verify safely. No Master Listing changes made.');
+ const normalized=v=>String(v??'').normalize('NFKC').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+ const register=v=>{
+  const s=normalized(v);
+  return s==='NA'?'':s.match(/\d{12}/)?.[0]||s;
+ };
+ const docRows=companies.map(c=>({name:normalized(c.name),registration:register(c.registration_no??c.registration)}));
+ const explicitlyDeleted=new Set(requestedNames.map(name=>normalized(name)));
+ const orphaned=[];
+ const kept=[];
+ for(const row of model.rows){
+  const info=companyData(model,row);
+  const name=normalized(info.name),registration=register(info.registration);
+  const fromDocuments=String(row.id||'').startsWith('doc-');
+  if(!fromDocuments&&!explicitlyDeleted.has(name)){kept.push(row);continue;}
+  const stillExists=docRows.some(c=>{
+   if(registration&&c.registration)return registration===c.registration;
+   return !!name&&name===c.name;
+  });
+  if(stillExists){kept.push(row);continue;}
+  orphaned.push({id:row.id,name:info.name});
+ }
+ if(!orphaned.length)return {model,removed:0,names:[]};
+ const ordinal=model.columns.findIndex((_,i)=>isListingOrdinalColumn(model,i));
+ const rows=kept.map((row,i)=>{
+  if(ordinal<0||row.values[ordinal]===String(i+1))return row;
+  const values=row.values.slice();values[ordinal]=String(i+1);
+  return {...row,values};
+ });
+ const updated={...model,rows};
+ validateMasterListing(updated);
+ return {model:updated,removed:orphaned.length,names:orphaned.map(c=>c.name)};
+}

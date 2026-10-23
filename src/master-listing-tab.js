@@ -4,7 +4,7 @@
  * Supabase Storage under the user's own prefix. No new database table or
  * service-role credentials are required. Documents folders change only when the user requests synchronization on add or through Sync.
  */
-import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeDeletedDocumentCompany,sortMasterListingCompanies} from './master-listing-data.js';
+import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeDeletedDocumentCompany,sortMasterListingCompanies,reconcileDeletedDocumentRows} from './master-listing-data.js';
 import {previewRegisterParticularsZip,preserveRegisterParticulars,compactRegisterColumns,REGISTER_PARTICULARS_COLUMNS} from './master-listing-register-particulars.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -315,6 +315,29 @@ async function saveRepairedDates(){
   }finally{state.saving=false;onRender?.();}
  }
 
+
+ /**
+  * Reconcile only rows previously generated from Documents and the explicitly
+  * deleted legacy "mmm" entry. Read the newest saved listing, then preserve a
+  * private backup before updating. Never clear Excel-only company rows.
+  */
+ async function reconcileOrphanedCompanies(companies){
+  if(state.loading||state.saving)throw Error('Master Listing is busy. Retry when it finishes loading.');
+  if(!getUser?.()?.id)throw Error('Sign in to DMS before checking the Master Listing.');
+  await load(true);
+  if(state.error)throw Error('Unable to read Master Listing: '+state.error);
+  if(!state.model)return {removed:0,names:[]};
+  const result=reconcileDeletedDocumentRows(state.model,companies);
+  if(!result.removed)return result;
+  state.saving=true;state.error='';state.status='Reconciling deleted Documents companies…';onRender?.();
+  try{
+   await saveModel(result.model,{backup:true});
+   state.editIndex=null;state.page=0;
+   state.status='Removed '+result.removed+' deleted Documents company record(s) from Master Listing. A private backup was saved.';
+   return {removed:result.removed,names:result.names};
+  }finally{state.saving=false;onRender?.();}
+ }
+
  async function syncDocuments(){
   const model=state.model;if(!model)throw Error('Import Master Listing first.');
   const existing=getCompanies?.()||[];
@@ -484,7 +507,7 @@ function renderEditor(){
   if(action==='ml-search-do'){state.search=document.getElementById('ml-search')?.value||'';state.page=0;onRender?.();return true;}
   if(action==='ml-search-clear'){state.search='';state.page=0;onRender?.();return true;}
   if(action==='ml-sync'){asyncRun(syncDocuments);return true;}
-  if(action==='ml-pull-documents'){asyncRun(()=>syncDocumentCompanies(getCompanies?.()||[]));return true;}
+  if(action==='ml-pull-documents'){asyncRun(async()=>{await reconcileOrphanedCompanies(getCompanies?.()||[]);await syncDocumentCompanies(getCompanies?.()||[]);});return true;}
   if(action==='ml-documents'){openCompany?.(id);return true;}
   return false;
  }
@@ -518,5 +541,5 @@ function renderEditor(){
   return true;
  }
  const exitFullscreen=()=>{if(!state.fullScreen)return false;state.fullScreen=false;state.page=0;onRender?.();return true;};
- return {render,load,reset,onClick,onChange,onSubmit,afterRender,exitFullscreen,syncDocumentCompanies,removeDeletedCompany,get model(){return state.model;},get state(){return state;}};
+ return {render,load,reset,onClick,onChange,onSubmit,afterRender,exitFullscreen,syncDocumentCompanies,removeDeletedCompany,reconcileOrphanedCompanies,get model(){return state.model;},get state(){return state;}};
 }

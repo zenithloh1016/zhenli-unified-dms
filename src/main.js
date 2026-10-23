@@ -785,7 +785,10 @@ ROOT.addEventListener('click', event=>{
   if(a==='deadline-refresh'){reloadStatutoryDeadlines(true).catch(showError);return;}
   if(a==='deadline-open-master'){
     state.tab='master-listing';render();
-    masterListingUI.load().catch(showError);return;
+    void (async()=>{
+      await reloadCompanies();
+      await masterListingUI.reconcileOrphanedCompanies(state.companies);
+    })().catch(showError);return;
   }
   if(a==='deadline-edit'){
     const index=Number(id);
@@ -806,7 +809,14 @@ ROOT.addEventListener('click', event=>{
     // Drafts are saved as edits are made; no JSON export is needed before switching modules.
     if(state.tab==='statutory-registers' && nextTab!=='statutory-registers' && !registerBookUI.canLeave())return;
     state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;if(state.tab!=='annual-return')state.arFullscreen=false;render();
-    if(nextTab==='master-listing')masterListingUI.load().catch(showError);
+    if(nextTab==='master-listing'){
+      // Reload the authoritative Documents companies before reconciling
+      // historical deletions. Orphan cleanup never affects imported-only rows.
+      void (async()=>{
+        await reloadCompanies();
+        await masterListingUI.reconcileOrphanedCompanies(state.companies);
+      })().catch(showError);
+    }
     if(nextTab==='statutory-registers')registerBookUI.load().catch(showError);
     if(nextTab==='statutory-deadlines')reloadStatutoryDeadlines(true).catch(showError);
     return;
