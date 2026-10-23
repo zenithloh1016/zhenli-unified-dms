@@ -1,4 +1,5 @@
 import {createNativeSigning} from './signing-native.js';
+import {createSupabaseSigning} from './signing-supabase.js';
 import { createClient } from '@supabase/supabase-js';
 import readExcelFile from 'read-excel-file/browser';
 import {openMasterListingWorkbook} from './master-listing-reader.js';
@@ -49,6 +50,7 @@ const state = {
   user: null, companies: [], folders: [], documents: [],
   companyId: null, folderId: null, search: '', busy: false, notice: '',
   tab: 'documents', totalDocs: 0, taskFullscreen: false, signingFullscreen: false, arFullscreen: false,
+  signingProvider: localStorage.getItem('zhenli:signing:provider')==='supabase'?'supabase':'edgeone',
   arSelectedCompanyId: null,
   deadlineQuery: '', deadlineKind: 'all', deadlinePeriod: 'all',
   modal: null, authMode: 'login', importData: null, importWorkbook: null, importReader: '',
@@ -565,6 +567,7 @@ function renderTasks(){
 // ZHENLI_SIGNING_DIRECT_LAUNCH_V1_3
 // ZHENLI_DMS_NATIVE_SIGNING_V1_5
 const signingUI=createNativeSigning({update:()=>render(),getCompanies:()=>state.companies});
+const signingSupabaseUI=createSupabaseSigning({db,getCompanies:()=>state.companies,update:()=>render()});
 // Same contained full-screen layout as Task Hub. Preserve the native signing DOM
 // on toggle so unsaved PDF placements and request fields are never discarded.
 function renderSigning(){
@@ -575,7 +578,11 @@ function renderSigning(){
     </div>
     <div class="signing-workspace">
       <div class="signing-fullscreen-launch">${action('Full-screen view','open-signing-fullscreen','','secondary')}</div>
-      ${signingUI.render()}
+      <div class="zs-toolbar" aria-label="Signing service options">
+        <button type="button" class="btn ${state.signingProvider==='supabase'?'primary':'secondary'}" data-action="signing-provider" data-id="supabase">Supabase signing (independent)</button>
+        <button type="button" class="btn ${state.signingProvider==='edgeone'?'primary':'secondary'}" data-action="signing-provider" data-id="edgeone">Existing Tencent EdgeOne</button>
+      </div>
+      ${state.signingProvider==='supabase'?signingSupabaseUI.render():signingUI.render()}
     </div>
   </section>`;
 }
@@ -609,7 +616,7 @@ function render() {
   ${state.busy ? '<div class="busy-bar">Working… please keep this page open</div>' : ''}
   ${state.modal?.kind==='taskLink'?renderLinkModal():modalHTML()}
   <input id="document-upload" type="file" multiple hidden />`;
-  if(state.tab==='signing') signingUI.mount();
+  if(state.tab==='signing') (state.signingProvider==='supabase'?signingSupabaseUI:signingUI).mount();
    if(state.tab==='annual-return'){
      ROOT.querySelector('#zh-annual-return-frame')?.addEventListener('load',()=>{sendAnnualReturnCompanyList();sendAnnualReturnCompany();},{once:true});
    }
@@ -736,6 +743,8 @@ ROOT.addEventListener('click', event=>{
   const button=event.target.closest('[data-action]');if(!button)return;
   const a=button.dataset.action,id=button.dataset.id;
   if(masterListingUI.onClick(a,id))return;
+  if(a==='signing-provider'){if(id==='supabase'||id==='edgeone'){state.signingProvider=id;localStorage.setItem('zhenli:signing:provider',id);render();}return;}
+  if(signingSupabaseUI.onClick(a,id,event))return;
   if(signingUI.onClick(a,id,event))return;
   if(a==='rb-refresh'){busyDo(()=>registerBookUI.load(true));return;}
   if(a==='sr-pick'){ROOT.querySelector('#sr-zip-input')?.click();return;}
@@ -882,6 +891,7 @@ ROOT.addEventListener('click', event=>{
 });
 ROOT.addEventListener('submit',event=>{
   if(masterListingUI.onSubmit(event.target)){event.preventDefault();return;}
+  if(signingSupabaseUI.submit(event.target)){event.preventDefault();return;}
   if(signingUI.submit(event.target)){event.preventDefault();return;}
   if(event.target.id==='signing-link-form'){
     event.preventDefault();
@@ -964,6 +974,7 @@ ROOT.addEventListener('change',e=>{
   if(e.target.id==='sd-kind'){state.deadlineKind=e.target.value;render();return;}
   if(e.target.id==='sd-period'){state.deadlinePeriod=e.target.value;render();return;}
   if(masterListingUI.onChange(e.target,prepareExcelImport))return;
+  if(signingSupabaseUI.changed(e.target))return;
   if(signingUI.changed(e.target))return;
   if(e.target.id==='document-upload'){const files=[...e.target.files];e.target.value='';if(files.length)busyDo(()=>uploadFiles(files));}
   if(e.target.id==='sr-zip-input'){const file=e.target.files?.[0];e.target.value='';if(file)busyDo(()=>registerBookUI.readZip(file));return;}
