@@ -665,7 +665,7 @@ async function deleteTarget(m) {
         ' Master Listing: '+(result.reason||'No matching entry found.');
     }catch(syncError){
       message+=' Master Listing removal failed: '+String(syncError?.message||syncError)+
-        '. Open Master Listing and use Remove row for the old company.';
+        '. Your Documents company was deleted, but Master Listing sync could not finish. Check your connection and contact the DMS administrator before deleting another company.';
     }
     state.modal=null;await refresh();toast(message);
     return;

@@ -173,12 +173,13 @@ test('Imported row without registration is removed on matched Documents deletion
  assert.equal(x.saved.rows.length,0);
 });
 
-test('Deleting ordinary folders does not change Master Listing and manual removal exists',()=>{
+test('Deleting ordinary subfolders never changes Master Listing, and company deletion automatically synchronizes',()=>{
  const source=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  assert.match(source,/masterListingUI\.removeDeletedCompany\(deletedCompany,state\.companies\)/);
  const tab=readFileSync(new URL('../src/master-listing-tab.js',import.meta.url),'utf8');
- assert.match(tab,/action==='ml-remove'/);
- assert.match(tab,/act\('Remove row','ml-remove'/);
+ assert.doesNotMatch(tab,/action==='ml-remove'/);
+ assert.doesNotMatch(tab,/act\('Remove row','ml-remove'/);
+ assert.doesNotMatch(tab,/async function removeListingCompany\(/);
  assert.match(source,/db\.from\('folders'\)\.delete\(\)\.eq\('id',m\.id\)/);
 });
 

@@ -4,7 +4,7 @@
  * Supabase Storage under the user's own prefix. No new database table or
  * service-role credentials are required. Documents folders change only when the user requests synchronization on add or through Sync.
  */
-import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeMasterListingRow,removeDeletedDocumentCompany,sortMasterListingCompanies} from './master-listing-data.js';
+import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeDeletedDocumentCompany,sortMasterListingCompanies} from './master-listing-data.js';
 import {previewRegisterParticularsZip,preserveRegisterParticulars,compactRegisterColumns,REGISTER_PARTICULARS_COLUMNS} from './master-listing-register-particulars.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -314,23 +314,6 @@ async function saveRepairedDates(){
    return {removed:1};
   }finally{state.saving=false;onRender?.();}
  }
- /** Manual repair for companies deleted before the automatic sync was introduced. */
- async function removeListingCompany(index){
-  if(state.loading||state.saving)throw Error('Master Listing is busy.');
-  const old=state.model?.rows?.[index];if(!old)throw Error('Row not found.');
-  const name=companyData(state.model,old).name;
-  if(!window.confirm('Remove '+name+' from the Master Listing?\n\nThis will NOT delete any Documents folders or files. A private backup will be saved.'))return;
-  await load(true);
-  if(state.error||!state.model)throw Error('Cannot read latest Master Listing; no row removed.');
-  const result=removeMasterListingRow(state.model,old.id);
-  if(!result.removed)throw Error('Row changed in another session. Reload and select it again.');
-  state.saving=true;state.error='';state.status='Backing up and removing Master Listing row…';onRender?.();
-  try{
-   await saveModel(result.model,{backup:true});
-   state.status=name+' removed from Master Listing. Documents were not changed.';
-   state.editIndex=null;state.page=0;
-  }finally{state.saving=false;onRender?.();}
- }
 
  async function syncDocuments(){
   const model=state.model;if(!model)throw Error('Import Master Listing first.');
@@ -423,7 +406,7 @@ async function saveRepairedDates(){
      return '<tr><td class="ml-no-col">'+esc(listingOrdinalValue(model,row,index))+'</td><td><strong>'+esc(displayedListingValue(model,model.nameColumn,row.values[model.nameColumn]))+'</strong></td><td>'+esc(c.registration||'N/A')+'</td>'+
       cols.map(col=>{const display=displayedListingValue(model,col.index,row.values[col.index]);return '<td class="'+dateCss(col.label)+'" title="'+esc(display)+'">'+esc(display)+'</td>';}).join('')+
       '<td><div class="ml-row-actions">'+act('Edit','ml-edit',index,'primary')+
-      (match?act('Documents','ml-documents',match.id,'secondary'):'<small>Not in Documents</small>')+act('Remove row','ml-remove',index,'secondary')+'</div></td></tr>';
+      (match?act('Documents','ml-documents',match.id,'secondary'):'<small>Not in Documents</small>')+'</div></td></tr>';
     }).join('')+'</tbody></table>'+(rows.length?'':'<div class="empty-line">No companies match your search.</div>')+'</div>'+
     '<div class="ml-pages">'+act('← Previous','ml-prev-page','','secondary')+
     '<span>Page '+(state.page+1)+' / '+pages+' · '+total+' matching companies</span>'+
@@ -502,7 +485,6 @@ function renderEditor(){
   if(action==='ml-search-clear'){state.search='';state.page=0;onRender?.();return true;}
   if(action==='ml-sync'){asyncRun(syncDocuments);return true;}
   if(action==='ml-pull-documents'){asyncRun(()=>syncDocumentCompanies(getCompanies?.()||[]));return true;}
-  if(action==='ml-remove'){asyncRun(()=>removeListingCompany(Number(id)));return true;}
   if(action==='ml-documents'){openCompany?.(id);return true;}
   return false;
  }
