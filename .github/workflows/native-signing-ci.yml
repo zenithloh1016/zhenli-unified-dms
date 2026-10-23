@@ -6,6 +6,8 @@ on:
       - 'supabase/native-sequential-signing.sql'
       - 'google-apps-script/SequentialSigningGmailRelay.gs'
       - 'tests/signing-gmail-relay.test.js'
+      - 'tests/signing-order-reset.test.js'
+      - 'tests/signing-supabase-order-reset.test.js'
       - 'src/signing-supabase.js'
       - 'src/signing-public.js'
       - 'sign/**'
@@ -28,3 +30,6 @@ jobs:
         run: |
           node --check --input-type=commonjs < google-apps-script/SequentialSigningGmailRelay.gs
           node --test tests/signing-gmail-relay.test.js
+      - name: Test ordered signers and non-destructive reset
+        run: |
+          node --test tests/signing-order-reset.test.js tests/signing-supabase-order-reset.test.js

@@ -250,6 +250,30 @@ async function finalize(r) {
     audit:[...(r.audit||[]),{event:"finalized",at:now()}]});
   return result;
 }
+// Never reorder a person who has signed: signed signers must remain a locked
+// prefix. Existing signer IDs, signature storage paths and PDF boxes are stable.
+function reorderUnsignedSigners(r,requested) {
+  if(!["draft","pending"].includes(r.status))throw Error("Only draft or pending requests can change signing order");
+  if(!Array.isArray(requested)||requested.length!==r.signers.length)
+    throw Error("Signing order must include every signer exactly once");
+  const ids=r.signers.map(x=>x.id);
+  if(requested.some(x=>typeof x!=="string")||
+    new Set(requested).size!==ids.length || requested.some(x=>!ids.includes(x)))
+    throw Error("Signing order contains an unknown or duplicate signer");
+  const fixed=r.signers.filter(s=>s.signedAt).map(s=>s.id);
+  if(fixed.some((id,i)=>requested[i]!==id))
+    throw Error("Signed signers cannot be moved or placed after unsigned signers");
+  return requested.map((id,i)=>({...r.signers.find(x=>x.id===id),position:i+1}));
+}
+function resetSignerMapping(r) {
+  const map=new Map();
+  const signers=r.signers.map((s,i)=>{
+    const id=uuid();map.set(s.id,id);
+    return {id,position:i+1,name:s.name,email:s.email,
+      signedAt:null,signaturePath:null};
+  });
+  return {signers,map};
+}
 async function handleAdmin(action,req,body) {
   const user=await who(req);
   if(action==="list"){
@@ -304,6 +328,89 @@ async function handleAdmin(action,req,body) {
   }
   const r=await owned(body.requestId,user);
   if(action==="detail")return {request:await presentation(r,true)};
+  if(action==="order"){
+    const reordered=reorderUnsignedSigners(r,body.signerIds);
+    const previous=r.signers.map(s=>s.id);
+    const next=reordered.map(s=>s.id);
+    if(previous.every((id,i)=>id===next[i]))
+      return {request:await presentation(r,true),changed:false};
+    const {data:updated,error:problem}=await table().update({
+      signers:reordered,updated_at:now(),
+      audit:[...(r.audit||[]),{event:"signing_order_changed",at:now(),
+        previousOrder:previous,newOrder:next}]
+    }).eq("id",r.id).eq("owner_id",user).eq("status",r.status)
+      .eq("updated_at",r.updated_at).select("*").maybeSingle();
+    if(problem)throw Error(problem.message);
+    if(!updated)throw Error("Request changed during reordering. Reload and try again.");
+    // Avoid sending unsolicited or duplicate email: use Resend invitation
+    // explicitly if the next signer has changed.
+    return {request:await presentation(updated,true),changed:true};
+  }
+  if(action==="reset"){
+    // A reset starts a NEW independent draft. Original request, signed
+    // evidence and audit remain intact. The old pending links get revoked.
+    if(r.status==="finalizing")throw Error("Finish PDF finalization before resetting this request");
+    const newId=uuid();
+    const {signers,map}=resetSignerMapping(r);
+    const uploaded: string[]=[];
+    const documents: any[]=[];
+    let cloned=false;
+    try {
+      for(const d of r.documents){
+        const id=uuid(),path=user+"/"+newId+"/original/"+id+".pdf";
+        const original=rowError(await bucket().download(d.path));
+        const bytes=new Uint8Array(await original.arrayBuffer());
+        if(bytes.length<20||bytes.length>maxPdf ||
+           new TextDecoder().decode(bytes.slice(0,5))!=="%PDF-")
+          throw Error("An original PDF is missing or invalid. The old request was not changed.");
+        rowError(await bucket().upload(path,bytes,{contentType:"application/pdf",upsert:false}));
+        uploaded.push(path);
+        documents.push({id,name:d.name,pages:d.pages,path,
+          sha256:await hash(bytes)});
+      }
+      const docIds=new Map(r.documents.map((d,i)=>[d.id,documents[i].id]));
+      const boxes=r.boxes.map(box=>({
+        ...box,documentId:docIds.get(box.documentId),
+        signerId:map.get(box.signerId)
+      }));
+      if(boxes.some(b=>!b.documentId||!b.signerId))
+        throw Error("Signature position mapping failed; the old request was not changed");
+      const fresh=rowError(await table().insert({
+        id:newId,owner_id:user,company:r.company,subject:r.subject,
+        note:r.note,sender_email:r.sender_email||defaultSenderEmail,
+        signers,documents,boxes,
+        status:"draft",expires_at:new Date(Date.now()+14*86400000).toISOString(),
+        audit:[{event:"reset_created",at:now(),sourceRequestId:r.id}]
+      }).select("*").single());
+      cloned=true;
+      // Render the new draft before touching original status so a link
+      // configuration problem can never revoke the source without providing a
+      // replacement draft to the DMS.
+      const freshPresentation=await presentation(fresh,true);
+      // CAS refuses reset if anyone has signed or edited concurrently.
+      // Completed originals stay completed; pending links become revoked.
+      const nextStatus=["pending","draft"].includes(r.status)?"revoked":r.status;
+      const {data:originalUpdated,error:problem}=await table().update({
+        status:nextStatus,updated_at:now(),
+        audit:[...(r.audit||[]),{event:"reset_to_new_draft",at:now(),
+          replacementRequestId:newId,previousStatus:r.status}]
+      }).eq("id",r.id).eq("owner_id",user).eq("status",r.status)
+        .eq("updated_at",r.updated_at).select("id").maybeSingle();
+      if(problem)throw Error(problem.message);
+      if(!originalUpdated)throw Error("The original request changed during reset. Reload and retry.");
+      return {request:freshPresentation,
+        sourceStatus:nextStatus,originalId:r.id};
+    }catch(error){
+      // Cleanup only NEW draft content. Never delete old PDFs or signatures.
+      if(cloned){
+        try{await table().delete().eq("id",newId).eq("owner_id",user);}catch{ /* return original error */ }
+      }
+      if(uploaded.length){
+        try{await bucket().remove(uploaded);}catch{ /* return original error */ }
+      }
+      throw error;
+    }
+  }
   if(action==="edit"){
     // Drafts can be edited normally. An activated request is editable only
     // before its first signature: editing returns it to draft and rotates ALL

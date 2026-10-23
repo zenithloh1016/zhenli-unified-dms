@@ -169,6 +169,28 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       ' <button class="btn primary" type="submit"'+(busy?' disabled':'')+
       '>Create draft signing request</button></form></section>';
   }
+  function orderForm() {
+    const r=detail;
+    if(!r||!["draft","pending"].includes(r.status))
+      return '<section class="zs-panel">This request cannot be reordered.</section>';
+    const unsigned=r.signers.filter(s=>!s.signedAt).length;
+    return '<div class="zs-toolbar">'+b('← Cancel and return','cancel-order')+'</div>'+
+      '<section class="zs-panel"><h2>Edit signing order</h2>'+
+      '<p class="muted">Use Up / Down to change the order of signers who have NOT signed. Signed signers are permanently locked in place. Signature boxes and existing completed signatures will not be changed.</p>'+
+      (r.status==='pending'
+        ?'<p class="muted">Pending request: changes take effect immediately, but do not trigger a new invitation. Use Resend invitation when ready to notify the next signer.</p>':'')+
+      (unsigned<2?'<p class="zs-message">Only '+unsigned+
+        ' unsigned signer remains. There is no alternate order; use Reset signing request if you need a completely fresh signing round.</p>':'')+
+      '<div id="ns-order-signers">'+r.signers.map((s,i)=>
+        '<div class="zs-signer zs-order-signer" data-ns-order-id="'+e(s.id)+'">'+
+        '<div><b class="ns-order-position">'+(i+1)+'. '+e(s.name)+'</b>'+
+        '<small>'+e(s.email)+' · '+(s.signedAt?'Already signed — order locked':'Not signed')+'</small></div>'+
+        '<div class="zs-edit-signer-actions">'+(s.signedAt?'<span class="zs-tag">Signed</span>':
+        b('↑ Up','order-up')+b('↓ Down','order-down'))+'</div></div>').join('')+
+      '</div><div class="zs-actions">'+b('Save signing order','save-order','','primary')+'</div>'+
+      '<p class="fineprint">This operation retains the original signer IDs and does not invalidate existing bearer links. Only the allowed signing sequence changes.</p>'+
+      '</section>';
+  }
   function mailInfo() {
     return '<section class="zs-panel"><h3>Gmail signing invitations</h3><p class="muted">'+
       (mailStatus.connected
@@ -248,6 +270,9 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       b('Reload details','open',r.id)+
       (['draft','pending'].includes(r.status)&&r.signers.every(s=>!s.signedAt)
         ?b('✎ Edit signing details','edit',r.id,'primary'):'')+
+      (['draft','pending'].includes(r.status)
+        ?b('↕ Edit signing order','order',r.id):'')+
+      (r.status!=='finalizing'?b('Reset signing request','reset',r.id):'')+
       (r.status!=='completed'&&r.status!=='revoked'?b('Revoke signing links','revoke',r.id):'')+
       '</div>'+mailInfo()+'<section class="zs-panel">'+
       '<div class="zs-details-heading"><div><h2>'+e(r.company)+'</h2>'+
@@ -345,6 +370,51 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       view='edit';message='';update();return true;
     }
     if(action==='cancel-edit'){view='detail';update();return true;}
+    if(action==='order'){
+      if(!detail||detail.id!==id||!['draft','pending'].includes(detail.status))return true;
+      view='order';message='';update();return true;
+    }
+    if(action==='cancel-order'){view='detail';update();return true;}
+    if(action==='order-up'||action==='order-down'){
+      const root=document.getElementById('ns-order-signers');
+      const item=ev?.target?.closest('[data-ns-order-id]');
+      if(!root||!item)return true;
+      const target=action==='order-up'?item.previousElementSibling:item.nextElementSibling;
+      if(!target)return true;
+      const targetSigner=detail?.signers.find(s=>s.id===target.dataset.nsOrderId);
+      if(targetSigner?.signedAt)return true; // Locked signed prefix
+      if(action==='order-up')root.insertBefore(item,target);
+      else root.insertBefore(target,item);
+      [...root.children].forEach((el,index)=>{
+        const label=el.querySelector('.ns-order-position');
+        const s=detail?.signers.find(x=>x.id===el.dataset.nsOrderId);
+        if(label&&s)label.textContent=(index+1)+'. '+s.name;
+      });
+      return true;
+    }
+    if(action==='save-order'){
+      const root=document.getElementById('ns-order-signers');
+      if(!root||!detail)return true;
+      const signerIds=[...root.children].map(x=>x.dataset.nsOrderId);
+      work(async()=>{
+        const result=await api('order',{requestId:detail.id,signerIds});
+        await open(result.request.id);
+        feedback(result.changed?
+          'Signing order saved. Signed records remain unchanged. Resend the invitation if the next signer has changed.':
+          'Signing order is unchanged.');
+      });
+      return true;
+    }
+    if(action==='reset'){
+      if(!detail||detail.id!==id)return true;
+      if(!confirm('RESET this signing request? A NEW draft will be created with fresh signer links, the original PDFs and signature boxes. All signatures and audit history in the ORIGINAL request will be preserved. Pending original links will be revoked. Continue?'))return true;
+      work(async()=>{
+        const result=await api('reset',{requestId:detail.id});
+        await open(result.request.id);
+        feedback('New draft created from the original signing request. Original signatures and audit records are preserved. Review PDF and signature positions, then activate to issue NEW signing links.');
+      });
+      return true;
+    }
     if(action==='add-signer'){
       const root=document.getElementById(view==='edit'?'ns-edit-signers':'ns-signers');
       if(!root)return true;
@@ -495,7 +565,8 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       '<span class="zs-version">Supabase Signing · EdgeOne-compatible layout</span></div>'+
       (message?'<div class="zs-message'+(error?' zs-error':'')+'" role="status">'+e(message)+'</div>':'')+
       (busy?'<div class="zs-message">Connecting to private signing service…</div>':'')+
-      (view==='mail'?mailForm():view==='new'?newForm():view==='edit'&&detail?editForm():
+      (view==='mail'?mailForm():view==='new'?newForm():view==='order'&&detail?orderForm():
+        view==='edit'&&detail?editForm():
         view==='detail'&&detail?detailView():listView()),
     mount:()=>{
       if(!initialized&&!busy){
