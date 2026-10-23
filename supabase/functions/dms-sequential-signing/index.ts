@@ -72,7 +72,7 @@ function bytesResponse(bytes, origin) {
   }});
 }
 async function signerMac(id,sid) {
-  const key = await crypto.subtle.importKey("raw",enc.encode(secret),"HMAC","SHA-256",false,["sign"]);
+  const key = await crypto.subtle.importKey("raw",enc.encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
   return secureHex(await crypto.subtle.sign("HMAC",key,enc.encode("ZHENLI_NATIVE_V1:"+id+":"+sid)));
 }
 async function createToken(r,s) {return r.id+"."+s.id+"."+await signerMac(r.id,s.id);}
@@ -147,7 +147,7 @@ async function sendInvite(r,s) {
 }
 async function finalize(r) {
   if(r.status!=="finalizing")throw Error("Request is not ready to finalize");
-  const updated=[];
+  const updated: any[]=[];
   for(const d of r.documents){
     if(d.finalPath){updated.push(d);continue;}
     const original=rowError(await bucket().download(d.path));
