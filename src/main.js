@@ -969,7 +969,7 @@ ROOT.addEventListener('input',e=>{
     input?.focus();input?.setSelectionRange(pos,pos);
     return;
   }
- signingUI.input(e.target);if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
+ if(state.tab==='signing'){if(state.signingProvider==='supabase')signingSupabaseUI.input(e.target);else signingUI.input(e.target);}if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
 ROOT.addEventListener('change',e=>{
   if(e.target.id==='sd-kind'){state.deadlineKind=e.target.value;render();return;}
   if(e.target.id==='sd-period'){state.deadlinePeriod=e.target.value;render();return;}
