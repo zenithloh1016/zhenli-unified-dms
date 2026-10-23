@@ -1,0 +1,5 @@
+# Supabase native signing serves recipients without Supabase accounts.
+# Authentication is enforced inside the function: user JWT for admin,
+# HMAC bearer tokens for recipients. Never use the secret key in browser code.
+[functions.dms-sequential-signing]
+verify_jwt = false
