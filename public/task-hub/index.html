@@ -2,6 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <!-- Direct Task Hub navigation opens the authenticated Supabase cloud
+       wrapper. The original embedded iframe remains the SAME interface. -->
+  <script>
+    if (window.parent === window && /^https?:$/.test(window.location.protocol))
+      window.location.replace(new URL('../task-hub-cloud/index.html',window.location.href).href);
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#172e4a" />
   <meta name="description" content="A company secretarial task dashboard, ready for secure personal online hosting and private company-list import." />
