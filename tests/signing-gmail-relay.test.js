@@ -70,7 +70,7 @@ test('rejects untrusted links, missing HMAC and different account',()=>{
 });
 
 test('cleans line breaks from document titles used in Gmail subject',()=>{
-  const titlePayload={...payload,documentTitle:'Board Resolution\\r\\nBcc: unwanted@example.com'};
+  const titlePayload={...payload,documentTitle:'Board Resolution\r\nBcc: unwanted@example.com'};
   assert.equal(exec(makeRequest(titlePayload,'7'.repeat(32))).accepted,true);
   assert.equal(sent.at(-1).subject,'ZHENLI | Signature required: Board Resolution Bcc: unwanted@example.com');
 });
