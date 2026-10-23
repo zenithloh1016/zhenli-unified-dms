@@ -99,3 +99,42 @@ test('Documents RPC failure does not remove a successfully saved Master Listing 
  assert.match(x.ui.state.error,/Documents company creation failed/);
  assert.equal(x.ui.state.addOpen,false);
 });
+
+
+test('New Documents company is appended to the Master Listing on creation',async()=>{
+ const x=makeWorkspace();
+ const result=await x.ui.syncDocumentCompanies([{name:'AUTOMATIC DOCS SDN BHD',registration_no:'202601234567'}]);
+ assert.equal(result.added,1);
+ assert.equal(x.saved.rows.length,1);
+ assert.deepEqual(x.saved.rows[0].values,['1','AUTOMATIC DOCS SDN BHD','202601234567','N/A','N/A']);
+ assert.equal(x.rpcs.length,0,'listing sync must not recreate Documents folders');
+});
+
+test('Repeat Documents sync skips duplicates and keeps existing statutory fields',async()=>{
+ const x=makeWorkspace();
+ await x.ui.load();x.ui.onClick('ml-add');
+ await submitAndDrain(x.ui,x.form({1:'EXISTING SDN BHD',2:'202601234500',3:'21/10/2026',4:'31/12/2026'},false));
+ const before=JSON.stringify(x.saved.rows[0]);
+ const result=await x.ui.syncDocumentCompanies([
+  {name:'Existing Sdn Bhd',registration_no:'202601234500'},
+  {name:'SECOND DOCS SDN BHD',registration_no:'202602345678'},
+  {name:'second docs sdn bhd',registration_no:'202602345678'}
+ ]);
+ assert.equal(result.added,1);
+ assert.equal(result.existing,2);
+ assert.equal(x.saved.rows.length,2);
+ assert.equal(JSON.stringify(x.saved.rows[0]),before);
+ assert.equal(x.saved.rows[1].values[0],'2');
+ const again=await x.ui.syncDocumentCompanies([{name:'SECOND DOCS SDN BHD',registration_no:'202602345678'}]);
+ assert.equal(again.added,0);
+ assert.equal(x.saved.rows.length,2);
+ assert.ok(x.uploads.some(u=>u.path.includes('/history/')),'private backup created before updating imported listing');
+});
+
+test('Reconcile Documents portfolio via new manual recovery action',async()=>{
+ const x=makeWorkspace();
+ x.companies.push({name:'RECOVERED SDN BHD',registration_no:'202601299999'});
+ const result=await x.ui.syncDocumentCompanies(x.companies);
+ assert.equal(result.added,1);
+ assert.match(x.ui.render(),/Sync from Documents/);
+});

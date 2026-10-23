@@ -237,3 +237,43 @@ export function listingCSV(model){
  return [model.columns.map(x=>csvCell(x.label)).join(','),
   ...model.rows.map(row=>row.values.map((v,i)=>csvCell(displayedListingValue(model,i,v))).join(','))].join('\r\n');
 }
+
+
+/** Append missing Documents companies without touching the existing Master Listing rows or column order. */
+export function mergeDocumentCompanies(model,companies){
+ validateMasterListing(model);
+ if(!Array.isArray(companies))throw Error('Documents companies must be an array.');
+ const regKey=value=>{const v=normal(value).toUpperCase();return v==='N/A'?'':v.replace(/[^A-Z0-9]/g,'');};
+ const names=new Set(),registrations=new Set();
+ for(const row of model.rows){
+  const c=companyData(model,row);
+  const n=key(c.name),r=regKey(c.registration);
+  if(n)names.add(n);if(r)registrations.add(r);
+ }
+ const serialCol=model.columns.findIndex((_,i)=>isListingOrdinalColumn(model,i));
+ let serial=model.rows.length;
+ if(serialCol>=0)for(const row of model.rows){
+  const n=Number(String(row.values[serialCol]||'').trim());
+  if(Number.isSafeInteger(n)&&n>serial)serial=n;
+ }
+ const rows=model.rows.slice();
+ let added=0,existing=0,invalid=0;
+ for(const company of companies){
+  const name=normal(company?.name);
+  const raw=normal(company?.registration_no??company?.registration??'');
+  const registration=raw.toUpperCase()==='N/A'?'':raw;
+  const n=key(name),r=regKey(registration);
+  if(name.length<3||name.length>250||/[\r\n]/.test(name)||invalidName.test(name)||!n){invalid++;continue;}
+  if(names.has(n)||(r&&registrations.has(r))){existing++;continue;}
+  if(rows.length>=LIMIT_ROWS)throw Error('Master Listing exceeds 5,000 companies. No automatic changes were saved.');
+  const values=model.columns.map(()=>'N/A');
+  values[model.nameColumn]=name;
+  if(model.registrationColumn>=0)values[model.registrationColumn]=registration||'N/A';
+  if(serialCol>=0)values[serialCol]=String(++serial);
+  rows.push({id:'doc-'+crypto.randomUUID(),values});
+  names.add(n);if(r)registrations.add(r);added++;
+ }
+ const updated=added?{...model,rows}:model;
+ validateMasterListing(updated);
+ return {model:updated,added,existing,invalid};
+}

@@ -711,29 +711,41 @@ async function runImport() {
   if(chosen.length>5000) throw new Error('Import is limited to 5,000 companies per file. Split the Master Listing into smaller files.');
   state.importError=''; state.importProgress=`Starting import of ${chosen.length} companies…`;render();
   let done=0, failures=[];
+  const succeededCompanies=[];
   for(let i=0;i<chosen.length;i+=4){
     const chunk=chosen.slice(i,i+4);
     const answers=await Promise.all(chunk.map(async c=> {
       try {
         const {error}=await db.rpc('create_company_with_folders',{p_name:c.name,p_registration_no:c.registration});
-        return error ? `${c.name}: ${importHint(error)}` : null;
-      } catch(e){return `${c.name}: ${importHint(e)}`;}
+        return {company:c,error:error ? `${c.name}: ${importHint(error)}` : null};
+      } catch(e){return {company:c,error:`${c.name}: ${importHint(e)}`};}
     }));
-    const failed=answers.filter(Boolean); failures.push(...failed);done+=chunk.length;
+    const failed=answers.filter(x=>x.error).map(x=>x.error);
+    succeededCompanies.push(...answers.filter(x=>!x.error).map(x=>({name:x.company.name,registration_no:x.company.registration})));
+    failures.push(...failed);done+=chunk.length;
     state.importProgress=`Processed ${done} of ${chosen.length} company names; ${failures.length} errors so far.`;
     render();
     // Missing RPC/policies will affect every row; stop early instead of making 85 doomed requests.
     if(i===0 && failed.length===chunk.length){break;}
   }
   await refresh();
+  let listingStatus='';
+  if(succeededCompanies.length){
+    try{
+      const result=await masterListingUI.syncDocumentCompanies(succeededCompanies);
+      listingStatus=' Master Listing: '+result.added+' new, '+result.existing+' already listed.';
+    }catch(error){
+      listingStatus=' Master Listing sync failed: '+String(error?.message||error)+'. Use Master Listing → Sync from Documents to retry.';
+    }
+  }
 
   if(failures.length){
-    state.importError=`Imported or verified ${done-failures.length} of ${done} attempted companies. ${failures.length} failed. ${failures.slice(0,3).join(' | ')}. Your selected data is preserved; fix the error and retry safely.`;
+    state.importError=`Imported or verified ${done-failures.length} of ${done} attempted companies. ${failures.length} failed. ${failures.slice(0,3).join(' | ')}. Your selected data is preserved; fix the error and retry safely.${listingStatus}`;
     state.importProgress=`Import paused. ${state.companies.length} companies are currently in your account.`;
     render();return;
   }
   state.importData=null;state.modal=null;state.importProgress=null;state.importError='';
-  toast(`${done} companies processed successfully. Existing companies were not duplicated; standard folders were ensured.`);
+  toast(`${done} companies processed successfully. Existing companies were not duplicated; standard folders were ensured.${listingStatus}`);
 }
 
 ROOT.addEventListener('click', event=>{
@@ -916,9 +928,17 @@ ROOT.addEventListener('submit',event=>{
     if(m.kind==='delete'){await deleteTarget(m);return;}
     const name=norm(form.get('name'));
     if(!name)throw new Error('Name cannot be blank.');
+    let companySyncNotice='';
     if(m.kind==='company'){
-      const {error}=await db.rpc('create_company_with_folders',{p_name:name,p_registration_no:norm(form.get('registration'))});check(error);
+      const registration=norm(form.get('registration'));
+      const {error}=await db.rpc('create_company_with_folders',{p_name:name,p_registration_no:registration});check(error);
       await reloadCompanies();
+      try{
+        const result=await masterListingUI.syncDocumentCompanies([{name,registration_no:registration}]);
+        companySyncNotice=result.added?'Company folders created and Master Listing updated.':'Company folders created; already in Master Listing.';
+      }catch(error){
+        companySyncNotice='Company folders created, but Master Listing sync failed: '+String(error?.message||error)+'. Open Master Listing → Sync from Documents to retry.';
+      }
     }else if(m.kind==='folder'){
       const {error}=await db.from('folders').insert({user_id:state.user.id,company_id:state.companyId,parent_id:state.folderId,name});check(error);
       await reloadContent();
@@ -927,7 +947,7 @@ ROOT.addEventListener('submit',event=>{
       const {error}=await db.from(table).update({name}).eq('id',m.id);check(error);
       await refresh();
     }
-    state.modal=null;await refresh();toast('Saved successfully.');
+    state.modal=null;await refresh();toast(companySyncNotice||'Saved successfully.');
   });
 });
 document.addEventListener('keydown',event=>{

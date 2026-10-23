@@ -4,7 +4,7 @@
  * Supabase Storage under the user's own prefix. No new database table or
  * service-role credentials are required. Documents folders change only when the user requests synchronization on add or through Sync.
  */
-import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn} from './master-listing-data.js';
+import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies} from './master-listing-data.js';
 import {previewRegisterParticularsZip,preserveRegisterParticulars,compactRegisterColumns,REGISTER_PARTICULARS_COLUMNS} from './master-listing-register-particulars.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -273,6 +273,28 @@ async function saveRepairedDates(){
    state.status=count+' date serial(s) corrected and saved to DMS. Previous listing retained as a private backup.';
   }finally{state.saving=false;onRender?.();}
  }
+
+ /** Read the newest private listing and safely append Documents-only companies. */
+ async function syncDocumentCompanies(companies){
+  if(state.loading||state.saving)throw Error('Master Listing is busy. Use Sync from Documents to retry.');
+  if(!getUser?.()?.id)throw Error('Sign in to DMS before syncing Master Listing.');
+  await load(true);
+  if(state.error)throw Error('Unable to read the latest Master Listing: '+state.error);
+  const current=state.model||manualListingTemplate();
+  const result=mergeDocumentCompanies(current,companies);
+  if(!result.added){
+   state.status='Documents sync: '+result.existing+' companies already listed; no changes required.';
+   onRender?.();
+   return {added:0,existing:result.existing,invalid:result.invalid};
+  }
+  state.saving=true;state.error='';state.status='Adding '+result.added+' Documents companies to Master Listing…';onRender?.();
+  try{
+   await saveModel(result.model,{backup:true});
+   state.status='Master Listing updated automatically: '+result.added+' new companies, '+result.existing+' existing. All prior details retained.';
+   return {added:result.added,existing:result.existing,invalid:result.invalid};
+  }finally{state.saving=false;onRender?.();}
+ }
+
  async function syncDocuments(){
   const model=state.model;if(!model)throw Error('Import Master Listing first.');
   const existing=getCompanies?.()||[];
@@ -352,7 +374,7 @@ async function saveRepairedDates(){
     '<span>Source: '+esc(model.filename)+' / '+esc(model.worksheet)+'</span></div>'+
     '<div class="ml-toolbar"><label>Search company or any field <input id="ml-search" type="search" value="'+esc(state.search)+'" placeholder="Search company name, number or details"></label>'+
     act('Search','ml-search-do','','secondary')+act('Clear','ml-search-clear','','secondary')+
-    act('Sync missing company folders','ml-sync','','secondary')+'</div>'+
+    act('Sync missing company folders','ml-sync','','secondary')+act('Sync from Documents','ml-pull-documents','','secondary')+'</div>'+
     (state.fullScreen?'<p class="ml-fullscreen-help">Full-screen table · all '+visible.length+' information columns · scroll right or down to browse.</p>':
     '<div class="ml-columns-nav">'+act('← Columns','ml-prev-cols','','secondary')+
     '<span>Columns '+(first+1)+'–'+end+' of '+visible.length+'</span>'+
@@ -372,7 +394,7 @@ async function saveRepairedDates(){
     '<p class="fineprint">Changes are saved to private DMS cloud storage using your signed-in account. Editing Master Listing fields does not automatically alter the Companies register or existing statutory documents.</p>'
    :(!state.loading&&!state.sheets.length?'<div class="empty-state"><div>📊</div><h3>No Master Listing imported yet</h3>'+
     '<p>Use Import Excel to load your company data, including deadlines, directors, filing details, fees and other worksheet columns.</p>'+
-    act('Import Master Listing Excel','ml-upload','','primary')+act('+ Add Company','ml-add','','secondary')+'</div>':''))+
+    act('Import Master Listing Excel','ml-upload','','primary')+act('+ Add Company','ml-add','','secondary')+act('Sync from Documents','ml-pull-documents','','secondary')+'</div>':''))+
    '</section>'+(state.addOpen?renderAddCompany(): '')+(state.editIndex!==null&&model?.rows[state.editIndex]?renderEditor(): '');
  }
  
@@ -442,6 +464,7 @@ function renderEditor(){
   if(action==='ml-search-do'){state.search=document.getElementById('ml-search')?.value||'';state.page=0;onRender?.();return true;}
   if(action==='ml-search-clear'){state.search='';state.page=0;onRender?.();return true;}
   if(action==='ml-sync'){asyncRun(syncDocuments);return true;}
+  if(action==='ml-pull-documents'){asyncRun(()=>syncDocumentCompanies(getCompanies?.()||[]));return true;}
   if(action==='ml-documents'){openCompany?.(id);return true;}
   return false;
  }
@@ -475,5 +498,5 @@ function renderEditor(){
   return true;
  }
  const exitFullscreen=()=>{if(!state.fullScreen)return false;state.fullScreen=false;state.page=0;onRender?.();return true;};
- return {render,load,reset,onClick,onChange,onSubmit,afterRender,exitFullscreen,get model(){return state.model;},get state(){return state;}};
+ return {render,load,reset,onClick,onChange,onSubmit,afterRender,exitFullscreen,syncDocumentCompanies,get model(){return state.model;},get state(){return state;}};
 }
