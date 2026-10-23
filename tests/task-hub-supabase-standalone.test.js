@@ -64,3 +64,13 @@ test('Task Hub offers five requested active statuses and retains completed task 
   assert.match(taskHub,/const workflowStatus = id =>/);
   assert.match(taskHub,/status:old&&isDone\(old\)\?'done':workflowStatus/);
 });
+
+test('task hub frame and scripts are cache-busted after status updates',()=>{
+  const version='20261023-status-refresh-v2';
+  assert.match(dms,new RegExp('task-hub/index\\.html'));
+  assert.ok(dms.includes("?'v=")===false); // version is appended after href
+  assert.ok(dms.includes("?v="+version));
+  assert.ok(cloud.includes("?v="+version));
+  assert.ok(taskHtml.includes('app.js?v='+version));
+  assert.ok(taskHtml.includes('styles.css?v='+version));
+});
