@@ -7,14 +7,16 @@
 (function () {
   const STORAGE_KEY = 'zhenli_secretarial_task_hub_v1'; // preserve existing tasks on the same website origin
   const CATEGORIES = ['Annual Return (AR)','Financial Statements (AFS)','Beneficial Ownership (BO)','SSM Lodgement / CRS','Board Resolution','Members’ Resolution','Banking & Signatories','Auditor / Tax Agent','Company Incorporation','Strike-off / Winding-up','Director / Secretary Changes','Shares & Allotments','Registered Charges','Client Follow-up','Electronic Signing','Registers & Statutory Books','General / Other'];
-  // Six selectable workflow statuses, including Completed. A completed task
-  // stays in the Completed archive and can be reopened from the editor.
+  // Eight selectable statuses; completed tasks remain in their archive.
+  // Retain legacy progress and completed records exactly as saved in Supabase.
   const STATUSES = [
     {id:'todo',name:'To do',short:'To do'},
+    {id:'progress',name:'In progress',short:'In progress'},
     {id:'ctc',name:'Waiting CTC',short:'Waiting CTC'},
     {id:'client',name:'Waiting client',short:'Waiting client'},
     {id:'ssm',name:'Waiting SSM',short:'Waiting SSM'},
     {id:'auditor',name:'Waiting auditor',short:'Waiting auditor'},
+    {id:'tax',name:'Waiting tax agent',short:'Waiting tax agent'},
     {id:'done',name:'Completed',short:'Completed'}
   ];
   const PRIORITIES = [{id:'urgent',name:'Urgent'},{id:'high',name:'High'},{id:'normal',name:'Normal'},{id:'low',name:'Low'}];
@@ -117,7 +119,7 @@
     const [title,desc,brow]=titles[state.view];$('#pageTitle').innerHTML=esc(title.slice(0,-1))+'<span class="heading-dot">.</span>';$('#pageDescription').textContent=desc;$('#pageEyebrow').textContent=brow;$('#quickCompanyBtn').style.visibility=state.view==='companies'?'visible':'hidden';
     let html='';switch(state.view){case'dashboard':html=renderDashboard();break;case'deadlines':html=renderDeadlines();break;case'board':html=renderBoard();break;case'calendar':html=renderCalendar();break;case'companies':html=renderCompanies();break;case'activity':html=renderActivity();break;default:html=renderList(state.view)}$('#pageContent').innerHTML=html;
   }
-  function renderDashboard(){const total=countActive(), overdue=data.tasks.filter(isOverdue).length,today=data.tasks.filter(isToday).length,upcoming=data.tasks.filter(dueSoon).length,complete=data.tasks.filter(isDone).length, waiting=data.tasks.filter(x=>['ctc','client','ssm','auditor'].includes(workflowStatus(x.status))).length;
+  function renderDashboard(){const total=countActive(), overdue=data.tasks.filter(isOverdue).length,today=data.tasks.filter(isToday).length,upcoming=data.tasks.filter(dueSoon).length,complete=data.tasks.filter(isDone).length, waiting=data.tasks.filter(x=>['ctc','client','ssm','auditor','tax'].includes(workflowStatus(x.status))).length;
     let focus=data.tasks.filter(t=>!isDone(t)).sort((a,b)=>{const w=t=>isOverdue(t)?0:isToday(t)?1:dueSoon(t)?2:3;return w(a)-w(b)|| (a.dueDate||'9999').localeCompare(b.dueDate||'9999')}).slice(0,7);
     let focusRows=focus.map(t=>`<div class="mini-task-row" data-edit-task="${esc(t.id)}"><span class="priority-stripe ${esc(t.priority)}"></span><button class="mini-check" data-toggle-task="${esc(t.id)}" title="Mark completed" aria-label="Complete ${esc(t.title)}"></button><div class="mini-task-text"><div class="mini-task-title">${esc(t.title)}</div><div class="mini-task-sub"><span>${esc(t.company||'No company')}</span><span>·</span><span>${esc(t.category)}</span></div></div><div class="mini-date ${isOverdue(t)?'overdue-date':''}">${isOverdue(t)?'Overdue':isToday(t)?'Today':formatDate(t.dueDate)}</div></div>`).join('');
     const stat=(label,n,icon,color,small,view)=>`<button type="button" class="stat-card" data-nav="${view}"><div class="stat-top"><span>${esc(label)}</span><span class="stat-symbol ${color}">${svg(icon)}</span></div><div class="stat-number">${n}</div><div class="stat-bottom">${esc(small)}</div></button>`;

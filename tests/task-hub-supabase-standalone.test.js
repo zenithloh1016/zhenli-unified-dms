@@ -55,18 +55,18 @@ test('standalone redirect cannot replace embedded Task Hub and same credentials 
   assert.match(cloud,/db\.auth\.signOut/);
 });
 
-test('Task Hub offers five requested active statuses and retains completed task archive',()=>{
+test('Task Hub offers eight selectable statuses, preserves completion and progress',()=>{
   const statuses=taskHub.match(/const STATUSES = \[([\s\S]*?)\];/);
   assert.ok(statuses, 'status options should exist');
   const names=[...statuses[1].matchAll(/name:'([^']+)'/g)].map(match=>match[1]);
-  assert.deepEqual(names,['To do','Waiting CTC','Waiting client','Waiting SSM','Waiting auditor']);
+  assert.deepEqual(names,['To do','In progress','Waiting CTC','Waiting client','Waiting SSM','Waiting auditor','Waiting tax agent','Completed']);
   assert.match(taskHub,/const isDone = t => t.status==='done'/);
   assert.match(taskHub,/const workflowStatus = id =>/);
-  assert.match(taskHub,/status:old&&isDone\(old\)\?'done':workflowStatus/);
+  assert.ok(taskHub.includes("status:workflowStatus($('#taskStatus').value)"));
 });
 
 test('task hub frame and scripts are cache-busted after status updates',()=>{
-  const version='20261023-status-refresh-v2';
+  const version='20261023-eight-status-v4';
   assert.match(dms,new RegExp('task-hub/index\\.html'));
   assert.ok(dms.includes("?'v=")===false); // version is appended after href
   assert.ok(dms.includes("?v="+version));
