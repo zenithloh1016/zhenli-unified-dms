@@ -42,6 +42,9 @@ test('DMS UI reorders only unsigned signers and resets to a separate preserved d
   const root={children:rows,insertBefore(item,target){
     const from=this.children.indexOf(item);this.children.splice(from,1);
     this.children.splice(this.children.indexOf(target),0,item);
+  },appendChild(item){
+    const from=this.children.indexOf(item);if(from>=0)this.children.splice(from,1);
+    this.children.push(item);
   }};
   for(const row of rows){
     Object.defineProperty(row,'previousElementSibling',{get(){
@@ -66,6 +69,12 @@ test('DMS UI reorders only unsigned signers and resets to a separate preserved d
     'signed signer may not be displaced');
   ui.onClick('ns-order-down','',{target:{closest:()=>rows[1]}});
   assert.deepEqual(root.children.map(x=>x.dataset.nsOrderId),['s1','s3','s2']);
+  assert.match(ui.render(),/Signing position/,'direct position dropdown is present');
+  ui.changed({name:'orderPosition',value:'2',closest:()=>rows[1]});
+  assert.deepEqual(root.children.map(x=>x.dataset.nsOrderId),['s1','s2','s3'],
+    'selecting numeric position directly repositions the signer');
+  ui.changed({name:'orderPosition',value:'3',closest:()=>rows[1]});
+  assert.deepEqual(root.children.map(x=>x.dataset.nsOrderId),['s1','s3','s2']);
   ui.onClick('ns-save-order');await tick();
   const order=calls.find(x=>x.action==='admin-order');
   assert.deepEqual(order.signerIds,['s1','s3','s2']);
@@ -76,4 +85,33 @@ test('DMS UI reorders only unsigned signers and resets to a separate preserved d
   assert.match(ui.render(),/New draft created from the original/);
   assert.match(ui.render(),/draft/);
   assert.equal(original.signers[0].signedAt,'2026-10-20T00:00:00Z');
+});
+
+test('Delete all requires explicit confirmation and removes only active list entries',async()=>{
+  const originalPrompt=globalThis.prompt,originalConfirm=globalThis.confirm;
+  const calls=[];let removed=false;
+  globalThis.confirm=()=>true;globalThis.prompt=()=> 'DELETE ALL';
+  const request={id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',company:'TEST SDN BHD',subject:'DRW',
+    status:'pending',created_at:'2026-10-23T00:00:00Z'};
+  const db={functions:{invoke:async(_, {body})=>{
+    calls.push(body);
+    if(body.action==='admin-list')
+      return {data:removed?{requests:[],total:0}:{requests:[request],total:1}};
+    if(body.action==='admin-mail-status')return {data:{connected:false}};
+    if(body.action==='admin-delete-all'){
+      assert.equal(body.confirmation,'DELETE ALL');
+      assert.equal(body.expectedCount,1);
+      removed=true;return {data:{deleted:1,evidencePreserved:true}};
+    }
+    throw Error('Unexpected action '+body.action);
+  }}};
+  const ui=createSupabaseSigning({db,getCompanies:()=>[],update:()=>{}});
+  try{
+    ui.mount();await tick();
+    assert.match(ui.render(),/Delete all signing requests/);
+    ui.onClick('ns-delete-all');await tick();
+    assert.equal(calls.filter(x=>x.action==='admin-delete-all').length,1);
+    assert.match(ui.render(),/audit evidence retained/);
+    assert.doesNotMatch(ui.render(),/data-action="ns-delete-all"/);
+  }finally{globalThis.prompt=originalPrompt;globalThis.confirm=originalConfirm;}
 });
