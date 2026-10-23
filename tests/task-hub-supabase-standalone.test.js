@@ -32,7 +32,7 @@ test('DMS Task Hub defaults to bundled same-origin Supabase and opens independen
 });
 test('task create, edit, checklists, recurring tasks, calendar and backup remain original',()=>{
   assert.match(taskHub,/function openTask\(id=null/);
-  assert.match(taskHub,/function saveTask\(ev\)/);
+  assert.match(taskHub,/function createFromForm\(ev\)/);
   assert.match(taskHub,/function renderCalendar\(\)/);
   assert.match(taskHub,/function renderBoard\(\)/);
   assert.match(taskHub,/function spawnRecurring\(t\)/);
