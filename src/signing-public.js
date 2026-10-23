@@ -24,7 +24,7 @@ async function openPdf(id) {
   const popup=window.open("about:blank","_blank");
   try {
     const blob=await api("document",{documentId:id});
-    const objectUrl=URL.createObjectURL(blob);
+    const objectUrl=URL.createObjectURL(new Blob([blob],{type:"application/pdf"}));
     if(popup)popup.location.href=objectUrl;
     else {
       const a=document.createElement("a");a.href=objectUrl;a.download="signing-document.pdf";a.click();
