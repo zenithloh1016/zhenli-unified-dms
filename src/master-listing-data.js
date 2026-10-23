@@ -277,3 +277,46 @@ export function mergeDocumentCompanies(model,companies){
  validateMasterListing(updated);
  return {model:updated,added,existing,invalid};
 }
+
+
+/** Remove exactly one Master Listing row, preserving every non-number field. */
+export function removeMasterListingRow(model,rowId){
+ validateMasterListing(model);
+ const at=model.rows.findIndex(row=>row.id===rowId);
+ if(at<0)return {model,removed:0};
+ const ordinal=model.columns.findIndex((_,i)=>isListingOrdinalColumn(model,i));
+ const rows=model.rows.filter((_,i)=>i!==at).map((row,i)=>{
+  if(ordinal<0||row.values[ordinal]===String(i+1))return row;
+  const values=row.values.slice();values[ordinal]=String(i+1);
+  return {...row,values};
+ });
+ const result={...model,rows};
+ validateMasterListing(result);
+ return {model:result,removed:1};
+}
+
+/** Remove only the unique matching company after its Documents record is deleted. */
+export function removeDeletedDocumentCompany(model,deleted,remaining=[]){
+ validateMasterListing(model);
+ if(!deleted?.name||!Array.isArray(remaining))throw Error('Deleted company identity is unavailable.');
+ const regKey=v=>{
+  const s=normal(v).toUpperCase();
+  if(!s||s==='N/A')return '';
+  return s.match(/\d{12}/)?.[0]||s.replace(/[^A-Z0-9]/g,'');
+ };
+ const name=key(deleted.name),reg=regKey(deleted.registration_no??deleted.registration);
+ const matches=(n,r)=>{
+  const b=regKey(r);
+  if(reg&&b)return reg===b;
+  return !!name&&name===key(n);
+ };
+ if(remaining.some(c=>matches(c.name,c.registration_no??c.registration)))
+  return {model,removed:0,reason:'A matching company still exists in Documents'};
+ const candidates=model.rows.filter(row=>{
+  const c=companyData(model,row);
+  return matches(c.name,c.registration);
+ });
+ if(!candidates.length)return {model,removed:0,reason:'No matching Master Listing entry'};
+ if(candidates.length>1)throw Error('Multiple Master Listing entries match; no row was removed.');
+ return {...removeMasterListingRow(model,candidates[0].id),reason:'Removed the matching company'};
+}

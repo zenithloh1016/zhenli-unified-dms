@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createMasterListingTab} from '../src/master-listing-tab.js';
+import {removeDeletedDocumentCompany} from '../src/master-listing-data.js';
+import {readFileSync} from 'node:fs';
 
 function makeWorkspace({documentsError=null}={}){
  let saved=null;
@@ -137,4 +139,45 @@ test('Reconcile Documents portfolio via new manual recovery action',async()=>{
  const result=await x.ui.syncDocumentCompanies(x.companies);
  assert.equal(result.added,1);
  assert.match(x.ui.render(),/Sync from Documents/);
+});
+
+
+test('Deleting Documents company also removes one matching Master Listing row with backup',async()=>{
+ const x=makeWorkspace();
+ await x.ui.syncDocumentCompanies([{name:'KEEP SDN BHD',registration_no:'202501234567'},{name:'REMOVE SDN BHD',registration_no:'202601234567'}]);
+ const before=x.uploads.length;
+ const done=await x.ui.removeDeletedCompany({name:'REMOVE SDN BHD',registration_no:'202601234567'},[{name:'KEEP SDN BHD',registration_no:'202501234567'}]);
+ assert.equal(done.removed,1);
+ assert.equal(x.saved.rows.length,1);
+ assert.equal(x.saved.rows[0].values[1],'KEEP SDN BHD');
+ assert.equal(x.saved.rows[0].values[0],'1');
+ assert.ok(x.uploads.slice(before).some(u=>u.path.includes('/history/')));
+});
+
+test('Do not remove unrelated or ambiguously identified listing rows',async()=>{
+ const x=makeWorkspace();
+ await x.ui.syncDocumentCompanies([{name:'ABC SDN BHD',registration_no:'202601111111'}]);
+ const miss=await x.ui.removeDeletedCompany({name:'ABC SDN BHD',registration_no:'202609999999'},[]);
+ assert.equal(miss.removed,0);
+ assert.equal(x.saved.rows.length,1);
+ const protectedEntry=removeDeletedDocumentCompany(x.ui.model,{name:'ABC SDN BHD',registration_no:'202601111111'},[{name:'ABC SDN BHD',registration_no:'202601111111'}]);
+ assert.equal(protectedEntry.removed,0);
+});
+
+test('Imported row without registration is removed on matched Documents deletion',async()=>{
+ const x=makeWorkspace();
+ await x.ui.load();x.ui.onClick('ml-add');
+ await submitAndDrain(x.ui,x.form({1:'LEGACY SDN BHD',3:'21/10/2026'},false));
+ const done=await x.ui.removeDeletedCompany({name:'LEGACY SDN BHD',registration_no:'202501234567'},[]);
+ assert.equal(done.removed,1);
+ assert.equal(x.saved.rows.length,0);
+});
+
+test('Deleting ordinary folders does not change Master Listing and manual removal exists',()=>{
+ const source=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ assert.match(source,/masterListingUI\.removeDeletedCompany\(deletedCompany,state\.companies\)/);
+ const tab=readFileSync(new URL('../src/master-listing-tab.js',import.meta.url),'utf8');
+ assert.match(tab,/action==='ml-remove'/);
+ assert.match(tab,/act\('Remove row','ml-remove'/);
+ assert.match(source,/db\.from\('folders'\)\.delete\(\)\.eq\('id',m\.id\)/);
 });

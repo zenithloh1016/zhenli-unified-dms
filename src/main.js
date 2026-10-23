@@ -341,7 +341,7 @@ function modalHTML() {
     body = `<label class="input-label">${m.kind === 'company' ? 'Company name' : 'Name'}<input name="name" required maxlength="250" autofocus value="${esc(name)}" placeholder="${m.kind === 'company' ? 'Example Sdn Bhd' : 'Folder name'}"/></label>`;
     if (m.kind === 'company') body += `<label class="input-label">Registration number (optional)<input name="registration" maxlength="100" placeholder="e.g. 202601234567"/></label>`;
   } else {
-    body = `<p>Delete <strong>${esc(m.name)}</strong>?</p><p class="alert">This permanently removes ${m.target === 'company' ? 'the company, all nested folders and ALL its uploaded files' : m.target === 'folder' ? 'this folder, all nested subfolders and their documents' : 'this document'}. This cannot be undone.</p>`;
+    body = `<p>Delete <strong>${esc(m.name)}</strong>?</p><p class="alert">This permanently removes ${m.target === 'company' ? 'the company, all nested folders and ALL its uploaded files, and its matching Master Listing entry (with private backup)' : m.target === 'folder' ? 'this folder, all nested subfolders and their documents' : 'this document'}. This cannot be undone.</p>`;
   }
   return `<div class="modal-backdrop" data-action="modal-bg"><section class="modal" role="dialog" aria-modal="true" aria-label="${title}"><div class="modal-heading"><h3>${title}</h3>${action('✕','close-modal')}</div><form id="modal-form">${body}<div class="modal-actions">${action('Cancel','close-modal')}<button class="btn ${m.kind==='delete'?'danger':'primary'}" type="submit">${m.kind === 'delete' ? 'Delete permanently' : 'Save'}</button></div></form></section></div>`;
 }
@@ -650,10 +650,25 @@ async function deleteTarget(m) {
     await removeObjects(paths);
     const {error}=await db.from('folders').delete().eq('id',m.id);check(error);
   } else {
+    // Capture the original identity before deleting the Documents company.
+    const {data:deletedCompany,error:lookupError}=await db.from('companies')
+      .select('id,name,registration_no').eq('id',m.id).single();check(lookupError);
     const {data,error}=await db.from('documents').select('storage_path').eq('company_id',m.id);check(error);
     await removeObjects((data||[]).map(d=>d.storage_path));
     const {error:e}=await db.from('companies').delete().eq('id',m.id);check(e);
     if(state.companyId===m.id){state.companyId=null;state.folderId=null;}
+    await reloadCompanies();
+    let message='Company Documents deleted.';
+    try {
+      const result=await masterListingUI.removeDeletedCompany(deletedCompany,state.companies);
+      message+=result.removed?' Matching Master Listing row removed and backed up.':
+        ' Master Listing: '+(result.reason||'No matching entry found.');
+    }catch(syncError){
+      message+=' Master Listing removal failed: '+String(syncError?.message||syncError)+
+        '. Open Master Listing and use Remove row for the old company.';
+    }
+    state.modal=null;await refresh();toast(message);
+    return;
   }
   state.modal=null;await refresh();toast('Deleted permanently.');
 }
