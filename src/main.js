@@ -384,7 +384,7 @@ function modalHTML() {
     body = `<label class="input-label">${m.kind === 'company' ? 'Company name' : 'Name'}<input name="name" required maxlength="250" autofocus value="${esc(name)}" placeholder="${m.kind === 'company' ? 'Example Sdn Bhd' : 'Folder name'}"/></label>`;
     if (m.kind === 'company') body += `<label class="input-label">Registration number (optional)<input name="registration" maxlength="100" placeholder="e.g. 202601234567"/></label>`;
   } else {
-    body = `<p>Delete <strong>${esc(m.name)}</strong>?</p><p class="alert">This permanently removes ${m.target === 'company' ? 'its Documents folders, Master Listing entry, Statutory Deadlines, Statutory Registers and Task Hub company records and tasks. Supabase signing requests will be hidden and pending links revoked; signed PDF evidence and audit logs are preserved' : m.target === 'folder' ? 'this folder, all nested subfolders and their documents' : 'this document'}. This cannot be undone.</p>`;
+    body = `<p>Delete <strong>${esc(m.name)}</strong>?</p><p class="alert">This permanently removes ${m.target === 'company' ? 'its Documents folders, Master Listing entry, Statutory Deadlines, Statutory Registers, local Annual Return drafts and Task Hub company records and tasks. Supabase signing requests will be hidden and pending links revoked; signed PDF evidence and audit logs are preserved' : m.target === 'folder' ? 'this folder, all nested subfolders and their documents' : 'this document'}. This cannot be undone.</p>`;
     if(m.target==='company')body+='<label class="input-label">Type DELETE to confirm removal from all tabs<input name="confirmCompanyDelete" required pattern="DELETE" autocomplete="off" placeholder="DELETE"/></label>';
   }
   return `<div class="modal-backdrop" data-action="modal-bg"><section class="modal" role="dialog" aria-modal="true" aria-label="${title}"><div class="modal-heading"><h3>${title}</h3>${action('✕','close-modal')}</div><form id="modal-form">${body}<div class="modal-actions">${action('Cancel','close-modal')}<button class="btn ${m.kind==='delete'?'danger':'primary'}" type="submit">${m.kind === 'delete' ? 'Delete permanently' : 'Save'}</button></div></form></section></div>`;
@@ -709,6 +709,13 @@ async function deleteTarget(m) {
     if(!deleted?.deleted)throw Error('The company was not deleted.');
     forgetDeletedHubCompany(deletedCompany,state.user.id);
     signingSupabaseUI.forgetCompany(deletedCompany.name);
+    // The embedded Annual Return generator uses same-origin, user-scoped drafts.
+    // Other devices clear their orphaned drafts when they next open this tab.
+    try{
+      const draftKey='zhenli:annual-return:local-draft:v1:'+
+        encodeURIComponent('dms:'+state.user.id)+':'+encodeURIComponent(m.id);
+      localStorage.removeItem(draftKey);
+    }catch(error){console.warn('Local Annual Return draft cleanup:',error);}
     if(state.companyId===m.id){state.companyId=null;state.folderId=null;}
     if(state.arSelectedCompanyId===m.id)state.arSelectedCompanyId=null;
     await reloadCompanies();
