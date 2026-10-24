@@ -133,7 +133,20 @@ if(window.parent!==window){
    const records=Array.isArray(event.data.companies)?event.data.companies:[];
    dmsCompanies=records.slice(0,5000).filter(isValidCompanyRecord).sort((a,b)=>a.name.localeCompare(b.name));
    if(typeof event.data.userId==='string'&&/^[a-z0-9-]{16,90}$/i.test(event.data.userId)){
-    draftScope='dms:'+event.data.userId;draftOptions();
+    draftScope='dms:'+event.data.userId;
+    // Locally saved DMS drafts for deleted company UUIDs must not reappear.
+    // Standalone/manual drafts and other users' workspaces remain untouched.
+    if(records.length<5000){
+     const liveIds=new Set(dmsCompanies.map(c=>c.id));
+     try{
+      const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      for(const draft of listAnnualReturnDrafts(localStorage,draftScope)){
+       if(uuid.test(draft.companyId)&&!liveIds.has(draft.companyId))
+        removeAnnualReturnDraft(localStorage,draft.key,draftScope);
+      }
+     }catch(error){console.warn('Annual Return deleted-company draft cleanup:',error);}
+    }
+    draftOptions();
    }
    renderSections();return;
   }
