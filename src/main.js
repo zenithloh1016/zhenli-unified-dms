@@ -708,6 +708,7 @@ async function deleteTarget(m) {
     check(deleteError);
     if(!deleted?.deleted)throw Error('The company was not deleted.');
     forgetDeletedHubCompany(deletedCompany,state.user.id);
+    signingSupabaseUI.forgetCompany(deletedCompany.name);
     if(state.companyId===m.id){state.companyId=null;state.folderId=null;}
     if(state.arSelectedCompanyId===m.id)state.arSelectedCompanyId=null;
     await reloadCompanies();
