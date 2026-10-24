@@ -11,6 +11,31 @@ let bridgeInstalled = false;
 let lastUserId = null;
 let syncBusy = false;
 let queuedState = null;
+let hubWritePromise = null;
+const deletedCompanyByAccount = new Map();
+const hubName = value => String(value||'').normalize('NFKC').trim().toUpperCase();
+function scrubDeletedHubCompanies(value,userId){
+  if(!value||!Array.isArray(value.companies)||!Array.isArray(value.tasks))return value;
+  const removed=deletedCompanyByAccount.get(userId);
+  if(!removed)return value;
+  return {...value,
+    companies:value.companies.filter(x=>!removed.ids.has(x.id)&&!removed.names.has(hubName(x.name))),
+    tasks:value.tasks.filter(x=>!removed.ids.has(x.company)&&!removed.names.has(hubName(x.company)))
+  };
+}
+export async function waitForHubWrites(){
+  if(hubWritePromise)await hubWritePromise;
+}
+export function forgetDeletedHubCompany(company,userId){
+  if(!userId||!company?.id||!company?.name)return;
+  let removed=deletedCompanyByAccount.get(userId);
+  if(!removed){removed={ids:new Set(),names:new Set()};deletedCompanyByAccount.set(userId,removed);}
+  removed.ids.add(company.id);removed.names.add(hubName(company.name));
+  if(lastUserId===userId){
+    payload=scrubDeletedHubCompanies(payload,userId);
+    queuedState=scrubDeletedHubCompanies(queuedState,userId);
+  }
+}
 
 export function renderIntegratedView(section, companies=[]) {
   const signingLink = getSigningUrl();
@@ -82,6 +107,7 @@ export function installHubBridge(db, getUser, getCompanies, displayError) {
       syncBusy=false;syncPromise=null;
       if(queuedState)void saveChanges().catch(displayError);
     });
+    hubWritePromise=syncPromise;
     return syncPromise;
   }
   function respond(child,type,requestId,result){
@@ -102,7 +128,7 @@ export function installHubBridge(db, getUser, getCompanies, displayError) {
       try {
         const {data,error}=await db.from('task_hub_state').select('payload').eq('user_id',user.id).maybeSingle();
         if(error)throw error;
-        const loaded=data?.payload && Array.isArray(data.payload.tasks) && Array.isArray(data.payload.companies) ? data.payload : defaultPayload();
+        const loaded=scrubDeletedHubCompanies(data?.payload && Array.isArray(data.payload.tasks) && Array.isArray(data.payload.companies) ? data.payload : defaultPayload(),user.id);
         const merged=mergeCompanies(loaded.companies,getCompanies());
         payload={...loaded,companies:merged.entries};
         if(merged.added || !data){
@@ -122,7 +148,8 @@ export function installHubBridge(db, getUser, getCompanies, displayError) {
         else displayError(new Error('Task Hub payload is too large for cloud sync.'));
         return;
       }
-      payload=p;lastUserId=user.id;queuedState=p;
+      const filtered=scrubDeletedHubCompanies(p,user.id);
+      payload=filtered;lastUserId=user.id;queuedState=filtered;
       try {
         await saveChanges();
         if(type==='ZHENLI_HUB_SAVE_CONFIRM')respond(childWindow,'ZHENLI_HUB_SAVE_RESULT',requestId,{ok:true});
