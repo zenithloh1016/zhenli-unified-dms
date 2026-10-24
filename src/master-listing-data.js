@@ -306,12 +306,12 @@ export function removeDeletedDocumentCompany(model,deleted,remaining=[]){
  };
  const name=key(deleted.name),reg=regKey(deleted.registration_no??deleted.registration);
  const matches=(n,r)=>{
-  // Exact company name is authoritative even when Excel and Documents
-  // store registration numbers in different or outdated formats.
-  // Registration numbers remain a fallback for a renamed listing row.
-  if(name&&name===key(n))return true;
+  // When both sides have registration numbers, use the registration number
+  // as the authoritative identifier. Never delete a same-name row with a
+  // conflicting registration number. If one side lacks it, match by name.
   const b=regKey(r);
-  return !!(reg&&b&&reg===b);
+  if(reg&&b)return reg===b;
+  return !!name&&name===key(n);
  };
  if(remaining.some(c=>matches(c.name,c.registration_no??c.registration)))
   return {model,removed:0,reason:'A matching company still exists in Documents'};
