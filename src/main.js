@@ -17,7 +17,8 @@ import {STANDARD_FOLDER_COUNT,isExistingRegisterBookFolder} from './register-boo
 import {createRegisterBookTab} from './register-book-tab.js';
 import {combinedRegisterSnapshot} from './statutory-ar-bridge.js';
 import './style.css';
-import {installHubBridge} from './integrated-modules.js';
+import {installHubBridge,waitForHubWrites,forgetDeletedHubCompany} from './integrated-modules.js';
+import {removeDeletedCompanyStorage} from './company-cleanup.js';
 
 const ROOT = document.getElementById('app');
 const BUCKET = 'dms-private';
@@ -120,6 +121,46 @@ async function reloadContent() {
   check(f.error); check(d.error);
   state.folders = f.data || []; state.documents = d.data || [];
   if (state.folderId && !state.folders.some(x=>x.id===state.folderId)) state.folderId = null;
+}
+
+let companyCleanupBusy=false;
+async function finishPendingCompanyDeletions(){
+  if(companyCleanupBusy||!state.user?.id)return {completed:0,failed:0};
+  companyCleanupBusy=true;
+  const userId=state.user.id;
+  let completed=0,failed=0;
+  try{
+    const {data:pending,error}=await db.from('dms_company_cleanup_queue')
+      .select('company_id,company_name,registration_no')
+      .eq('user_id',userId).order('created_at',{ascending:true});
+    check(error);
+    for(const item of pending||[]){
+      try{
+        if(state.user?.id!==userId)throw Error('Account changed during deletion cleanup');
+        if(state.companies.some(c=>c.id===item.company_id))
+          throw Error('Company still exists in Documents; refusing cleanup');
+        const synced=await masterListingUI.removeDeletedCompany({
+          id:item.company_id,name:item.company_name,registration_no:item.registration_no
+        },state.companies);
+        if(synced.reason==='A matching company still exists in Documents')
+          throw Error(synced.reason);
+        await removeDeletedCompanyStorage(db,BUCKET,userId,item.company_id);
+        const {error:ackError}=await db.from('dms_company_cleanup_queue')
+          .delete().eq('company_id',item.company_id).eq('user_id',userId);
+        check(ackError);
+        completed++;
+        registerBookUI.reset();
+        deadlineLastCheck=0;
+      }catch(error){
+        failed++;
+        console.warn('Pending DMS company cleanup:',item.company_id,error);
+        state.notice='Company deleted, but cross-tab cleanup needs a retry: '+
+          String(error?.message||error)+'. Reopen DMS or refresh to retry automatically.';
+        break; // Retry in order; never acknowledge an incomplete cleanup.
+      }
+    }
+  }finally{companyCleanupBusy=false;}
+  return {completed,failed};
 }
 const boVerifiedCompanyIds=new Set();
 let boVerifiedForUser=null;
@@ -299,6 +340,8 @@ async function ensureChargesFolders({force=false}={}){
 
 async function refresh() {
   await reloadCompanies();
+  try{await finishPendingCompanyDeletions();}
+  catch(error){console.warn('Company cleanup queue unavailable:',error);state.notice='Company cleanup check failed: '+String(error?.message||error);}
   try{
     const bo=await ensureBeneficialOwnersFolders();
     if(bo.failed)state.notice='Beneficial Owners folders could not be created for '+bo.failed+' companies. Tap Ensure BO folders to retry.';
@@ -341,7 +384,8 @@ function modalHTML() {
     body = `<label class="input-label">${m.kind === 'company' ? 'Company name' : 'Name'}<input name="name" required maxlength="250" autofocus value="${esc(name)}" placeholder="${m.kind === 'company' ? 'Example Sdn Bhd' : 'Folder name'}"/></label>`;
     if (m.kind === 'company') body += `<label class="input-label">Registration number (optional)<input name="registration" maxlength="100" placeholder="e.g. 202601234567"/></label>`;
   } else {
-    body = `<p>Delete <strong>${esc(m.name)}</strong>?</p><p class="alert">This permanently removes ${m.target === 'company' ? 'the company, all nested folders and ALL its uploaded files, and its matching Master Listing entry (with private backup)' : m.target === 'folder' ? 'this folder, all nested subfolders and their documents' : 'this document'}. This cannot be undone.</p>`;
+    body = `<p>Delete <strong>${esc(m.name)}</strong>?</p><p class="alert">This permanently removes ${m.target === 'company' ? 'its Documents folders, Master Listing entry, Statutory Deadlines, Statutory Registers and Task Hub company records and tasks. Supabase signing requests will be hidden and pending links revoked; signed PDF evidence and audit logs are preserved' : m.target === 'folder' ? 'this folder, all nested subfolders and their documents' : 'this document'}. This cannot be undone.</p>`;
+    if(m.target==='company')body+='<label class="input-label">Type DELETE to confirm removal from all tabs<input name="confirmCompanyDelete" required pattern="DELETE" autocomplete="off" placeholder="DELETE"/></label>';
   }
   return `<div class="modal-backdrop" data-action="modal-bg"><section class="modal" role="dialog" aria-modal="true" aria-label="${title}"><div class="modal-heading"><h3>${title}</h3>${action('✕','close-modal')}</div><form id="modal-form">${body}<div class="modal-actions">${action('Cancel','close-modal')}<button class="btn ${m.kind==='delete'?'danger':'primary'}" type="submit">${m.kind === 'delete' ? 'Delete permanently' : 'Save'}</button></div></form></section></div>`;
 }
@@ -650,24 +694,36 @@ async function deleteTarget(m) {
     await removeObjects(paths);
     const {error}=await db.from('folders').delete().eq('id',m.id);check(error);
   } else {
-    // Capture the original identity before deleting the Documents company.
     const {data:deletedCompany,error:lookupError}=await db.from('companies')
-      .select('id,name,registration_no').eq('id',m.id).single();check(lookupError);
-    const {data,error}=await db.from('documents').select('storage_path').eq('company_id',m.id);check(error);
-    await removeObjects((data||[]).map(d=>d.storage_path));
-    const {error:e}=await db.from('companies').delete().eq('id',m.id);check(e);
+      .select('id,name,registration_no').eq('id',m.id)
+      .eq('user_id',state.user.id).single();
+    check(lookupError);
+    // Wait for Task Hub saves from the old iframe before removing its records.
+    await waitForHubWrites();
+    // This RPC deletes Documents/Folders, Task Hub records, and hides/revokes
+    // Supabase signing requests in one authorised PostgreSQL transaction.
+    const {data:deleted,error:deleteError}=await db.rpc('delete_dms_company_cascade',{
+      p_company_id:m.id
+    });
+    check(deleteError);
+    if(!deleted?.deleted)throw Error('The company was not deleted.');
+    forgetDeletedHubCompany(deletedCompany,state.user.id);
     if(state.companyId===m.id){state.companyId=null;state.folderId=null;}
+    if(state.arSelectedCompanyId===m.id)state.arSelectedCompanyId=null;
     await reloadCompanies();
-    let message='Company Documents deleted.';
-    try {
-      const result=await masterListingUI.removeDeletedCompany(deletedCompany,state.companies);
-      message+=result.removed?' Matching Master Listing row removed and backed up.':
-        ' Master Listing: '+(result.reason||'No matching entry found.');
-    }catch(syncError){
-      message+=' Master Listing removal failed: '+String(syncError?.message||syncError)+
-        '. Your Documents company was deleted, but Master Listing sync could not finish. Check your connection and contact the DMS administrator before deleting another company.';
+    // Master Listing and storage cannot join the SQL transaction. The server
+    // keeps a private retry record until BOTH cleanups finish successfully.
+    let sync;
+    try{sync=await finishPendingCompanyDeletions();}
+    catch(error){
+      console.warn('Company deletion cleanup failed:',error);
+      sync={failed:1};
     }
-    state.modal=null;await refresh();toast(message);
+    state.modal=null;
+    await refresh();
+    toast(sync.failed
+      ?'Company deleted from Documents and Task Hub. Master Listing/storage cleanup is pending and will retry automatically.'
+      :'Company removed from Documents, Master Listing, Statutory Deadlines, Statutory Registers and Task Hub. Signing records hidden; signed evidence preserved.');
     return;
   }
   state.modal=null;await refresh();toast('Deleted permanently.');
@@ -950,7 +1006,11 @@ ROOT.addEventListener('submit',event=>{
   }
   const m=state.modal;if(!m)return;
   busyDo(async()=>{
-    if(m.kind==='delete'){await deleteTarget(m);return;}
+    if(m.kind==='delete'){
+      if(m.target==='company'&&String(form.get('confirmCompanyDelete')||'')!=='DELETE')
+        throw Error('Type DELETE exactly to confirm company-wide removal.');
+      await deleteTarget(m);return;
+    }
     const name=norm(form.get('name'));
     if(!name)throw new Error('Name cannot be blank.');
     let companySyncNotice='';
