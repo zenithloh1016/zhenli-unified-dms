@@ -598,6 +598,16 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     return true;
   }
   return {
+    forgetCompany(name){
+      const key=String(name||'').normalize('NFKC').trim().toUpperCase();
+      requests=requests.filter(r=>String(r.company||'').normalize('NFKC').trim().toUpperCase()!==key);
+      if(detail&&String(detail.company||'').normalize('NFKC').trim().toUpperCase()===key){
+        detail=null;view='list';preview.reset();
+      }
+      totalRequests=requests.length;
+      initialized=false; // Force server refresh next time Signing is opened.
+      update();
+    },
     onClick,onSubmit,submit:onSubmit,changed,
     input:element=>{
       if(element?.closest?.('#ns-placements .zs-placement-row'))
