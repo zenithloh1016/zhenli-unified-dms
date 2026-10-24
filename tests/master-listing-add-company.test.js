@@ -175,7 +175,13 @@ test('Imported row without registration is removed on matched Documents deletion
 
 test('Deleting ordinary subfolders never changes Master Listing, and company deletion automatically synchronizes',()=>{
  const source=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
- assert.match(source,/masterListingUI\.removeDeletedCompany\(deletedCompany,state\.companies\)/);
+  // The company deletion uses an atomic Supabase RPC and a durable
+  // cleanup queue to finish Master Listing and company storage deletion.
+  assert.match(source,/delete_dms_company_cascade/);
+  assert.match(source,/await finishPendingCompanyDeletions\(\)/);
+  assert.match(source,/masterListingUI\.removeDeletedCompany\(\{/);
+  assert.match(source,/await removeDeletedCompanyStorage\(/);
+  assert.match(source,/await waitForHubWrites\(\)/);
  const tab=readFileSync(new URL('../src/master-listing-tab.js',import.meta.url),'utf8');
  assert.doesNotMatch(tab,/action==='ml-remove'/);
  assert.doesNotMatch(tab,/act\('Remove row','ml-remove'/);
