@@ -124,13 +124,16 @@ function isPlaceholder(row){
  return !entries.length||entries.every(x=>absent(x.value)||/^0(?:\.0+)?$/.test(x.value));
 }
 function statusFor(fields){
- const end=fields.find(f=>/^(?:date of cessation|cessation date|date ceased|date of discharge|date of satisfaction|date of release|date ceased to be(?: a member)?|date of resignation|date of termination)$/i.test(f.label));
- if(end)return absent(end.value)?'current':'former';
- const status=fields.find(f=>/^(?:status|charge status|appointment status|active\/inactive)$/i.test(f.label));
+ // Explicit, reviewable status takes precedence over a blank cessation date.
+ // The user may know a departure was completed before the effective date is
+ // entered in the historical register. Never infer or fabricate that date.
+ const status=fields.find(f=>/^(?:status|charge status|appointment status|active\/inactive)$/i.test(f.label)&&!absent(f.value));
  if(status){
   if(/(?:discharg|satisfi|releas|cease|resign|terminat|former|inactive|cancel)/i.test(status.value))return 'former';
   if(/(?:current|active|existing|ongoing|appointed|outstanding)/i.test(status.value))return 'current';
  }
+ const end=fields.find(f=>/^(?:date of cessation|cessation date|date ceased|date of discharge|date of satisfaction|date of release|date ceased to be(?: a member)?|date of resignation|date of termination)$/i.test(f.label));
+ if(end)return absent(end.value)?'current':'former';
  return 'unknown';
 }
 function titleFor(fields,index){
