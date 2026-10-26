@@ -4,7 +4,7 @@
  * Supabase Storage under the user's own prefix. No new database table or
  * service-role credentials are required. Documents folders change only when the user requests synchronization on add or through Sync.
  */
-import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,repairListingConstitutionPlaceholders,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeDeletedDocumentCompany,sortMasterListingCompanies,reconcileDeletedDocumentRows} from './master-listing-data.js';
+import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,repairListingConstitutionPlaceholders,isUnknownConstitutionValue,isListingConstitutionColumn,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeDeletedDocumentCompany,sortMasterListingCompanies,reconcileDeletedDocumentRows} from './master-listing-data.js';
 import {previewRegisterParticularsZip,preserveRegisterParticulars,compactRegisterColumns,REGISTER_PARTICULARS_COLUMNS} from './master-listing-register-particulars.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -270,6 +270,29 @@ async function saveAddedCompany(form){
   }
  }finally{state.saving=false;onRender?.();}
 }
+/**
+ * Refresh from the latest cloud listing and repeat the original backup-first
+ * Constitution migration. Useful when a mobile APK or Windows app has cached
+ * an older table state, or the user imports another legacy worksheet.
+ */
+async function repairConstitutionNow(){
+ if(!getUser?.()?.id)throw Error('Sign in before repairing Constitution values.');
+ await load(true);
+ if(state.error)throw Error(state.error);
+ const model=state.model;
+ if(!model)throw Error('No saved Master Listing found to repair.');
+ const columns=model.columns.flatMap((c,i)=>
+  isListingConstitutionColumn(c.label)?[i]:[]);
+ if(!columns.length){
+  state.status='Constitution check: No Constitution column exists in the saved Master Listing.';
+ }else if(!/^Repaired \d+ Constitution value/.test(state.status)){
+  const missing=model.rows.reduce((n,row)=>n+
+   columns.filter(i=>isUnknownConstitutionValue(row.values[i])).length,0);
+  state.status='Constitution cloud listing checked. '+missing+
+   ' N/A value(s); no remaining legacy placeholders were found.';
+ }
+ onRender?.();
+}
 async function saveRepairedDates(){
   if(!state.model)throw Error('Import a Master Listing first.');
   const {model,count}=repairLegacyDateSerials(state.model);
@@ -407,7 +430,9 @@ async function saveRepairedDates(){
    '<div class="content-header"><div><p class="eyebrow">STATUTORY COMPANY INFORMATION</p><h1>Master Listing</h1>'+
    '<p class="muted">Import an Excel workbook, keep all company-information columns, and edit each company inside this private DMS tab.</p></div>'+
    '<div class="header-buttons">'+(model?act(state.fullScreen?'Exit full screen ✕':'Full screen ⛶','ml-fullscreen','','secondary'):'')+
-   (model?act('Export CSV','ml-export','','secondary'):'')+(model?act('Import Register Books','ml-register-upload','','secondary'):'')+(model&&compactRegisterColumns(model).removed?act('Keep Current Names Only','ml-compact-register','','secondary'):'')+act('+ Add Company','ml-add','','primary')+act('Import Excel','ml-upload','','secondary')+'</div></div>'+
+   (model?act('Export CSV','ml-export','','secondary'):'')+
+   (model?act('Fix Constitution N/A','ml-fix-constitution','','secondary'):'')+
+   (model?act('Import Register Books','ml-register-upload','','secondary'):'')+(model&&compactRegisterColumns(model).removed?act('Keep Current Names Only','ml-compact-register','','secondary'):'')+act('+ Add Company','ml-add','','primary')+act('Import Excel','ml-upload','','secondary')+'</div></div>'+
    '<input id="ml-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>'+
    '<input id="ml-register-file" type="file" accept=".zip,application/zip" hidden>'+
    (state.error?'<div class="alert" role="alert">'+esc(state.error)+'</div>':'')+
@@ -509,6 +534,7 @@ function renderEditor(){
    onRender?.();return true;
   }
   if(action==='ml-repair-dates'){asyncRun(saveRepairedDates);return true;}
+  if(action==='ml-fix-constitution'){asyncRun(repairConstitutionNow);return true;}
   if(action==='ml-export'){
    if(!state.model)return true;
    const csv=listingCSV(state.model),blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});

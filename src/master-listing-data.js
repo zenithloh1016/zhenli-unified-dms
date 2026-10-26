@@ -88,11 +88,27 @@ export function isListingConstitutionColumn(label){
  const words=normal(label).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
  return /^(?:(?:company|corporate|adopted) )?constitution(?: (?:status|adopted|adoption))?$/.test(words);
 }
+/**
+ * Invalid single-character values imported from older Constitution columns
+ * may visually resemble "b", "p" or the Unicode thorn "þ". These do not
+ * establish a real Constitution status. Preserve Y/N/A abbreviations and
+ * any meaningful descriptive records.
+ */
+export function isUnknownConstitutionValue(value){
+ const compact=String(value??'').normalize('NFKC')
+  .replace(/[\u200B-\u200D\u2060\uFEFF]/g,'')
+  .replace(/[\u0300-\u036F]/g,'').trim();
+ if(!compact)return true;
+ if(/^(?:n\s*\/?\s*a|nil|none|not\s+(?:applicable|available)|-|–|—)$/i.test(compact))
+  return true;
+ return Array.from(compact).length===1&&/\p{L}/u.test(compact)&&
+  !/^[ANY]$/i.test(compact);
+}
 export function formattedListingCell(model,columnIndex,value){
  const raw=String(value??'');
  if(!raw.trim())return 'N/A';
  if(isListingConstitutionColumn(model?.columns?.[columnIndex]?.label)&&
-    ['B','N/A','NA'].includes(raw.trim().toUpperCase()))return 'N/A';
+    isUnknownConstitutionValue(raw))return 'N/A';
  const dateColumn=isListingDateColumn(model?.columns?.[columnIndex]?.label);
  return normalizeListingDateText(raw,{dateColumn,date1904:!!model?.date1904})??raw;
 }

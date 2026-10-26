@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
  buildMasterListing,changeListingCell,displayedListingValue,formattedListingCell,
- listingCSV,listingRowsForSearch,isListingConstitutionColumn,
+ listingCSV,listingRowsForSearch,isListingConstitutionColumn,isUnknownConstitutionValue,
  repairListingConstitutionPlaceholders
 } from '../src/master-listing-data.js';
 import {createMasterListingTab} from '../src/master-listing-tab.js';
@@ -114,4 +114,41 @@ test('saved Constitution repair is idempotent and never edits unrelated columns'
  const again=repairListingConstitutionPlaceholders(info.model);
  assert.equal(again.count,0);
  assert.equal(again.model,info.model);
+});
+
+test('Unicode b-like Constitution placeholders normalize without erasing genuine statuses',()=>{
+ const m=example();
+ for(const v of ['b','B','p','P','þ','Þ','ƀ','ɓ','ᵇ','β',
+                 '\u200Bþ\uFEFF',' \u200B b\u200D ','nil','N/A','NA']){
+  assert.equal(isUnknownConstitutionValue(v),true,'unknown '+v);
+  assert.equal(formattedListingCell(m,3,v),'N/A','Constitution '+v);
+  assert.equal(formattedListingCell(m,4,v),v,'Unrelated Remarks '+v);
+ }
+ for(const v of ['Y','N','A','Yes','No','Adopted','Not adopted','Memorandum and Articles','2024']){
+  assert.equal(isUnknownConstitutionValue(v),false,'meaningful '+v);
+  assert.equal(formattedListingCell(m,3,v),v);
+ }
+});
+test('explicit repair reloads fresh cloud values and saves a backup before correcting',async()=>{
+ const b=example();b.rows[0].values[3]='þ';b.rows[1].values[3]='b';
+ let server=JSON.stringify(b),backupCount=0;
+ const storage={
+  download:async()=>({data:new Blob([server]),error:null}),
+  upload:async(path,blob)=>{const data=await blob.text();
+   if(path.endsWith('/current.json'))server=data;
+   else backupCount++;
+   return {error:null};}
+ };
+ const tab=createMasterListingTab({db:{storage:{from:()=>storage}},
+  getUser:()=>({id:'test-account'}),getCompanies:()=>[],openCompany:()=>{},notify:()=>{}});
+ await tab.load();
+ assert.equal(backupCount,1);
+ assert.deepEqual(JSON.parse(server).rows.slice(0,2).map(r=>r.values[3]),['N/A','N/A']);
+ assert.match(tab.render(),/Fix Constitution N\/A/);
+ const old=JSON.parse(server);old.rows[0].values[3]='þ';server=JSON.stringify(old);
+ tab.onClick('ml-fix-constitution');
+ for(let i=0;i<12;i++)await new Promise(r=>setImmediate(r));
+ assert.equal(backupCount,2);
+ assert.equal(JSON.parse(server).rows[0].values[3],'N/A');
+ assert.match(tab.state.status,/Repaired 1 Constitution value/);
 });
