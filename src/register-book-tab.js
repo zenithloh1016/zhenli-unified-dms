@@ -6,7 +6,7 @@ import {previewStatutoryZip,makeRegisterBook,mergeRegisterBooks,validateRegister
 import {buildStatutoryRegistersPdf} from './statutory-register-pdf.js';
 import {renderStatutoryRegisterDocument} from './statutory-register-annual-ui.js';
 import {buildGroupedRegister} from './statutory-register-annual-layout.js';
-import {registerLabel,registerKind,describeStatutorySheet,isManagerRegister,normalizeRegisterName,ensureChargeRegister,visibleRegisterIndices,registerGroupIndices} from './statutory-register-review.js';
+import {registerLabel,registerKind,describeStatutorySheet,isManagerRegister,normalizeRegisterName,ensureChargeRegister,ensureReferenceParticulars,visibleRegisterIndices,registerGroupIndices} from './statutory-register-review.js';
 import {formatStatutoryNumberByKind,normalizeStatutoryNumberByKind} from './statutory-number-format.js';
 import {browserDownload,saveOrShareFile} from './file-transfer.js';
 import {Capacitor} from '@capacitor/core';
@@ -178,15 +178,18 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   try{
    const [saved,originalDocs]=await Promise.all([remoteBook(uid,id),legacyOriginals(id)]);
    const book=saved||makeRegisterBook(company);
-   ensureChargeRegister(book);
+   const chargesAdded=ensureChargeRegister(book);
+   const referenceAdded=ensureReferenceParticulars(book);
+   const changed=chargesAdded||referenceAdded;
    if(getUser?.()?.id!==uid)return;
    state.selectedId=id;state.book=book;state.originalUpdatedAt=book.updatedAt;state.originalDocs=originalDocs;
    state.historyOpen=false;state.historyItems=[];state.historyPreview=null;
    state.historyPreviewName='';state.historyLoaded=false;state.historyLoading=false;
-   state.dirty=false;
-   state.sheetIndex=Math.max(0,book.sheets.findIndex(s=>!isManagerRegister(s.name)));
-   state.showBlankFields=false;
-   state.message=book.sourceFile==='Manual entry'?'No imported register yet. Editable statutory register templates are ready.':'Statutory registers loaded. Edit any cell, then select Save Changes.';
+   state.dirty=!!changed;
+   state.sheetIndex=visibleRegisterIndices(book)[0]??0;
+   state.showBlankFields=!!changed||book.sourceFile==='Manual entry';
+   state.message=changed?'Missing MAJUKAYA ENTITI reference fields were added as blank editable particulars. Review and Save Changes to preserve them with a private version backup.':
+    book.sourceFile==='Manual entry'?'Register templates follow the MAJUKAYA ENTITI reference. Enter actual particulars before relying on them.':'Statutory registers loaded in MAJUKAYA ENTITI reference sequence.';
   }catch(error){state.error=String(error?.message||error);}
   finally{state.loading=false;notify();}
  }
@@ -213,7 +216,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     act('Export Combined Registers PDF','sr-pdf-combined','','secondary')+
     act('Add Register','sr-add-sheet')+
     '<span class="rb-dirty" id="sr-dirty">'+(state.dirty?'Unsaved changes':'All changes saved')+'</span></div>'+
-   '<div class="sr-registers-label">Choose a statutory register to view, edit or export:</div>'+
+   '<div class="sr-registers-label">Register sequencing and particulars based on MAJUKAYA ENTITI SDN. BHD. · Verify blank fields against company records:</div>'+
    '<div class="rb-sheet-tabs">'+visibleRegisterIndices(book).map(i=>'<button type="button" class="rb-sheet-tab '+
      (i===state.sheetIndex?'active':'')+'" data-action="sr-sheet" data-id="'+i+'">'+esc(registerLabel(book.sheets[i].name))+'</button>').join('')+'</div>'+
    (sheet&&!isManagerRegister(sheet.name)?'<div class="sr-register-controls">'+
@@ -353,7 +356,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   if(action==='sr-sheet'){
    const n=Number(id);
    if(Number.isInteger(n)&&n>=0&&n<(state.book?.sheets?.length||0)&&!isManagerRegister(state.book.sheets[n].name)){
-    state.sheetIndex=n;state.showBlankFields=false;notify();
+    state.sheetIndex=n;state.showBlankFields=state.dirty||state.book?.sourceFile==='Manual entry';notify();
    }return true;
   }
   if(action==='sr-set-status'){
