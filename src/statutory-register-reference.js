@@ -19,12 +19,13 @@ export const REFERENCE_FIELDS={
  allotments:['Allotment Date','Allotment No.','Allottee',"Allottee's Address",'Number of Shares','Amount Paid on Share','Certificate No.','Class','Folio No.'],
  transfers:['Transfer No.','Transfer Date','Shares','Consideration','No. of Old Certificate','Class of Shares','Transferor','IC No. / PP No. / Company No.','Folio of Transferor','Transferee','Transferee IC No. / PP No. / Company No.','Transferee Address','Folio of Transferee','No. of New Certificate'],
  charges:['Registered No.','Date of Registration','Name of Chargee','Nature of Charge','Amount of Indebtedness','Date of Discharge'],
- // Secretaries follow the Directors' personal/appointment order. A legacy
- // Registration No. is kept separately (not presumed to be NRIC, PC or MIA no.).
- secretaries:['Name','Date of Birth','Identification No.','Passport Expiry','Gender',
-  'Nationality / Race','Business Occupation','Residential Address','Service Address',
-  'Appointment Date','Cessation Date','SSM Practicing Certificate No.','Membership No.',
-  'Registration No.'],
+ // Follow the Directors' personal/appointment particulars, with two
+ // secretary-specific qualifications directly after Name. Legacy
+ // Registration No. remains in imported source data but is not a default.
+ secretaries:['Name','SSM Practicing Certificate No.','Membership No.',
+  'Date of Birth','Identification No.','Passport Expiry','Gender',
+  'Nationality / Race','Business Occupation','Residential Address',
+  'Service Address','Appointment Date','Cessation Date'],
  beneficialOwners:['Full Name','Identification No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Ownership / Voting Rights (%)','Type of Ownership','Criteria','Effective Date Becoming BO','Cessation Date']
 };
 export const MEMBER_LEDGER_FIELDS={
@@ -144,6 +145,9 @@ export function excludeRegisterField(name,label){
  const kind=referenceKind(name);
  const x=norm(label);
  if(kind==='directors')return /^remarks?(?:\s|$)/.test(x);
+ // Keep historical registration numbers in the stored workbook and previous
+ // versions; omit the legacy field only from the secretary view / PDF.
+ if(kind==='secretaries')return /^(?:registration no|registration number)$/.test(x);
  if(kind==='beneficialOwners')return (
   // Only the Section 56 notice/date-received field remains excluded.
   // Becoming-BO effective dates and separate cessation dates must display.
