@@ -1,5 +1,5 @@
 import {isCurrentMember,currentMemberKey,positiveShares,hasPendingMemberShares} from './statutory-current-members.js';
-import {sortReferenceFields,referenceDisplayLabel,referenceKind} from './statutory-register-reference.js';
+import {sortReferenceFields,referenceDisplayLabel,referenceKind,excludeRegisterField,sortCompanyDetails} from './statutory-register-reference.js';
 import {formatStatutoryNumber,numericKind,parseStatutoryNumber} from './statutory-number-format.js';
 /**
  * Editable, independent statutory-register document projection.
@@ -24,8 +24,10 @@ function recordsToBlocks(records,sheetIndex,showBlanks,{separateHistory=true,kin
   const rawStatus=record.status==='former'?'Former':record.status==='current'?'Current':'';
   result.push({type:'record',title:record.title||'Record '+(result.length+1),
    row:record.row,sheetIndex:si,status:separateHistory?rawStatus:''});
-  const visible=sortReferenceFields(title,(record.fields||[]).filter(f=>showBlanks||hasText(f.value)||
-   (kind==='charges'&&/^date of (?:discharge|satisfaction|release)$/i.test(f.label))));
+  const visible=sortReferenceFields(title,(record.fields||[]).filter(f=>
+   !excludeRegisterField(title,f.label)&&
+   (showBlanks||hasText(f.value)||
+    (kind==='charges'&&/^date of (?:discharge|satisfaction|release)$/i.test(f.label)))));
   if(visible.length)result.push(...visible.map(f=>({
    ...mappedField(f,si),
    label:referenceDisplayLabel(referenceKind(title),f.label,f,record.fields||[])
@@ -248,7 +250,8 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
     if(showBlanks||hasText(item.value))result.blocks.push(mappedField(item,sheetIndex));
    }
   }
-  if(!first)result.blocks.push({type:'note',text:'Registered Address is not recorded. Use Add Field to create it.'});
+  result.blocks=sortCompanyDetails(result.blocks);
+  if(!first)result.blocks.push({type:'note',text:'Registered Address is not recorded. Complete the registered address once verified.'});
  }else if(details.kind==='member'){
   result.blocks.push(...memberDisplayBlocks(book,[sheetIndex],{showBlanks}));
  }else if(details.kind==='table'||details.kind==='text'){

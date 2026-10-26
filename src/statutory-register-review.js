@@ -1,5 +1,5 @@
 import {parseMemberFolios} from './statutory-current-members.js';
-import {REFERENCE_FIELDS,referenceKind,referencePriority,referenceFieldIndex,referenceTemplateSheets} from './statutory-register-reference.js';
+import {REFERENCE_FIELDS,referenceKind,referencePriority,referenceFieldIndex,referenceTemplateSheets,createCompanyDetailsSheet,companyDetailIndex} from './statutory-register-reference.js';
 /**
  * Review-only projections over the original imported worksheet cells.
  * No statutory particulars are deleted or written back in a different order.
@@ -16,7 +16,7 @@ export function isManagerRegister(name){
 }
 export function registerLabel(name){
  const original=tidy(name);
- if(/^master$/i.test(original))return 'Company Details';
+ if(/^(?:master|company details)$/i.test(original))return 'Company Details';
  const source=original.replace(/\s+\(Imported\s+[^)]*\)(?:\s+\d+)?$/i,'');
  const imported=original.slice(source.length);
  const bare=source.replace(/^register (?:of|or)\s+/i,'').trim();
@@ -58,7 +58,7 @@ export function isMemberPersonalOrSharesLabel(label){
 }
 export function registerKind(name){
  const s=tidy(name).toLowerCase();
- if(/^master$/.test(s))return 'profile';
+ if(/^(?:master|company details)$/.test(s))return 'profile';
  if(/^register of members(?:\s|$)/.test(s))return 'member';
  if(/pdf page|word register text/.test(s))return 'text';
  return 'table';
@@ -324,6 +324,23 @@ export function registerGroupIndices(book,index){
 export function ensureReferenceParticulars(book){
  if(!Array.isArray(book?.sheets))return false;
  let changed=false;
+ // Add a profile without changing existing sheet positions, which preserves
+ // saved status overrides, field references and historical worksheets.
+ let profile=book.sheets.find(s=>referenceKind(s.name)==='profile');
+ if(!profile&&book.sheets.length<100){
+  profile=createCompanyDetailsSheet(book);
+  book.sheets.push(profile);
+  changed=true;
+ }
+ if(profile&&Array.isArray(profile.rows)){
+  const standard=createCompanyDetailsSheet(book);
+  for(const row of standard.rows){
+   const index=companyDetailIndex(row[0]);
+   const exists=profile.rows.some(existing=>(existing||[]).some(v=>companyDetailIndex(v)===index));
+   if(exists||profile.rows.length>=12000)continue;
+   profile.rows.push(row);changed=true;
+  }
+ }
  // Complete the canonical set for imported books which lack one or more
  // statutory register worksheets. Never invent a person or transaction.
  for(const standard of referenceTemplateSheets()){

@@ -3,6 +3,16 @@
  * SDN. BHD. Register Book. These are schema definitions ONLY; company-specific
  * names, shares, addresses, dates and transactions must never be copied.
  */
+export const COMPANY_DETAILS_FIELDS=[
+ 'Company Name','Company No.','Last update','Date of Incorporation',
+ 'Date of Cosec Appointment','Registered Address'
+];
+export function createCompanyDetailsSheet(company){
+ return {name:'Company Details',rows:COMPANY_DETAILS_FIELDS.map((label,i)=>[
+  label+':',i===0?String(company?.companyName||company?.name||''):
+  i===1?String(company?.registrationNo||company?.registration_no||''):''
+ ])};
+}
 export const REFERENCE_FIELDS={
  directors:['Name','Date of Birth','Identification No.','Passport Expiry','Gender','Nationality / Race','Business Occupation','Residential Address','Service Address','Appointment Date','Cessation Date'],
  members:['Folio No.','Name','Date of Birth','ID Type','Nationality/Origin','Identification No.','Race','Occupation','Email Address','Address','Date Entered as A Member','Date Ceased to be A Member','Total Shares Held'],
@@ -10,7 +20,7 @@ export const REFERENCE_FIELDS={
  transfers:['Transfer No.','Transfer Date','Shares','Consideration','No. of Old Certificate','Class of Shares','Transferor','IC No. / PP No. / Company No.','Folio of Transferor','Transferee','Transferee IC No. / PP No. / Company No.','Transferee Address','Folio of Transferee','No. of New Certificate'],
  charges:['Registered No.','Date of Registration','Name of Chargee','Nature of Charge','Amount of Indebtedness','Date of Discharge'],
  secretaries:['Name','Registration No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Appointment Date','Cessation Date'],
- beneficialOwners:['Full Name','Identification No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Ownership / Voting Rights (%)','Type of Ownership','Criteria','Effective Date','Cessation Date']
+ beneficialOwners:['Full Name','Identification No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Ownership / Voting Rights (%)','Type of Ownership','Criteria','Cessation Date']
 };
 export const MEMBER_LEDGER_FIELDS={
  acquired:['Date','No. of Share Certificate','Allotment or Transfer No.','Folio','Class of Shares','No. of Shares','Consideration'],
@@ -75,7 +85,6 @@ const synonyms={
   'Identification No.':['NRIC No. / Passport No.','NRIC No.','Passport No.'],
   'Type of Ownership':['Type of Beneficial Ownership','Nature of Ownership'],
   'Criteria':['Criteria of BO','Beneficial Owner Criteria'],
-  'Effective Date':['Date a Person Becomes / Ceases to be BO','Date of Becoming BO','Date a Person Becomes BO'],
   'Cessation Date':['Date of Cessation','Date Ceased','Date a Person Ceases to be BO']
  }
 };
@@ -113,6 +122,39 @@ export function referenceDisplayLabel(kind,label,field,allFields=[]){
   if(dual.length>=2&&dual[1]===field)return REFERENCE_FIELDS.transfers[10];
  }
  return REFERENCE_FIELDS[kind][index];
+}
+/**
+ * Removed screen/PDF particulars remain in original imported data and version
+ * backups. These filters apply only to the rendered statutory view.
+ */
+export function excludeRegisterField(name,label){
+ const kind=referenceKind(name);
+ const x=norm(label);
+ if(kind==='directors')return /^remarks?(?:\s|$)/.test(x);
+ if(kind==='beneficialOwners')return (
+  /^(?:effective date|date becoming bo|date of becoming bo|date a person becomes|date a person ceases|date when becoming bo)\b/.test(x)||
+  /^date (?:of )?(?:notices?|notice sent|bo information received|receipt of bo information|section 56 notices?)\b/.test(x)||
+  /\b(?:notices? pursuant to|date of notice|date of bo information received|date bo information received|section 56 notices?)\b/.test(x)
+ );
+ return false;
+}
+export function companyDetailIndex(label){
+ const x=norm(label);
+ const aliases=[
+  ['company name'],
+  ['company no','company number','company registration no','company registration number','registration no'],
+  ['last update','last updated','date of last update'],
+  ['date of incorporation','incorporation date','date of registration','registration date'],
+  ['date of cosec appointment','date of co sec appointment','date of company secretary appointment','date of secretary appointment'],
+  ['registered address','registered office','registered office address']
+ ];
+ return aliases.findIndex(xs=>xs.includes(x));
+}
+export function sortCompanyDetails(fields){
+ return [...(fields||[])].sort((a,b)=>{
+  const x=companyDetailIndex(a.label),y=companyDetailIndex(b.label);
+  return (x<0?100:x)-(y<0?100:y);
+ });
 }
 export function referenceTemplateSheets(){
  return [
