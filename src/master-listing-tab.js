@@ -48,7 +48,7 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   });
   if(listError)throw Error('Cannot read private Master Listing history: '+listError.message);
   const candidates=(items||[]).filter(f=>
-   /^\\d{14}-[a-z0-9-]+\\.json$/i.test(String(f.name||'')) &&
+   /^\d{14}-[a-z0-9-]+\.json$/i.test(String(f.name||'')) &&
    (!f.metadata?.size||Number(f.metadata.size)<=MAX_JSON_BYTES))
    .sort((a,b)=>b.name.localeCompare(a.name)).slice(0,60);
   const snapshots=[],unreadable=[];
