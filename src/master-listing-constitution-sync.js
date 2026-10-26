@@ -32,6 +32,9 @@ export function companiesWithConstitutionDocuments(folders,documents){
  }
  for(const doc of documents||[]){
   if(!doc?.company_id||!doc.name)continue;
+  // A draft or template is not evidence of an adopted Constitution, even
+  // when it was uploaded to the dedicated Constitution folder.
+  if(/\b(?:draft|sample|template|specimen|unsigned|blank|checklist)\b/i.test(doc.name))continue;
   if(insideConstitution(doc.folder_id,doc.company_id)||
      isConstitutionDocumentFilename(doc.name))
    existing.add(doc.company_id);

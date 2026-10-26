@@ -61,8 +61,8 @@ test('empty Constitution folder is never evidence; actual uploaded document is',
   {company_id:'d',folder_id:'fd',name:'draft-sample.pdf'}
  ];
  const ids=companiesWithConstitutionDocuments(folders,docs);
- assert.deepEqual([...ids].sort(),['a','b','c','d'],
-  'a draft inside the Constitution folder is still a real uploaded file');
+ assert.deepEqual([...ids].sort(),['a','b','c'],
+  'drafts in Constitution folders are not evidence of an adopted Constitution');
  const res=applyConstitutionDocumentEvidence(sample(),companies,folders,docs);
  assert.equal(res.count,2);
  assert.equal(res.conflicts,1,'explicit No is never silently overwritten');
