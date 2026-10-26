@@ -90,7 +90,7 @@ test('Director Remarks are hidden from web and PDF layout but preserved in store
  assert.equal(JSON.stringify(b.sheets[0].rows),before);
 });
 
-test('BO becoming and notice dates are hidden; independent cessation remains for history',()=>{
+test('BO effective date becoming BO is retained, Section 56 notice date is hidden, and cessation history remains',()=>{
  const b=makeRegisterBook(co,{path:'old.xlsx',sheets:[
   {name:'Register of BO',rows:[
    ['Full Name','Identification No.','Date of Birth',
@@ -108,9 +108,38 @@ test('BO becoming and notice dates are hidden; independent cessation remains for
  const fields=section.blocks.filter(x=>x.type==='field');
  assert(fields.some(x=>x.label==='Cessation Date'&&x.value==='05/05/2026'));
  assert(fields.some(x=>x.label==='Criteria'&&x.value==='A'));
- assert(!fields.some(x=>/becomes|becoming|notices|notice|effective date/i.test(x.label)));
+ const effective=fields.filter(x=>x.label==='Effective Date Becoming BO');
+ assert.equal(effective.length,2,'retain both original becoming-BO source fields without losing data');
+ assert(effective.some(x=>x.value==='01/01/2020'));
+ assert(effective.some(x=>x.value==='Date becoming BO: 01/01/2020'));
+ assert(!fields.some(x=>/notices|notice/i.test(x.label)));
  const html=renderStatutoryRegisterDocument(b,0,{showBlanks:true});
- assert(!html.includes('Date becoming BO: 01/01/2020'));
+ assert(html.includes('Effective Date Becoming BO'));
+ assert(html.includes('01/01/2020'));
  assert(!html.includes('Date of notice: 01/01/2021'));
  assert.equal(JSON.stringify(b.sheets[0].rows),before);
+});
+\ntest('all companies have a standard editable Effective Date Becoming BO field by default',()=>{
+ const b=makeRegisterBook(co);
+ const bo=b.sheets.find(s=>s.name==='Register of Beneficial Owners');
+ assert(bo.rows[0].includes('Effective Date Becoming BO'));
+ assert(!bo.rows[0].some(x=>/notices|notice/i.test(x)));
+ const old=makeRegisterBook(co,{path:'historical.xlsx',sheets:[
+  {name:'Register of BO',rows:[
+   ['Full Name','Identification No.','Date a Person Becomes / Ceases to Become BO',
+    'Date of Notices Pursuant to Section 56'],
+   ['BO HOLDER','ID-X','Date becoming BO: 23/07/2014','Date of notice: 03/08/2014']
+  ]}
+ ]});
+ const original=JSON.stringify(old.sheets[0].rows);
+ assert.equal(ensureReferenceParticulars(old),true);
+ const after=old.sheets[0].rows[0];
+ assert.equal(after.filter(label=>/^(?:Effective Date Becoming BO|Date a Person Becomes \/ Ceases to Become BO)$/.test(label)).length,1,
+  'existing becoming-BO heading must not be duplicated');
+ assert.equal(old.sheets[0].rows[1][2],'Date becoming BO: 23/07/2014');
+ const layout=buildGroupedRegister(old,0,{showBlanks:true});
+ assert(layout.blocks.some(x=>x.type==='field'&&x.label==='Effective Date Becoming BO'));
+ assert(!layout.blocks.some(x=>x.type==='field'&&/notice/i.test(x.label)));
+ assert.equal(JSON.stringify(old.sheets[0].rows),original,
+  'standardizing fields must not rewrite original BO records');
 });

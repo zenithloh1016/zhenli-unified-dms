@@ -20,7 +20,7 @@ export const REFERENCE_FIELDS={
  transfers:['Transfer No.','Transfer Date','Shares','Consideration','No. of Old Certificate','Class of Shares','Transferor','IC No. / PP No. / Company No.','Folio of Transferor','Transferee','Transferee IC No. / PP No. / Company No.','Transferee Address','Folio of Transferee','No. of New Certificate'],
  charges:['Registered No.','Date of Registration','Name of Chargee','Nature of Charge','Amount of Indebtedness','Date of Discharge'],
  secretaries:['Name','Registration No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Appointment Date','Cessation Date'],
- beneficialOwners:['Full Name','Identification No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Ownership / Voting Rights (%)','Type of Ownership','Criteria','Cessation Date']
+ beneficialOwners:['Full Name','Identification No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Ownership / Voting Rights (%)','Type of Ownership','Criteria','Effective Date Becoming BO','Cessation Date']
 };
 export const MEMBER_LEDGER_FIELDS={
  acquired:['Date','No. of Share Certificate','Allotment or Transfer No.','Folio','Class of Shares','No. of Shares','Consideration'],
@@ -85,6 +85,7 @@ const synonyms={
   'Identification No.':['NRIC No. / Passport No.','NRIC No.','Passport No.'],
   'Type of Ownership':['Type of Beneficial Ownership','Nature of Ownership'],
   'Criteria':['Criteria of BO','Beneficial Owner Criteria'],
+  'Effective Date Becoming BO':['Effective Date','Date Becoming BO','Date of Becoming BO','Date a Person Becomes / Ceases to Become BO','Date a Person Becomes / Ceases to be BO','Date a Person Becomes BO','Date a Person Becomes a BO'],
   'Cessation Date':['Date of Cessation','Date Ceased','Date a Person Ceases to be BO']
  }
 };
@@ -132,7 +133,8 @@ export function excludeRegisterField(name,label){
  const x=norm(label);
  if(kind==='directors')return /^remarks?(?:\s|$)/.test(x);
  if(kind==='beneficialOwners')return (
-  /^(?:effective date|date becoming bo|date of becoming bo|date a person becomes|date a person ceases|date when becoming bo)\b/.test(x)||
+  // Only the Section 56 notice/date-received field remains excluded.
+  // Becoming-BO effective dates and separate cessation dates must display.
   /^date (?:of )?(?:notices?|notice sent|bo information received|receipt of bo information|section 56 notices?)\b/.test(x)||
   /\b(?:notices? pursuant to|date of notice|date of bo information received|date bo information received|section 56 notices?)\b/.test(x)
  );
