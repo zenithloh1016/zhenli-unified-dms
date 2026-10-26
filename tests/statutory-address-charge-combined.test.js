@@ -99,7 +99,7 @@ test('one unified Members tab groups multiple folios and preserves individual ed
  assert(members.blocks.some(x=>x.type==='field'&&x.value==='MEMBER B'&&x.sheetIndex===2));
  const {tab}=fixture();await tab.openCompany('co1');
  const html=tab.render();
- assert.equal((html.match(/data-action="sr-sheet"/g)||[]).length,4); // Master, Members, Directors, N/A Charges
+ assert.equal((html.match(/data-action="sr-sheet"/g)||[]).length,8); // Original tabs plus standard missing registers
  tab.command('sr-sheet','1');
  const memberHtml=tab.render();
  assert(memberHtml.includes('MEMBER A')&&memberHtml.includes('MEMBER B'));

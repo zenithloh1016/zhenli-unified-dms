@@ -70,6 +70,7 @@ test('imported older Allotments and Transfers remain editable with their origina
   const section=buildGroupedRegister(b,i);
   assert.deepEqual(section.blocks.filter(x=>x.type==='group').map(x=>x.title),['Transactions']);
   assert.equal(section.blocks.filter(x=>x.type==='record').length,1);
-  assert.deepEqual(section.blocks.filter(x=>x.type==='field').map(x=>x.label),['Date','No. of Shares','Name']);
+  assert.deepEqual(section.blocks.filter(x=>x.type==='field').map(x=>x.label),
+    [i===0?'Allotment Date':'Transfer Date',i===0?'Number of Shares':'Shares','Name']);
  }
 });

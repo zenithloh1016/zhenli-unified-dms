@@ -46,7 +46,7 @@ test('Director history is recovered with personal particulars and current/former
  assert(section.blocks.some(x=>x.type==='group'&&x.title==='Former'));
  assert(section.blocks.some(x=>x.type==='record'&&x.title==='CURRENT DIRECTOR'&&x.status==='Current'));
  assert(section.blocks.some(x=>x.type==='record'&&x.title==='FORMER DIRECTOR'&&x.status==='Former'));
- assert(section.blocks.some(x=>x.type==='field'&&x.label==='Date of Cessation'&&x.value==='45356'));
+ assert(section.blocks.some(x=>x.type==='field'&&x.label==='Cessation Date'&&x.value==='45356'));
  const html=renderStatutoryRegisterDocument(b,1);
  assert(html.includes('CURRENT DIRECTOR')&&html.includes('FORMER DIRECTOR'));
  assert(html.indexOf('CURRENT DIRECTOR')<html.indexOf('FORMER DIRECTOR'));

@@ -103,7 +103,7 @@ function headerCandidate(row){
  // header, but must never be interpreted as a new header. Check the first
  // heading using these actual Malaysian statutory workbook labels.
  const first=tidy(row?.[0]||'');
- if(!/^(?:director name|full name|name|allottee(?: name)?|name of allottee|transferor(?: name)?|name of transferor|transferee(?: name)?|date|registered no\.?|registration no\.?|allotment no\.?|transfer no\.?|chargee(?: name)?|folio(?: no\.?)?|no\.?(?: of)?(?: shares)?)$/i.test(first))return -1;
+ if(!/^(?:director name|full name|name|allotment date|allottee(?: name)?|name of allottee|transferor(?: name)?|name of transferor|transferee(?: name)?|date|registered no\.?|registration no\.?|allotment no\.?|transfer no\.?|chargee(?: name)?|folio(?: no\.?)?|no\.?(?: of)?(?: shares)?)$/i.test(first))return -1;
  const short=entries.filter(x=>x.value.length<=95);
  if(short.length<Math.max(3,Math.ceil(entries.length*0.68)))return -1;
  const texts=entries.map(x=>x.value);
