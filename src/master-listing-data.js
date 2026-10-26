@@ -111,6 +111,9 @@ export function isAffirmativeConstitutionValue(value){
 }
 export function formattedListingCell(model,columnIndex,value){
  const raw=String(value??'');
+ // The restored 24 October worksheet keeps all original Constitution values.
+ if(model?.restoredPreAmendment&&isListingConstitutionColumn(model?.columns?.[columnIndex]?.label))
+  return raw;
  if(!raw.trim())return 'N/A';
  if(isListingConstitutionColumn(model?.columns?.[columnIndex]?.label)){
   if(isAffirmativeConstitutionValue(raw))return 'Yes';

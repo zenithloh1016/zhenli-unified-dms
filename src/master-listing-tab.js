@@ -8,6 +8,7 @@ import {buildMasterListing,detectListingColumns,validateMasterListing,companyDat
 import {previewRegisterParticularsZip,preserveRegisterParticulars,compactRegisterColumns,REGISTER_PARTICULARS_COLUMNS} from './master-listing-register-particulars.js';
 import {applyConstitutionDocumentEvidence} from './master-listing-constitution-sync.js';
 import {restoreHistoricalConstitutionStatuses} from './master-listing-constitution-history.js';
+import {PRE_AMENDMENT_MASTER_LISTING,isMasterListingRestored,restoredMasterListingSnapshot} from './master-listing-pre-amendment.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeText=value=>String(value??'').slice(0,15000);
@@ -85,6 +86,30 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
    return await restoreConstitutionHistory();
   }finally{state.loading=false;onRender?.();}
  }
+ /**
+  * Revert EXACTLY to the saved 24 October 2026 Master Listing. Backup the
+  * current file before replacement, without altering folder, document or
+  * register records. The marker makes restoration one-time per account.
+  */
+ async function restoreUnamendedMasterListing(){
+  const original=state.model,user=getUser?.();
+  if(!original||!user?.id||isMasterListingRestored(original))
+   return {restored:false,alreadyRestored:true};
+  const historicalPath=user.id+'/master-listing/history/'+PRE_AMENDMENT_MASTER_LISTING;
+  const {data,error}=await storage.download(historicalPath);
+  if(error){
+   if(isMissing(error))return {restored:false,notFound:true};
+   throw Error('Cannot open pre-amendment backup: '+error.message);
+  }
+  if(!data)throw Error('Pre-amendment Master Listing returned no data.');
+  let earlier;
+  try{earlier=validateMasterListing(JSON.parse(await data.text()));}
+  catch(e){throw Error('Pre-amendment backup is damaged: '+e.message);}
+  await saveModel(restoredMasterListingSnapshot(earlier),{backup:true});
+  state.status='Restored original Master Listing from 24 October 2026, 9:52 AM. '+
+   'All original company records and columns were restored. The previous listing was backed up.';
+  return {restored:true,rows:earlier.rows.length,columns:earlier.columns.length};
+ }
  async function load(force=false){
   const user=getUser?.();
   if(!user?.id){reset();return;}
@@ -102,31 +127,18 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
     catch{throw Error('Saved Master Listing JSON is damaged. The stored file has not been changed.');}
     const original=validateMasterListing(json);
     state.model=original;
-    const constitution=repairListingConstitutionPlaceholders(original);
-    if(constitution.count){
-     // The old UI patch changed the visible display only. Migrate the source
-     // into the authenticated owner's cloud listing, backing up every previous
-     // value first. This repair runs only when invalid values still exist.
+    if(isMasterListingRestored(original)){
+     state.status='Original Master Listing restored (24 October 2026). No automatic Constitution changes.';
+    }else{
+     // Stop automated Constitution normalizers and selective history merges.
+     // Replace only from the exact pre-amendment private backup, once.
      try{
-      await saveModel(constitution.model,{backup:true});
-      state.status='Repaired '+constitution.count+
-       ' Constitution value(s) to N/A in saved Master Listing. Original file backed up privately.';
-     }catch(error){
-      state.error='Constitution values display as N/A, but the cloud copy could not be repaired: '+
-       String(error?.message||error)+'. Please check storage permissions and try refreshing.';
-      state.status='Master Listing loaded; Constitution repair could not be saved.';
-      state.model=original;
-     }
-    }else state.status='Saved Master Listing loaded.';
-    // One safe authenticated history check per sign-in, including after app
-    // upgrades. Backups are read-only and only confirmed Yes is restored.
-    if(state.model&&constitutionHistoryCheckedForUser!==user.id&&
-       typeof storage?.list==='function'){
-     constitutionHistoryCheckedForUser=user.id;
-     try{await restoreConstitutionHistory({quiet:true});}
-     catch(historyError){
-      console.warn('Previous Constitution status recovery:',historyError);
-      state.status+=' Earlier Constitution history could not be checked. Use Restore Constitution History to retry.';
+      const rollback=await restoreUnamendedMasterListing();
+      if(rollback.notFound)state.status='Saved Master Listing loaded; pre-amendment backup not present under this account.';
+     }catch(e){
+      state.error='Could not restore the Master Listing: '+String(e?.message||e)+
+       '. Existing cloud listing was left unchanged.';
+      state.status='Pre-amendment listing not restored.';
      }
     }
    }
@@ -535,9 +547,9 @@ async function saveRepairedDates(){
    '<p class="muted">Import an Excel workbook, keep all company-information columns, and edit each company inside this private DMS tab.</p></div>'+
    '<div class="header-buttons">'+(model?act(state.fullScreen?'Exit full screen ✕':'Full screen ⛶','ml-fullscreen','','secondary'):'')+
    (model?act('Export CSV','ml-export','','secondary'):'')+
-   (model?act('Fix Constitution N/A','ml-fix-constitution','','secondary'):'')+
-    (model?act('Sync Constitution Status','ml-sync-constitution','','secondary'):'')+
-    (model?act('Restore Constitution History','ml-restore-constitution','','secondary'):'')+
+   (model&&!isMasterListingRestored(model)?act('Fix Constitution N/A','ml-fix-constitution','','secondary'):'')+
+    (model&&!isMasterListingRestored(model)?act('Sync Constitution Status','ml-sync-constitution','','secondary'):'')+
+    (model&&!isMasterListingRestored(model)?act('Restore Constitution History','ml-restore-constitution','','secondary'):'')+
    (model?act('Import Register Books','ml-register-upload','','secondary'):'')+(model&&compactRegisterColumns(model).removed?act('Keep Current Names Only','ml-compact-register','','secondary'):'')+act('+ Add Company','ml-add','','primary')+act('Import Excel','ml-upload','','secondary')+'</div></div>'+
    '<input id="ml-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>'+
    '<input id="ml-register-file" type="file" accept=".zip,application/zip" hidden>'+
@@ -596,7 +608,7 @@ function renderAddCompany(){
   const isName=i===model.nameColumn,isReg=i===model.registrationColumn;
   const hint=isName?'Required':isReg?'Optional':'Optional';
   const draft=state.addDraft?.[i]??'';
-  if(isListingConstitutionColumn(col.label)){
+  if(isListingConstitutionColumn(col.label)&&!isMasterListingRestored(model)){
    const selected=['Yes','No','N/A'].includes(draft)?draft:'N/A';
    return '<label><span>'+esc(col.label)+' <small>(Company Constitution)</small></span>'+
     '<select name="ml-new-'+i+'">'+['N/A','Yes','No'].map(v=>
@@ -624,7 +636,7 @@ function renderEditor(){
    '<p class="muted">Edit any imported column. Save updates your private Master Listing without changing uploaded statutory documents.</p>'+
    '<form id="ml-edit-form"><div class="ml-edit-fields">'+model.columns.map((col,i)=>{
     const value=displayedListingValue(model,i,row.values[i]);
-    if(isListingConstitutionColumn(col.label)&&['Yes','No','N/A'].includes(value))
+    if(isListingConstitutionColumn(col.label)&&!isMasterListingRestored(model)&&['Yes','No','N/A'].includes(value))
      return '<label><span>'+esc(col.label)+' <small>('+String(i+1)+')</small></span>'+
       '<select name="ml-col-'+i+'">'+['N/A','Yes','No'].map(v=>
        '<option value="'+v+'"'+(value===v?' selected':'')+'>'+v+'</option>').join('')+

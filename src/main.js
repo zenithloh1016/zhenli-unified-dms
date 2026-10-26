@@ -759,7 +759,7 @@ async function uploadFiles(files) {
       }catch(err){failed.push(file.name+': '+(err.message||String(err)));}
     }
   }finally{await reloadContent().catch(console.error);}
-  if(saved>0&&state.folders.some(f=>f.id===folderId&&
+  if(saved>0&&!masterListingUI.model?.restoredPreAmendment&&state.folders.some(f=>f.id===folderId&&
       /constitution|memorandum|articles/i.test(f.name))&&masterListingUI.model){
    try{await masterListingUI.syncConstitutionDocuments({quiet:true});}
    catch(error){console.warn('Constitution status sync:',error);}
@@ -883,8 +883,9 @@ ROOT.addEventListener('click', event=>{
       // historical deletions. Orphan cleanup never affects imported-only rows.
       void (async()=>{
         await reloadCompanies();
-        await masterListingUI.reconcileOrphanedCompanies(state.companies);
-        await masterListingUI.syncConstitutionDocuments({reload:false,quiet:true});
+        if(!masterListingUI.model?.restoredPreAmendment)
+         await masterListingUI.reconcileOrphanedCompanies(state.companies);
+        // Do not auto-sync Constitution over a restored historical Master Listing.
       })().catch(showError);
     }
     if(nextTab==='statutory-registers')registerBookUI.load().catch(showError);
