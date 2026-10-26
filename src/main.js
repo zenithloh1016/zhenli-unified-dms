@@ -759,6 +759,11 @@ async function uploadFiles(files) {
       }catch(err){failed.push(file.name+': '+(err.message||String(err)));}
     }
   }finally{await reloadContent().catch(console.error);}
+  if(saved>0&&state.folders.some(f=>f.id===folderId&&
+      /constitution|memorandum|articles/i.test(f.name))&&masterListingUI.model){
+   try{await masterListingUI.syncConstitutionDocuments({quiet:true});}
+   catch(error){console.warn('Constitution status sync:',error);}
+  }
   if(failed.length)toast(saved+' uploaded, '+skipped+' duplicates skipped, '+failed.length+' failed: '+failed.slice(0,2).join(' | ')+'. Check your folder and retry failed files.');
   else toast(saved+' uploaded successfully'+(skipped?'; '+skipped+' identical duplicate(s) skipped':'')+'. Saved in this company folder.');
 }
@@ -879,6 +884,7 @@ ROOT.addEventListener('click', event=>{
       void (async()=>{
         await reloadCompanies();
         await masterListingUI.reconcileOrphanedCompanies(state.companies);
+        await masterListingUI.syncConstitutionDocuments({reload:false,quiet:true});
       })().catch(showError);
     }
     if(nextTab==='statutory-registers')registerBookUI.load().catch(showError);

@@ -6,6 +6,7 @@
  */
 import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,repairListingConstitutionPlaceholders,isUnknownConstitutionValue,isListingConstitutionColumn,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeDeletedDocumentCompany,sortMasterListingCompanies,reconcileDeletedDocumentRows} from './master-listing-data.js';
 import {previewRegisterParticularsZip,preserveRegisterParticulars,compactRegisterColumns,REGISTER_PARTICULARS_COLUMNS} from './master-listing-register-particulars.js';
+import {applyConstitutionDocumentEvidence} from './master-listing-constitution-sync.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeText=value=>String(value??'').slice(0,15000);
@@ -293,6 +294,44 @@ async function repairConstitutionNow(){
  }
  onRender?.();
 }
+async function syncConstitutionDocuments({reload=true,quiet=false}={}){
+ if(state.loading||state.saving)return {count:0,skipped:true};
+ if(!getUser?.()?.id)throw Error('Sign in before syncing Constitution status.');
+ if(reload)await load(true);
+ if(state.error)throw Error(state.error);
+ const model=state.model,user=getUser?.();
+ if(!model)return {count:0,matchedCompanies:0};
+ if(!user?.id||user.id!==state.userId)throw Error('Sign-in changed. Retry Constitution sync.');
+ state.loading=true;
+ if(!quiet)state.status='Checking uploaded Constitution documents…';
+ onRender?.();
+ async function scan(table,fields){
+  const all=[],size=500,max=15000;
+  for(let offset=0;offset<max;offset+=size){
+   const {data,error}=await db.from(table).select(fields)
+    .eq('user_id',user.id).range(offset,offset+size-1);
+   if(error)throw Error('Cannot verify '+table+': '+error.message);
+   all.push(...(data||[]));
+   if((data||[]).length<size)return all;
+  }
+  throw Error('Too many '+table+' to verify; no Constitution status was changed.');
+ }
+ try{
+  const [folders,documents]=await Promise.all([
+   scan('folders','id,company_id,parent_id,name'),
+   scan('documents','company_id,folder_id,name')
+  ]);
+  const result=applyConstitutionDocumentEvidence(model,getCompanies?.()||[],folders,documents);
+  if(result.count)await saveModel(result.model,{backup:true});
+  state.status=result.count
+   ?result.count+' Constitution value(s) set to Yes from uploaded documents; original listing backed up.'
+   :result.matchedCompanies
+    ?'Constitution documents verified for '+result.matchedCompanies+' company/companies; existing statuses retained.'
+    :'No uploaded Constitution documents found for matched companies. No status changed.';
+  if(result.conflicts)state.status+=' '+result.conflicts+' conflicting No entry/entries require manual verification.';
+  return result;
+ }finally{state.loading=false;onRender?.();}
+}
 async function saveRepairedDates(){
   if(!state.model)throw Error('Import a Master Listing first.');
   const {model,count}=repairLegacyDateSerials(state.model);
@@ -432,6 +471,7 @@ async function saveRepairedDates(){
    '<div class="header-buttons">'+(model?act(state.fullScreen?'Exit full screen ✕':'Full screen ⛶','ml-fullscreen','','secondary'):'')+
    (model?act('Export CSV','ml-export','','secondary'):'')+
    (model?act('Fix Constitution N/A','ml-fix-constitution','','secondary'):'')+
+    (model?act('Sync Constitution Status','ml-sync-constitution','','secondary'):'')+
    (model?act('Import Register Books','ml-register-upload','','secondary'):'')+(model&&compactRegisterColumns(model).removed?act('Keep Current Names Only','ml-compact-register','','secondary'):'')+act('+ Add Company','ml-add','','primary')+act('Import Excel','ml-upload','','secondary')+'</div></div>'+
    '<input id="ml-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>'+
    '<input id="ml-register-file" type="file" accept=".zip,application/zip" hidden>'+
@@ -490,6 +530,13 @@ function renderAddCompany(){
   const isName=i===model.nameColumn,isReg=i===model.registrationColumn;
   const hint=isName?'Required':isReg?'Optional':'Optional';
   const draft=state.addDraft?.[i]??'';
+  if(isListingConstitutionColumn(col.label)){
+   const selected=['Yes','No','N/A'].includes(draft)?draft:'N/A';
+   return '<label><span>'+esc(col.label)+' <small>(Company Constitution)</small></span>'+
+    '<select name="ml-new-'+i+'">'+['N/A','Yes','No'].map(v=>
+     '<option value="'+v+'"'+(selected===v?' selected':'')+'>'+v+'</option>').join('')+
+    '</select></label>';
+  }
   return '<label><span>'+esc(col.label)+' <small>('+hint+')</small></span>'+
    '<textarea name="ml-new-'+i+'" rows="2" maxlength="'+(isName?250:isReg?100:15000)+'"'+(isName?' required':'')+
    ' placeholder="'+(isName?'Company name':isReg?'Registration number':isListingDateColumn(col.label)?'DD/MM/YYYY':'N/A')+'">'+esc(draft)+'</textarea></label>';
@@ -510,7 +557,13 @@ function renderEditor(){
    '<div class="modal-heading"><h3>Edit '+esc(company.name)+'</h3>'+act('✕','ml-close-edit')+'</div>'+
    '<p class="muted">Edit any imported column. Save updates your private Master Listing without changing uploaded statutory documents.</p>'+
    '<form id="ml-edit-form"><div class="ml-edit-fields">'+model.columns.map((col,i)=>{
-    const value=displayedListingValue(model,i,row.values[i]);return '<label><span>'+esc(col.label)+' <small>('+String(i+1)+')</small></span>'+
+    const value=displayedListingValue(model,i,row.values[i]);
+    if(isListingConstitutionColumn(col.label)&&['Yes','No','N/A'].includes(value))
+     return '<label><span>'+esc(col.label)+' <small>('+String(i+1)+')</small></span>'+
+      '<select name="ml-col-'+i+'">'+['N/A','Yes','No'].map(v=>
+       '<option value="'+v+'"'+(value===v?' selected':'')+'>'+v+'</option>').join('')+
+      '</select></label>';
+    return '<label><span>'+esc(col.label)+' <small>('+String(i+1)+')</small></span>'+
      '<textarea name="ml-col-'+i+'" rows="'+clamp(Math.ceil(value.length/100),2,6)+'" maxlength="15000">'+esc(value)+'</textarea></label>';
    }).join('')+'</div><div class="ml-actions">'+act('Cancel','ml-close-edit')+
    '<button class="btn primary" type="submit"'+(state.saving?' disabled':'')+'>Save company information</button></div></form></section></div>';
@@ -535,6 +588,7 @@ function renderEditor(){
   }
   if(action==='ml-repair-dates'){asyncRun(saveRepairedDates);return true;}
   if(action==='ml-fix-constitution'){asyncRun(repairConstitutionNow);return true;}
+  if(action==='ml-sync-constitution'){asyncRun(syncConstitutionDocuments);return true;}
   if(action==='ml-export'){
    if(!state.model)return true;
    const csv=listingCSV(state.model),blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
@@ -584,5 +638,5 @@ function renderEditor(){
   return true;
  }
  const exitFullscreen=()=>{if(!state.fullScreen)return false;state.fullScreen=false;state.page=0;onRender?.();return true;};
- return {render,load,reset,onClick,onChange,onSubmit,afterRender,exitFullscreen,syncDocumentCompanies,removeDeletedCompany,reconcileOrphanedCompanies,get model(){return state.model;},get state(){return state;}};
+ return {render,load,reset,onClick,onChange,onSubmit,afterRender,exitFullscreen,syncDocumentCompanies,syncConstitutionDocuments,removeDeletedCompany,reconcileOrphanedCompanies,get model(){return state.model;},get state(){return state;}};
 }
