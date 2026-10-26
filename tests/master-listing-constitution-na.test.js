@@ -86,7 +86,7 @@ test('previously saved Master Listing JSON immediately displays Constitution N/A
  const matches=html.match(/<td class="" title="N\/A">N\/A<\/td>/g)||[];
  assert.equal(matches.length,3);
  assert.match(html,/Adopted 2024/);
- assert(!html.includes('title="b">b</td>'));
+ assert.match(html,/title="b">b<\/td>/,'Remarks b remains unchanged');
  assert.equal(writes,0,'loading must not silently overwrite original cloud JSON');
  assert.equal(tab.state.model.rows[0].values[3],'b','original source remains recoverable');
 });
