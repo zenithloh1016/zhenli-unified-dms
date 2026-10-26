@@ -78,9 +78,21 @@ export function normalizeListingDateText(value,{dateColumn=false,date1904=false}
  }
  return null;
 }
+/**
+ * Older company Master Listings sometimes contain the literal "b" under
+ * Constitution, which is not a meaningful Constitution status. Treat ONLY
+ * this placeholder (and blanks) as N/A; never reinterpret genuine text such
+ * as Adopted, Not Adopted, Yes, No or historical M&A descriptions.
+ */
+export function isListingConstitutionColumn(label){
+ const words=normal(label).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+ return /^(?:(?:company|corporate|adopted) )?constitution(?: (?:status|adopted|adoption))?$/.test(words);
+}
 export function formattedListingCell(model,columnIndex,value){
  const raw=String(value??'');
  if(!raw.trim())return 'N/A';
+ if(isListingConstitutionColumn(model?.columns?.[columnIndex]?.label)&&
+    /^(?:b|n\\/?a)$/i.test(raw.trim()))return 'N/A';
  const dateColumn=isListingDateColumn(model?.columns?.[columnIndex]?.label);
  return normalizeListingDateText(raw,{dateColumn,date1904:!!model?.date1904})??raw;
 }
