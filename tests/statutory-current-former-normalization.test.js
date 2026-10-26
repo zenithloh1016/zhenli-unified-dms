@@ -115,6 +115,7 @@ test('verified Mark Former/Current persists in book without inventing cessation 
  const originalWindow=globalThis.window;globalThis.window={confirm:()=>true};
  try{
   await tab.openCompany('c1');
+  tab.command('sr-sheet','0');
   const html=tab.render();
   assert(html.includes('Mark Former'));
   assert(html.includes('Mark Current'));

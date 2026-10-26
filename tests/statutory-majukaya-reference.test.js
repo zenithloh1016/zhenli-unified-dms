@@ -23,7 +23,7 @@ test('Majukaya worksheet order is reproduced in tabs without rearranging source 
  assert.deepEqual(visibleRegisterIndices(b),[0,1,2,3,4,5,6,8]);
  assert.equal(b.sheets[7].name,'Register of Managers');
  const unsequenced=makeRegisterBook(company);
- assert.deepEqual(visibleRegisterIndices(unsequenced),[0,1,5,6,4,3,2]);
+ assert.deepEqual(visibleRegisterIndices(unsequenced),[7,0,1,5,6,4,3,2]);
  assert(referencePriority('Register of Allotments')<referencePriority('Register of Charges'));
  assert(referencePriority('Register of Secretaries')<referencePriority('Register of BO'));
 });

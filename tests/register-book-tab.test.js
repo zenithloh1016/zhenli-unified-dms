@@ -50,10 +50,16 @@ test('initializes only missing company statutory registers with the same editabl
  assert.deepEqual(created.sheets.map(s=>s.name),[
   'Register of Directors','Register of Members','Register of Beneficial Owners',
   'Register of Secretaries','Register of Charges',
-  'Register of Allotments','Register of Transfers'
+  'Register of Allotments','Register of Transfers','Company Details'
  ]);
  assert(created.sheets.find(s=>s.name==='Register of Charges').rows[0].includes('Date of Discharge'));
- assert(created.sheets.every(s=>s.rows.length===1),'do not invent any statutory particulars');
+ assert(created.sheets.filter(s=>s.name!=='Company Details').every(s=>s.rows.length===1),'do not invent any statutory particulars');
+ const info=created.sheets.find(s=>s.name==='Company Details');
+ assert.deepEqual(info.rows.map(r=>r[0]),['Company Name:','Company No.:','Last update:',
+  'Date of Incorporation:','Date of Cosec Appointment:','Registered Address:']);
+ assert.equal(info.rows[0][1],'BETA SDN BHD');
+ assert.equal(info.rows[1][1],'202609876543');
+ assert(info.rows.slice(2).every(row=>row[1]===''));
  await tab.load(true);
  assert.equal(written.filter(p=>p==='u1/statutory-registers/c2.json').length,1,'repeat refresh must be idempotent');
  await tab.openCompany('c2');
@@ -80,6 +86,8 @@ test('each statutory register opens independently without Annual Return or Excel
  let html=tab.render();
  assert.match(html,/Register of Directors|Directors/);
  assert.match(html,/Export This Register PDF/);
+ tab.command('sr-sheet','0');
+ html=tab.render();
  assert.match(html,/Add Entry/);
  assert.match(html,/Add Field/);
  assert.match(html,/data-action="sr-sheet"/);
@@ -98,6 +106,7 @@ test('add statutory entries and fields using register controls',async()=>{
  const previousPrompt=globalThis.window;
  globalThis.window={prompt:()=> 'NEW DIRECTOR'};
  try{
+  tab.command('sr-sheet','0');
   const starting=tab.state.book.sheets[0].rows.length;
   tab.command('sr-add-row');
   assert.equal(tab.state.book.sheets[0].rows.length,starting+1);
@@ -111,6 +120,7 @@ test('add statutory entries and fields using register controls',async()=>{
 test('saves edited register privately and reloads it',async()=>{
  const {tab,blobs,written}=fixture();
  await tab.openCompany('c1');
+ tab.command('sr-sheet','0');
  globalThis.document={getElementById:()=>null};
  assert.equal(tab.updateCell({dataset:{r:'0',c:'0'},value:'Director Name (Revised)'}),true);
  assert.equal(tab.state.dirty,true);
