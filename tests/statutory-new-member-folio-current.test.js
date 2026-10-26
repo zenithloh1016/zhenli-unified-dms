@@ -16,8 +16,14 @@ function fixture(){
    :{data:null,error:{message:'Object not found',statusCode:404}},
   upload:async(path,blob)=>{blobs.set(path,blob);return {error:null};}
  };
- const tab=createRegisterBookTab({db:{storage:{from:()=>storage}},
-  getUser:()=>({id:'u1'}),getCompanies:()=>[company]});
+ const db={storage:{from:()=>storage},from(){
+  const query={select(){return query;},eq(){return query;},is(){return query;},
+   ilike(){return query;},order(){return query;},
+   limit:async()=>({data:[],error:null})};
+  return query;
+ }};
+ const tab=createRegisterBookTab({db,getUser:()=>({id:'u1'}),
+  getCompanies:()=>[company]});
  return {tab,blobs};
 }
 const memberIndex=book=>book.sheets.findIndex(s=>s.name==='Register of Members');
