@@ -98,10 +98,126 @@ const synonyms={
   'Identification No.':['NRIC No. / Passport No.','NRIC No.','Passport No.'],
   'Type of Ownership':['Type of Beneficial Ownership','Nature of Ownership'],
   'Criteria':['Criteria of BO','Beneficial Owner Criteria'],
-  'Effective Date Becoming BO':['Effective Date','Date Becoming BO','Date of Becoming BO','Date a Person Becomes / Ceases to Become BO','Date a Person Becomes / Ceases to be BO','Date a Person Becomes BO','Date a Person Becomes a BO'],
+  'Effective Date Becoming BO':['Effective Date','Date Becoming BO','Date of Becoming BO','Date a Person Becomes BO','Date a Person Becomes a BO'],
   'Cessation Date':['Date of Cessation','Date Ceased','Date a Person Ceases to be BO']
  }
 };
+/**
+ * Former BO register templates combine becoming and ceasing dates in a single
+ * source column. Keep that source column intact, but do not equate it with
+ * the independent effective-date field.
+ */
+export function isLegacyBoCombinedDateField(label){
+ const labelText=norm(label);
+ return /^date a person becomes\b.*\bceas(?:e|es)\b.*\b(?:bo|beneficial owner)$/.test(labelText);
+}
+const boDatePattern='(?:\\d{1,2}[\\/.-]\\d{1,2}[\\/.-]\\d{4}|\\d{4}[\\/.-]\\d{1,2}[\\/.-]\\d{1,2})';
+function isValidBoDate(value){
+ const text=String(value||'');
+ let day,month,year;
+ if(/^\d{4}[\\/.-]/.test(text)) [year,month,day]=text.split(/[\\/.-]/).map(Number);
+ else [day,month,year]=text.split(/[\\/.-]/).map(Number);
+ const date=new Date(Date.UTC(year,month-1,day));
+ return Number.isFinite(date.getTime())&&date.getUTCFullYear()===year&&
+  date.getUTCMonth()+1===month&&date.getUTCDate()===day;
+}
+/** Extract only an unambiguous becoming date, never cessation or notice date. */
+export function extractBoBecomingDate(value){
+ const raw=String(value??'').trim();
+ if(!raw)return '';
+ const prefix='(?:date\\s*(?:of\\s*)?becom(?:ing|es?|e)\\s*(?:a\\s*)?(?:bo|beneficial\\s*owner)|date\\s+a\\s+person\\s+becomes\\s*(?:a\\s*)?(?:bo|beneficial\\s*owner))';
+ const labelled=raw.match(new RegExp(prefix+'\\s*[:\\-]?\\s*('+boDatePattern+')','i'));
+ if(labelled)return isValidBoDate(labelled[1])?labelled[1]:'';
+ const lines=raw.split(/\\r?\\n/).map(s=>s.trim())
+  .filter(s=>s&&!/^(?:-|–|—|n\\/a|nil|none)$/i.test(s));
+ if(lines.length===1&&new RegExp('^'+boDatePattern+'
+ const q=norm(label),fields=REFERENCE_FIELDS[kind]||[];
+ for(let i=0;i<fields.length;i++){
+  if(q===norm(fields[i])||(synonyms[kind]?.[fields[i]]||[]).some(x=>q===norm(x)))return i;
+ }
+ return -1;
+}
+/**
+ * Screen/PDF labels follow the screenshot template while all cell coordinates
+ * continue to target the original saved worksheet. Preserve unknown extra
+ * columns after the standard particulars, never delete them.
+ */
+export function sortReferenceFields(name,fields){
+ const kind=referenceKind(name);
+ const all=fields||[];
+ if(!REFERENCE_FIELDS[kind])return all;
+ const dual=kind==='transfers'?all.filter(f=>referenceFieldIndex(kind,f.label)===7)
+  .sort((a,b)=>(a.col??0)-(b.col??0)):[];
+ function position(f){
+  if(kind==='transfers'&&dual.length>=2&&f===dual[1])return 10;
+  const i=referenceFieldIndex(kind,f.label);
+  return i<0?1000:i;
+ }
+ return [...all].sort((a,b)=>position(a)-position(b));
+}
+export function referenceDisplayLabel(kind,label,field,allFields=[]){
+ const index=referenceFieldIndex(kind,label);
+ if(index<0)return label;
+ if(kind==='transfers'&&index===7){
+  const dual=allFields.filter(f=>referenceFieldIndex(kind,f.label)===7)
+   .sort((a,b)=>(a.col??0)-(b.col??0));
+  if(dual.length>=2&&dual[1]===field)return REFERENCE_FIELDS.transfers[10];
+ }
+ return REFERENCE_FIELDS[kind][index];
+}
+/**
+ * Removed screen/PDF particulars remain in original imported data and version
+ * backups. These filters apply only to the rendered statutory view.
+ */
+export function excludeRegisterField(name,label){
+ const kind=referenceKind(name);
+ const x=norm(label);
+ if(kind==='directors')return /^remarks?(?:\s|$)/.test(x);
+ // Keep historical registration numbers in the stored workbook and previous
+ // versions; omit the legacy field only from the secretary view / PDF.
+ if(kind==='secretaries')return /^(?:registration no|registration number)$/.test(x);
+ if(kind==='beneficialOwners')return (
+  isLegacyBoCombinedDateField(label)||
+  // Only the Section 56 notice/date-received field remains excluded.
+  // Becoming-BO effective dates and separate cessation dates must display.
+  /^date (?:of )?(?:notices?|notice sent|bo information received|receipt of bo information|section 56 notices?)\b/.test(x)||
+  /\b(?:notices? pursuant to|date of notice|date of bo information received|date bo information received|section 56 notices?)\b/.test(x)
+ );
+ return false;
+}
+export function companyDetailIndex(label){
+ const x=norm(label);
+ const aliases=[
+  ['company name'],
+  ['company no','company number','company registration no','company registration number','registration no'],
+  ['last update','last updated','date of last update'],
+  ['date of incorporation','incorporation date','date of registration','registration date'],
+  ['date of cosec appointment','date of co sec appointment','date of company secretary appointment','date of secretary appointment'],
+  ['registered address','registered office','registered office address']
+ ];
+ return aliases.findIndex(xs=>xs.includes(x));
+}
+export function sortCompanyDetails(fields){
+ return [...(fields||[])].sort((a,b)=>{
+  const x=companyDetailIndex(a.label),y=companyDetailIndex(b.label);
+  return (x<0?100:x)-(y<0?100:y);
+ });
+}
+export function referenceTemplateSheets(){
+ return [
+  {name:'Register of Directors',rows:[[...REFERENCE_FIELDS.directors]]},
+  {name:'Register of Members',rows:[[...REFERENCE_FIELDS.members]]},
+  {name:'Register of Beneficial Owners',rows:[[...REFERENCE_FIELDS.beneficialOwners]]},
+  {name:'Register of Secretaries',rows:[[...REFERENCE_FIELDS.secretaries]]},
+  {name:'Register of Charges',rows:[[...REFERENCE_FIELDS.charges]]},
+  {name:'Register of Allotments',rows:[[...REFERENCE_FIELDS.allotments]]},
+  {name:'Register of Transfers',rows:[[...REFERENCE_FIELDS.transfers]]}
+ ];
+}
+).test(lines[0])&&isValidBoDate(lines[0]))
+  return lines[0];
+ return '';
+}
 export function referenceFieldIndex(kind,label){
  const q=norm(label),fields=REFERENCE_FIELDS[kind]||[];
  for(let i=0;i<fields.length;i++){
