@@ -383,6 +383,38 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    state.book.recordStatuses[si+':'+ri]=choice;
    state.dirty=true;notify();return true;
   }
+  if(action==='sr-set-consideration-rate'){
+   const match=/^(\d+):(\d+)$/.exec(String(id));
+   if(!match)return true;
+   const si=Number(match[1]),ri=Number(match[2]);
+   if(registerKind(state.book?.sheets?.[si]?.name)!=='member')return true;
+   const section=buildGroupedRegister(state.book,state.sheetIndex,{showBlanks:true});
+   const member=section.blocks.find(b=>b.type==='record'&&
+    b.sheetIndex===si&&b.row===ri&&b.status==='Current');
+   if(!member)return true;
+   const key=si+':'+ri;
+   const previous=state.book.memberShareRates?.[key]??'';
+   const answer=window.prompt(
+    'Enter the documented consideration paid per share (RM) for '+member.title+
+    '.\n\nCurrent shares held × RM/share determines the displayed consideration. '+
+    'Clear the rate to use recorded acquisition ledger amounts when available. '+
+    'Do not assume RM1/share without supporting documents.',String(previous));
+   if(answer===null)return true;
+   const raw=String(answer).trim();
+   let rate='';
+   if(raw){
+    const candidate=raw.replace(/^(?:RM|MYR)\s*/i,'').replace(/,/g,'');
+    if(!/^\d+(?:\.\d{1,6})?$/.test(candidate)||!Number.isFinite(Number(candidate))||
+      Number(candidate)>1e12)
+     throw Error('Enter a valid non-negative RM rate per share (maximum six decimal places).');
+    rate=candidate;
+   }
+   if(rate===String(previous))return true;
+   if(!state.book.memberShareRates)state.book.memberShareRates={};
+   if(rate)state.book.memberShareRates[key]=rate;
+   else delete state.book.memberShareRates[key];
+   state.dirty=true;notify();return true;
+  }
   if(action==='sr-edit-field'){
    const match=/^(\d+):(\d+):(\d+)$/.exec(String(id));
    if(!match)return true;

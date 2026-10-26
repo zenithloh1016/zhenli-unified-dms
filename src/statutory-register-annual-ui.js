@@ -6,7 +6,11 @@ export function renderStatutoryRegisterDocument(book,sheetIndex,{showBlanks=fals
  const parts=section.blocks.map(block=>{
   if(block.type==='group')return '<div class="sr-member-group">'+esc(block.title)+'</div>';
   if(block.type==='metric')return '<div class="sr-ar-row sr-derived-row">'+
-    '<span class="sr-ar-label"><span>'+esc(block.label)+'</span></span>'+
+    '<span class="sr-ar-label"><span>'+esc(block.label)+'</span>'+
+    (Number.isInteger(block.rateSheetIndex)&&Number.isInteger(block.rateRow)
+     ?'<span class="sr-field-actions"><button type="button" class="sr-edit-field" data-action="sr-set-consideration-rate" data-id="'+
+      block.rateSheetIndex+':'+block.rateRow+'" title="Enter the verified RM per share">Set RM/share</button></span>'
+     :'')+'</span>'+
     '<span class="sr-ar-value"><strong>'+esc(block.value)+'</strong></span></div>';
   if(block.type==='record'){
    const changesAllowed=/^Register of /i.test(section.title)&&

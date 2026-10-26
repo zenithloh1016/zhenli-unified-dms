@@ -129,7 +129,7 @@ export function formerMemberRecords(book,indices){
 const isPersonalField=f=>isMemberPersonalOrSharesLabel(f.label)&&
  !/^(?:name|full name|shareholder'?s? name|member'?s? name)$/i.test(f.label)&&
  !/\b(?:shares held|shareholding)\b/i.test(f.label);
-function memberPersonBlocks(item,{showBlanks=false,former=false,total=0}={}){
+function memberPersonBlocks(item,{showBlanks=false,former=false,total=0,book=null}={}){
  const {record,sheetIndex}=item,blocks=[];
  const name=record.fields.find(f=>/^(?:name|full name|shareholder'?s? name|member'?s? name)$/i.test(f.label))||
   record.fields.find(f=>/\bname\b/i.test(f.label));
@@ -178,15 +178,32 @@ function memberPersonBlocks(item,{showBlanks=false,former=false,total=0}={}){
  // Consistent acquisition consideration row for all CURRENT members. A missing
  // source amount is unknown, not RM0. Former members retain transfer totals.
  if(!former){
+  // A member's documented per-share rate makes this amount recalculate when
+  // current shares change. Never infer a par value (Malaysian shares have none).
   const count=ledger?.acquisitionValueCount||0;
-  blocks.push({type:'metric',label:'Total Share Consideration (Acquisitions)',
-   value:count>0
+  const rate=book?.memberShareRates?.[sheetIndex+':'+record.row];
+  const perShare=rate===undefined||rate===null||String(rate).trim()===''
+   ?null:parseStatutoryNumber(rate);
+  const held=parseStatutoryNumber(shares?.value);
+  const calculated=perShare!==null&&perShare>=0&&held!==null&&held>=0
+   ?Math.round((held*perShare+Number.EPSILON)*100)/100:null;
+  const value=calculated!==null
+   ?formatStatutoryNumber('Share Consideration',calculated)
+   :count>0
     ?formatStatutoryNumber('Share Consideration',ledger.acquisitionConsideration)
-    :'Not recorded'});
-  if(ledger?.acquisitionCount>count)
+    :'Not recorded';
+  blocks.push({type:'metric',label:'Total Share Consideration (Acquisitions)',
+   value,rateSheetIndex:sheetIndex,rateRow:record.row});
+  if(calculated!==null)
+   blocks.push({type:'note',text:'Calculated from '+formatStatutoryNumber('Number of Shares Held',held)+
+    ' shares × '+formatStatutoryNumber('Share Consideration',perShare)+
+    ' per share. Verify the entered rate against allotment or acquisition documents.'});
+  else if(ledger?.acquisitionCount>count)
    blocks.push({type:'note',text:count>0
     ?'Some acquisitions have no consideration recorded; the displayed acquisition amount is a partial total.'
     :'Acquisition consideration is not recorded in the source ledger. Verify the allotment and acquisition documents.'});
+  else if(!count)
+   blocks.push({type:'note',text:'Set a documented RM-per-share rate to calculate the amount from current holdings. No RM1/share assumption has been made.'});
  }
  if(ledger){
   if(former){
@@ -217,7 +234,7 @@ function memberDisplayBlocks(book,indices,options={}){
  const total=current.reduce((sum,item)=>sum+(parseStatutoryNumber(item.record.shareField?.value)||0),0);
  const blocks=[{type:'group',title:'Current'}];
  if(current.length){
-  for(const item of current)blocks.push(...memberPersonBlocks(item,{...options,total}));
+  for(const item of current)blocks.push(...memberPersonBlocks(item,{...options,total,book}));
   if(pending.length)blocks.push({type:'note',text:pending.length+
    ' current member folio(s) have missing or zero shareholdings. Verify membership and actual shares held; these entries are provisional, not verified shareholdings.'});
   if(total>0)blocks.push({type:'note',text:'Shareholding percentages are calculated against the total positive current holdings recorded in this register, not independently verified issued share capital.'});
