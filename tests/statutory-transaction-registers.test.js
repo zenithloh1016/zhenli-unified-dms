@@ -52,7 +52,7 @@ test('entered allotments and transfers preserve exact labels, editable coordinat
   const section=buildGroupedRegister(b,i,{showBlanks:true});
   assert.equal(section.blocks.filter(x=>x.type==='record').length,1);
   assert.equal(section.blocks.find(x=>x.type==='record').title,name);
-  assert.deepEqual(section.blocks.filter(x=>x.type==='field').map(x=>x.label),labels.filter((_,j)=>i===5||j!==13));
+  assert.deepEqual(section.blocks.filter(x=>x.type==='field').map(x=>x.label),labels);
   assert(section.blocks.filter(x=>x.type==='field').every(x=>x.sheetIndex===i&&x.row===1));
   const html=renderStatutoryRegisterDocument(b,i);
   assert(html.includes('data-s="'+i+'" data-r="1" data-c="3"'));
