@@ -149,16 +149,17 @@ test('explicit repair reloads fresh cloud values and saves a backup before corre
  const tab=createMasterListingTab({db:{storage:{from:()=>storage}},
   getUser:()=>({id:'test-account'}),getCompanies:()=>[],openCompany:()=>{},notify:()=>{}});
  await tab.load();
- assert.equal(backupCount,0,'no unwanted automatic Constitution repair');
+ assert.equal(backupCount,1,'requested þ-to-Yes correction is backed up and saved automatically');
+ assert.deepEqual(JSON.parse(server).rows.slice(0,2).map(r=>r.values[3]),['Yes','b']);
  tab.onClick('ml-fix-constitution');
  for(let i=0;i<12;i++)await new Promise(r=>setImmediate(r));
- assert.equal(backupCount,1);
- assert.deepEqual(JSON.parse(server).rows.slice(0,2).map(r=>r.values[3]),['N/A','N/A']);
+ assert.equal(backupCount,2);
+ assert.deepEqual(JSON.parse(server).rows.slice(0,2).map(r=>r.values[3]),['Yes','N/A']);
  assert.match(tab.render(),/Fix Constitution N\/A/);
  const old=JSON.parse(server);old.rows[0].values[3]='þ';server=JSON.stringify(old);
  tab.onClick('ml-fix-constitution');
  for(let i=0;i<12;i++)await new Promise(r=>setImmediate(r));
- assert.equal(backupCount,2);
- assert.equal(JSON.parse(server).rows[0].values[3],'N/A');
- assert.match(tab.state.status,/Repaired 1 Constitution value/);
+ assert.equal(backupCount,3);
+ assert.equal(JSON.parse(server).rows[0].values[3],'Yes');
+ assert.match(tab.state.status,/Constitution cloud listing checked|Master Listing updated/);
 });
