@@ -6,7 +6,7 @@ import {formatStatutoryNumber,numericKind,parseStatutoryNumber} from './statutor
  * All edit coordinates map to privately stored statutory data; Excel's
  * sheet layout is never displayed and is never required for PDF export.
  */
-import {describeStatutorySheet,registerLabel,isManagerRegister,isMemberPersonalOrSharesLabel,registerGroupIndices,visibleRegisterIndices,getRegisterFieldOverrides,isChronologicalRegister,latestRegisterRecords} from './statutory-register-review.js';
+import {describeStatutorySheet,registerLabel,isManagerRegister,isMemberPersonalOrSharesLabel,registerGroupIndices,visibleRegisterIndices,getRegisterFieldOverrides,isChronologicalRegister,latestRegisterRecords,registerRecordStatus} from './statutory-register-review.js';
 
 export const STATUTORY_DOCUMENT_COLORS={
  ink:'#243b4d',navy:'#193f64',blue:'#245f80',light:'#eaf3f8',
@@ -83,15 +83,20 @@ export function currentMemberRecords(book,indices){
  const latest=new Map();
  for(const sheetIndex of indices){
   const description=describeStatutorySheet(book.sheets[sheetIndex]);
-  for(const rec of description.records||[]){
-   const id=currentMemberKey(rec,{sheetIndex});
+  for(const source of description.records||[]){
+   const id=currentMemberKey(source,{sheetIndex});
    if(!id)continue;
-   // Relatively newer folios / imported revisions supersede older entries.
+   // Manual status is a display override only: the original cessation and
+   // shareholding data remain unchanged and independently verifiable.
+   const manual=book?.recordStatuses?.[sheetIndex+':'+source.row];
+   const rec={...source,status:registerRecordStatus(book,sheetIndex,source),
+    manualStatus:manual==='current'||manual==='former'?manual:null};
    if(latest.has(id))latest.delete(id);
    latest.set(id,{record:rec,sheetIndex});
   }
  }
- return [...latest.values()].filter(item=>isCurrentMember(item.record));
+ return [...latest.values()].filter(item=>
+  item.record.manualStatus==='current'||isCurrentMember(item.record));
 }
 /** Former records are derived from EACH imported member folio, not merely
  * from the most recent shareholder snapshot. This retains earlier cessation
@@ -100,9 +105,13 @@ export function formerMemberRecords(book,indices){
  const history=new Map();
  for(const sheetIndex of indices){
   const description=describeStatutorySheet(book.sheets[sheetIndex]);
-  for(const record of description.records||[]){
-   const id=currentMemberKey(record,{sheetIndex});
+  for(const source of description.records||[]){
+   const id=currentMemberKey(source,{sheetIndex});
    if(!id)continue;
+   const manual=book?.recordStatuses?.[sheetIndex+':'+source.row];
+   if(manual==='current')continue;
+   const record={...source,status:registerRecordStatus(book,sheetIndex,source),
+    manualStatus:manual==='former'?'former':null};
    if(record.status!=='former'&&
       (positiveShares(record.shareField?.value)||hasPendingMemberShares(record)||!record.shareField))continue;
    const cessation=String(record.ceasedField?.value??'').trim();
@@ -195,13 +204,13 @@ function memberPersonBlocks(item,{showBlanks=false,former=false,total=0}={}){
 function memberDisplayBlocks(book,indices,options={}){
  const current=currentMemberRecords(book,indices);
  const former=formerMemberRecords(book,indices);
- const pending=current.filter(item=>hasPendingMemberShares(item.record));
+ const pending=current.filter(item=>!positiveShares(item.record.shareField?.value));
  const total=current.reduce((sum,item)=>sum+(parseStatutoryNumber(item.record.shareField?.value)||0),0);
  const blocks=[{type:'group',title:'Current'}];
  if(current.length){
   for(const item of current)blocks.push(...memberPersonBlocks(item,{...options,total}));
   if(pending.length)blocks.push({type:'note',text:pending.length+
-   ' current member folio(s) have blank shareholdings. Complete the actual particulars and total shares held; these entries are provisional, not verified shareholdings.'});
+   ' current member folio(s) have missing or zero shareholdings. Verify membership and actual shares held; these entries are provisional, not verified shareholdings.'});
   if(total>0)blocks.push({type:'note',text:'Shareholding percentages are calculated against the total positive current holdings recorded in this register, not independently verified issued share capital.'});
  }else blocks.push({type:'note',text:'No current shareholders with verified positive shares are recorded. Review recent SSM returns and share transfers.'});
  blocks.push({type:'group',title:'Former'});

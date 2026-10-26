@@ -81,3 +81,39 @@ test('historical zero share folio still stays outside verified Current',()=>{
  assert.equal(currentMemberRecords(book,[0]).length,0);
  assert.equal(formerMemberRecords(book,[0]).length,1);
 });
+
+test('manual Current and Former controls alter member group only, never underlying share or cessation cells',async()=>{
+ const {tab}=fixture();await tab.openCompany('max');
+ tab.command('sr-sheet',String(memberIndex(tab.state.book)));
+ tab.command('sr-add-row');
+ const book=tab.state.book;
+ const sheet=book.sheets.findIndex(s=>s.name==='Register of Members 001');
+ const folio=book.sheets[sheet];
+ const before=JSON.stringify(folio.rows);
+ const nameRow=folio.rows.findIndex(r=>r[0]==='Name:');
+ const previous=globalThis.window;
+ globalThis.window={confirm:()=>true};
+ try{
+  assert(tab.render().includes('Mark Former'));
+  tab.command('sr-set-status',sheet+':'+nameRow+':former');
+  assert.equal(book.recordStatuses[sheet+':'+nameRow],'former');
+  assert(entries(book).some(b=>b.type==='record'&&b.status==='Former'));
+  assert(tab.render().includes('Mark Current'));
+  tab.command('sr-set-status',sheet+':'+nameRow+':current');
+  assert.equal(book.recordStatuses[sheet+':'+nameRow],'current');
+  assert(entries(book).some(b=>b.type==='record'&&b.status==='Current'));
+  assert.equal(JSON.stringify(folio.rows),before,'status marking must not rewrite factual statutory data');
+ }finally{globalThis.window=previous;}
+});
+
+test('manual Current overrides legacy zero-share display without inventing verified shares or a percentage',()=>{
+ const rows=[['Folio No.:','1'],['Name:','HISTORICAL HOLDER'],
+  ['Date Ceased to be A Member:',''],['Total Shares Held:','0']];
+ const book=makeRegisterBook(company,{path:'original.xlsx',sheets:[{name:'Register of Members 001',rows}]});
+ book.recordStatuses={'0:1':'current'};
+ const projected=buildGroupedRegister(book,0);
+ assert(projected.blocks.some(b=>b.type==='record'&&b.title==='HISTORICAL HOLDER'&&b.status==='Current'));
+ assert(!projected.blocks.some(b=>b.type==='record'&&b.status==='Former'));
+ assert(!projected.blocks.some(b=>b.type==='metric'&&/percentage/i.test(b.label||'')));
+ assert(projected.blocks.some(b=>b.type==='note'&&/provisional/i.test(b.text)));
+});
