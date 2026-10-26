@@ -19,7 +19,12 @@ export const REFERENCE_FIELDS={
  allotments:['Allotment Date','Allotment No.','Allottee',"Allottee's Address",'Number of Shares','Amount Paid on Share','Certificate No.','Class','Folio No.'],
  transfers:['Transfer No.','Transfer Date','Shares','Consideration','No. of Old Certificate','Class of Shares','Transferor','IC No. / PP No. / Company No.','Folio of Transferor','Transferee','Transferee IC No. / PP No. / Company No.','Transferee Address','Folio of Transferee','No. of New Certificate'],
  charges:['Registered No.','Date of Registration','Name of Chargee','Nature of Charge','Amount of Indebtedness','Date of Discharge'],
- secretaries:['Name','Registration No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Appointment Date','Cessation Date'],
+ // Secretaries follow the Directors' personal/appointment order. A legacy
+ // Registration No. is kept separately (not presumed to be NRIC, PC or MIA no.).
+ secretaries:['Name','Date of Birth','Identification No.','Passport Expiry','Gender',
+  'Nationality / Race','Business Occupation','Residential Address','Service Address',
+  'Appointment Date','Cessation Date','SSM Practicing Certificate No.','Membership No.',
+  'Registration No.'],
  beneficialOwners:['Full Name','Identification No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Ownership / Voting Rights (%)','Type of Ownership','Criteria','Effective Date Becoming BO','Cessation Date']
 };
 export const MEMBER_LEDGER_FIELDS={
@@ -75,10 +80,17 @@ const synonyms={
   'Nature of Charge':['Description'],'Date of Discharge':['Date of Satisfaction','Date of Release']
  },
  secretaries:{
-  'Name':['Full Name'],
-  // An NRIC and a secretary's registration/practising number are NOT
-  // interchangeable. Preserve NRIC as a separately named source field.
-  'Appointment Date':['Date of Appointment'],'Cessation Date':['Date of Cessation']
+  'Name':['Full Name','Secretary Name'],
+  // NRIC or passport is an identification number. The legacy Registration No.
+  // remains a distinct statutory cell and is never silently reinterpreted.
+  'Identification No.':['NRIC No.','NRIC Number','IC No. / Passport No.',
+    'IC No.','Passport No.','Identification Number'],
+  'Appointment Date':['Date of Appointment'],
+  'Cessation Date':['Date of Cessation','Date Ceased'],
+  'SSM Practicing Certificate No.':['SSM Practising Certificate No.',
+    'SSM Practising Certificate Number','SSM Practicing Certificate Number',
+    'Practising Certificate No.','Practicing Certificate No.','PC No.'],
+  'Membership No.':['Membership Number','MIA Membership No.','MIA No.']
  },
  beneficialOwners:{
   'Full Name':['Name'],
