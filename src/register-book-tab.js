@@ -458,7 +458,17 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     while(state.book.sheets.some(s=>new RegExp('^Register of Members 0*'+n+'(?:\\s|$)','i').test(s.name)))n++;
     const folioName='Register of Members '+String(n).padStart(3,'0');
     const firstIndex=state.book.sheets.findIndex(s=>registerLabel(s.name)==='Register of Members');
-    state.book.sheets.push({name:folioName,rows:[['Name:','New member'],['Identification / Registration No.:',''],['Date of Birth:',''],['Nationality/Origin:',''],['Address:',''],['Total Shares Held:','']]});
+    state.book.sheets.push({name:folioName,rows:[
+     ['Name:','New member'],['Date of Birth:',''],['ID Type:',''],
+     ['Nationality/Origin:',''],['Identification No.:',''],['Race:',''],
+     ['Occupation:',''],['Email Address:',''],['Address:',''],
+     ['Date Entered as A Member:',''],['Date Ceased to be A Member:',''],
+     ['Total Shares Held:',''],
+     ['SHARES ACQUIRED','','','','','','','SHARES TRANSFERRED'],
+     ['Date','No. of Share Certificate','Allotment or Transfer No.','Folio',
+      'Class of Shares','No. of Shares','Consideration','Date','Transfer No.',
+      'Folio','Class of Shares','No. of Shares','Consideration','Balance of Shares']
+    ]});
     state.sheetIndex=firstIndex>=0?firstIndex:state.book.sheets.length-1;state.showBlankFields=true;
     state.dirty=true;notify();return true;
    }
