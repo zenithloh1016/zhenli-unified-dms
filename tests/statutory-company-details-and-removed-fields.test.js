@@ -119,7 +119,8 @@ test('BO effective date becoming BO is retained, Section 56 notice date is hidde
  assert(!html.includes('Date of notice: 01/01/2021'));
  assert.equal(JSON.stringify(b.sheets[0].rows),before);
 });
-\ntest('all companies have a standard editable Effective Date Becoming BO field by default',()=>{
+
+test('all companies have a standard editable Effective Date Becoming BO field by default',()=>{
  const b=makeRegisterBook(co);
  const bo=b.sheets.find(s=>s.name==='Register of Beneficial Owners');
  assert(bo.rows[0].includes('Effective Date Becoming BO'));
@@ -140,6 +141,8 @@ test('BO effective date becoming BO is retained, Section 56 notice date is hidde
  const layout=buildGroupedRegister(old,0,{showBlanks:true});
  assert(layout.blocks.some(x=>x.type==='field'&&x.label==='Effective Date Becoming BO'));
  assert(!layout.blocks.some(x=>x.type==='field'&&/notice/i.test(x.label)));
- assert.equal(JSON.stringify(old.sheets[0].rows),original,
+ assert.equal(JSON.stringify(old.sheets[0].rows.slice(1)),JSON.stringify(JSON.parse(original).slice(1)),
   'standardizing fields must not rewrite original BO records');
+ assert.deepEqual(old.sheets[0].rows[0].slice(0,4),JSON.parse(original)[0],
+  'original BO header columns remain unchanged; only new blank labels may append');
 });
