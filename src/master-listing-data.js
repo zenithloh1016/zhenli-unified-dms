@@ -92,7 +92,7 @@ export function formattedListingCell(model,columnIndex,value){
  const raw=String(value??'');
  if(!raw.trim())return 'N/A';
  if(isListingConstitutionColumn(model?.columns?.[columnIndex]?.label)&&
-    /^(?:b|n\\/?a)$/i.test(raw.trim()))return 'N/A';
+    ['B','N/A','NA'].includes(raw.trim().toUpperCase()))return 'N/A';
  const dateColumn=isListingDateColumn(model?.columns?.[columnIndex]?.label);
  return normalizeListingDateText(raw,{dateColumn,date1904:!!model?.date1904})??raw;
 }
