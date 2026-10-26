@@ -1,1 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#173e64"/><path d="M19 16h19l10 10v22H19z" fill="#fff"/><path d="M38 16v11h10" fill="#cbd9e8"/><path d="M25 34h18M25 40h18M25 46h11" stroke="#173e64" stroke-width="3"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+<title id="title">UNICOSEC</title><desc id="desc">White U with gold folded document on deep navy, UNICOSEC wordmark.</desc>
+<defs>
+<linearGradient id="navy" x1="0" y1="0" x2=".86" y2="1"><stop stop-color="#0874bd"/><stop offset=".23" stop-color="#0a3e7e"/><stop offset=".60" stop-color="#051d4c"/><stop offset="1" stop-color="#020e29"/></linearGradient>
+<radialGradient id="shine" cx=".23" cy=".06" r=".83"><stop stop-color="#1b8dd7" stop-opacity=".8"/><stop offset=".66" stop-color="#0d3684" stop-opacity=".22"/><stop offset="1" stop-color="#06102a" stop-opacity="0"/></radialGradient>
+<linearGradient id="white" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset=".66" stop-color="#f9fbff"/><stop offset="1" stop-color="#c7d2e6"/></linearGradient>
+<linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff9a1"/><stop offset=".22" stop-color="#ffdd63"/><stop offset=".58" stop-color="#edaf2c"/><stop offset="1" stop-color="#d58209"/></linearGradient>
+<linearGradient id="fold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffbc2"/><stop offset=".55" stop-color="#ffe67f"/><stop offset="1" stop-color="#edaf25"/></linearGradient>
+<linearGradient id="spine" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#b46d0e"/><stop offset=".43" stop-color="#ffe172"/><stop offset="1" stop-color="#e4a226"/></linearGradient>
+<filter id="shadow" x="-30%" y="-30%" width="160%" height="170%"><feGaussianBlur stdDeviation="9"/></filter>
+</defs>
+<rect x="3" y="3" width="1018" height="1018" rx="172" fill="url(#navy)"/>
+<rect x="3" y="3" width="1018" height="1018" rx="172" fill="url(#shine)"/>
+<path d="M40 164 Q40 40 166 40 H858" stroke="#39adf5" stroke-width="4" fill="none" opacity=".5"/>
+<g opacity=".36" filter="url(#shadow)"><path d="M245 250 H422 V520 Q420 615 555 610 H751 L712 700 Q646 772 529 757 Q245 744 245 534 Z" fill="#030d27" transform="translate(8 13)"/></g>
+<path d="M250 240 H411 Q428 240 428 258 V518 C428 579 462 604 560 604 H742 L700 685 C662 747 605 750 522 747 C357 741 250 663 250 515 Z" fill="url(#white)"/>
+<path d="M254 240 V510 C254 661 352 740 520 744 C609 750 657 742 701 685" fill="none" stroke="#fff" stroke-width="3" opacity=".55"/>
+<path d="M509 204 L559 176 L559 585 L518 585 Q506 585 506 570 V227 Q506 212 509 204 Z" fill="url(#spine)" stroke="#ffdd65" stroke-width="3"/>
+<path d="M585 138 L813 324 L813 578 Q812 590 798 590 H585 Z" fill="url(#gold)" stroke="#ffed90" stroke-width="3"/>
+<path d="M585 138 V290 Q585 322 622 322 H813 Z" fill="url(#fold)"/>
+<path d="M585 139 L682 286 Q697 310 723 315 L813 324" stroke="#ffe28b" stroke-width="4" fill="none" opacity=".65"/>
+<path d="M589 333 L589 585 H790" fill="none" stroke="#fff1a9" stroke-width="3" opacity=".28"/>
+<text x="512" y="892" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="91" font-weight="700" letter-spacing="6" fill="#fff" textLength="777" lengthAdjust="spacingAndGlyphs">UNICOSEC</text>
+</svg>

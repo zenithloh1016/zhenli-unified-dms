@@ -89,6 +89,7 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
+          node scripts/generate-unicosec-icons.mjs android
           node scripts/install-native-pdf-saver.mjs .
       - name: Verify Add Company is bundled in Android
         run: |
