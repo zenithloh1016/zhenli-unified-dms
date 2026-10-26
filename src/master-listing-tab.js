@@ -4,7 +4,7 @@
  * Supabase Storage under the user's own prefix. No new database table or
  * service-role credentials are required. Documents folders change only when the user requests synchronization on add or through Sync.
  */
-import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,repairListingConstitutionPlaceholders,isUnknownConstitutionValue,isListingConstitutionColumn,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeDeletedDocumentCompany,sortMasterListingCompanies,reconcileDeletedDocumentRows} from './master-listing-data.js';
+import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,repairListingConstitutionPlaceholders,isUnknownConstitutionValue,isListingConstitutionColumn,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeDeletedDocumentCompany,sortMasterListingCompanies,reconcileDeletedDocumentRows,applyRequestedMasterListingCorrections} from './master-listing-data.js';
 import {previewRegisterParticularsZip,preserveRegisterParticulars,compactRegisterColumns,REGISTER_PARTICULARS_COLUMNS} from './master-listing-register-particulars.js';
 import {applyConstitutionDocumentEvidence} from './master-listing-constitution-sync.js';
 import {restoreHistoricalConstitutionStatuses} from './master-listing-constitution-history.js';
@@ -148,6 +148,23 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
       state.error='Could not restore the Master Listing: '+String(e?.message||e)+
        '. Existing cloud listing was left unchanged.';
       state.status='Pre-amendment listing not restored.';
+     }
+    }
+    // Owner-requested correction is applied after the historical restore so
+    // its results cannot be overwritten on the next refresh. Only the exact
+    // ABC name and the Unicode thorn Constitution cells are touched.
+    if(state.model&&!state.error){
+     try{
+      const correction=applyRequestedMasterListingCorrections(state.model);
+      if(correction.model!==state.model){
+       await saveModel(correction.model,{backup:true});
+       state.status='Master Listing updated: '+correction.removed+
+        ' ABC SDN BHD row removed, '+correction.changed+
+        ' Constitution þ value(s) set to Yes. Previous listing backed up.';
+      }
+     }catch(error){
+      state.error='Requested Master Listing correction could not be saved: '+
+       String(error?.message||error)+'. Existing cloud listing is preserved.';
      }
     }
    }
