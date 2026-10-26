@@ -1,4 +1,5 @@
 import {isCurrentMember,currentMemberKey,positiveShares} from './statutory-current-members.js';
+import {sortReferenceFields} from './statutory-register-reference.js';
 import {formatStatutoryNumber,numericKind,parseStatutoryNumber} from './statutory-number-format.js';
 /**
  * Editable, independent statutory-register document projection.
@@ -16,15 +17,15 @@ function mappedField(item,sheetIndex){
  return {type:'field',sheetIndex,row:item.row,col:item.col,
   label:String(item.label||'Particulars').trim(),value:String(item.value??'')};
 }
-function recordsToBlocks(records,sheetIndex,showBlanks,{separateHistory=true,kind=''}={}){
+function recordsToBlocks(records,sheetIndex,showBlanks,{separateHistory=true,kind='',title=''}={}){
  const result=[];
  const renderRecord=record=>{
   const si=Number.isInteger(record.sourceSheetIndex)?record.sourceSheetIndex:sheetIndex;
   const rawStatus=record.status==='former'?'Former':record.status==='current'?'Current':'';
   result.push({type:'record',title:record.title||'Record '+(result.length+1),
    row:record.row,sheetIndex:si,status:separateHistory?rawStatus:''});
-  const visible=(record.fields||[]).filter(f=>showBlanks||hasText(f.value)||
-   (kind==='charges'&&/^date of (?:discharge|satisfaction|release)$/i.test(f.label)));
+  const visible=sortReferenceFields(title,(record.fields||[]).filter(f=>showBlanks||hasText(f.value)||
+   (kind==='charges'&&/^date of (?:discharge|satisfaction|release)$/i.test(f.label))));
   if(visible.length)result.push(...visible.map(f=>mappedField(f,si)));
   else result.push({type:'note',text:'No particulars recorded.'});
  };
@@ -123,7 +124,7 @@ function memberPersonBlocks(item,{showBlanks=false,former=false,total=0}={}){
  blocks.push({type:'record',sheetIndex,row:record.row,title:record.title,
   status:former?'Former':'Current'});
  blocks.push({...mappedField(name,sheetIndex),label:'Shareholder Name'});
- const personal=record.fields.filter(f=>isPersonalField(f)&&f!==shares);
+ const personal=sortReferenceFields('Register of Members',record.fields.filter(f=>isPersonalField(f)&&f!==shares));
  const addr=personal.find(f=>/^address$/i.test(f.label));
  const continuation=addr?personal.filter(f=>/^address · continued$/i.test(f.label)&&f.row>addr.row):[];
  for(const f of personal){
@@ -238,7 +239,7 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
  }else if(details.kind==='table'||details.kind==='text'){
   result.blocks.push(...recordsToBlocks(details.records,sheetIndex,showBlanks,{
    separateHistory:!historyExcluded(result.title),
-   kind:/^register of charges$/i.test(result.title)?'charges':''}));
+   kind:/^register of charges$/i.test(result.title)?'charges':'',title:result.title}));
  }else{
   result.blocks.push(...genericEntries(sheet.rows||[],sheetIndex,{showBlanks}));
  }
@@ -309,7 +310,7 @@ export function buildGroupedRegister(book,sheetIndex,options={}){
   const rows=latestRegisterRecords(book,indices);
   if(rows.length)return finishDisplay(book,{
    sheetIndex:indices[0],title,sourceName:book.sheets[indices[0]].name,
-   blocks:recordsToBlocks(rows,indices[0],options.showBlanks||false,{kind})});
+   blocks:recordsToBlocks(rows,indices[0],options.showBlanks||false,{kind,title})});
   const hasMeaningful=indices.some(i=>{
    const d=describeStatutorySheet(book.sheets[i]);
    return d.kind==='unstructured'&&(book.sheets[i].rows||[]).some(row=>
