@@ -104,11 +104,18 @@ export function isUnknownConstitutionValue(value){
  return Array.from(compact).length===1&&/\p{L}/u.test(compact)&&
   !/^[ANY]$/i.test(compact);
 }
+/** A confirmed adoption/presence of a company constitution displays as Yes. */
+export function isAffirmativeConstitutionValue(value){
+ const compact=normal(value).toLowerCase().replace(/[_.-]+/g,' ').replace(/\s+/g,' ').trim();
+ return /^(?:yes|y|true|adopted|adopted constitution|constitution adopted|has constitution|has a constitution|constitution available|constitution in place|constitution in force|present|available)$/.test(compact);
+}
 export function formattedListingCell(model,columnIndex,value){
  const raw=String(value??'');
  if(!raw.trim())return 'N/A';
- if(isListingConstitutionColumn(model?.columns?.[columnIndex]?.label)&&
-    isUnknownConstitutionValue(raw))return 'N/A';
+ if(isListingConstitutionColumn(model?.columns?.[columnIndex]?.label)){
+  if(isAffirmativeConstitutionValue(raw))return 'Yes';
+  if(isUnknownConstitutionValue(raw))return 'N/A';
+ }
  const dateColumn=isListingDateColumn(model?.columns?.[columnIndex]?.label);
  return normalizeListingDateText(raw,{dateColumn,date1904:!!model?.date1904})??raw;
 }
