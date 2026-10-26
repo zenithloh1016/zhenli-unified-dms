@@ -50,7 +50,7 @@ test('initializes only missing company statutory registers with the same editabl
  assert.deepEqual(created.sheets.map(s=>s.name),[
   'Register of Directors','Register of Members','Register of Beneficial Owners',
   'Register of Secretaries','Register of Charges',
-  'Register of Share Allotments','Register of Share Transfers'
+  'Register of Allotments','Register of Transfers'
  ]);
  assert(created.sheets.find(s=>s.name==='Register of Charges').rows[0].includes('Date of Discharge'));
  assert(created.sheets.every(s=>s.rows.length===1),'do not invent any statutory particulars');
