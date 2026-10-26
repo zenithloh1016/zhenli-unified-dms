@@ -32,8 +32,11 @@ test('legacy date field is hidden and becoming date is migrated to blank effecti
  assert(isLegacyBoCombinedDateField(otherHeading));
  assert(excludeRegisterField('Register of Beneficial Owners',oldHeading));
  assert.equal(ensureReferenceParticulars(book),true);
- assert.deepEqual(book.sheets[0].rows[1].slice(0,input.length),input,
-  'legacy source data, section 56 notice and blank cessation remain unmodified');
+ assert.deepEqual(book.sheets[0].rows[1].slice(0,5),input.slice(0,5),
+  'all legacy source values, including notice and combined dates, remain unchanged');
+ assert.equal(book.sheets[0].rows[1][5],'06/06/2025',
+  'only the previously blank effective-date cell receives the becoming date');
+ assert.equal(book.sheets[0].rows[1][6],'','cessation remains unmodified');
  const cells=values(book);
  assert.equal(effective(book).length,1);
  assert.equal(effective(book)[0].value,'06/06/2025');
