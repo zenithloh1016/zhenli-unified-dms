@@ -277,13 +277,29 @@ function resetSignerMapping(r) {
 async function handleAdmin(action,req,body) {
   const user=await who(req);
   if(action==="list"){
-    const rows=rowError(await table().select("id,company,subject,status,created_at,expires_at")
+    // JSONB signer/document arrays are selected ONLY inside the trusted
+    // Edge Function. Expose aggregate progress, not emails, signature paths,
+    // private storage paths or signer tokens in the listing response.
+    const rows=rowError(await table().select(
+      "id,company,subject,status,created_at,expires_at,signers,documents")
       .eq("owner_id",user).is("deleted_at",null)
       .order("created_at",{ascending:false}).limit(100));
     const {count,error}=await table().select("id",{count:"exact",head:true})
       .eq("owner_id",user).is("deleted_at",null);
     if(error)throw Error(error.message);
-    return {requests:rows,total:count||0};
+    const requests=rows.map(r=>{
+      const signers=Array.isArray(r.signers)?r.signers:[];
+      const docs=Array.isArray(r.documents)?r.documents:[];
+      return {
+        id:r.id,company:r.company,subject:r.subject,status:r.status,
+        created_at:r.created_at,expires_at:r.expires_at,
+        signedCount:signers.filter(s=>!!s.signedAt).length,
+        signerCount:signers.length,
+        docCount:docs.length,
+        signedPdfCount:docs.filter(d=>!!d.finalPath).length
+      };
+    });
+    return {requests,total:count||0};
   }
   if(action==="delete-all"){
     // This does not erase legally relevant signed records or PDF evidence.

@@ -227,6 +227,25 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       '<p class="fineprint">A connected relay sends invitations to each signer in turn. You may resend the current pending invitation after connecting. Google daily quotas and recipient spam filtering still apply.</p>'+
       '</section>';
   }
+  function signingProgress(r){
+    const done=Number.isInteger(r.signedCount)?r.signedCount:null;
+    const total=Number.isInteger(r.signerCount)?r.signerCount:null;
+    return done===null||total===null
+      ?'—/—':e(done)+'/'+e(total);
+  }
+  function pdfProgress(r){
+    const all=Number.isInteger(r.docCount)?r.docCount:null;
+    const ready=Number.isInteger(r.signedPdfCount)?r.signedPdfCount:null;
+    if(all===null)return '—';
+    if(ready===null)return e(all)+' PDF'+(all===1?'':'s');
+    if(!all)return '0 PDFs';
+    return e(all)+' PDF'+(all===1?'':'s')+
+      '<small>'+(ready===all?e(ready)+' signed PDF'+(ready===1?'':'s')+' ready':
+       ready>0?e(ready)+'/'+e(all)+' signed PDFs ready':
+       r.status==='finalizing'?'Finalizing signed PDFs':
+       r.status==='completed'?'Signed PDFs not yet ready':
+       'Awaiting completion')+'</small>';
+  }
   function listView(){
     return '<div class="zs-toolbar">'+b('+ New signing request','new','','primary')+
       b('Refresh requests','refresh')+
@@ -241,8 +260,8 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       (requests.length?requests.map(r=>'<tr>'+
         '<td><b>'+e(r.company)+'</b><small>'+e(r.subject)+'</small></td>'+
         '<td><span class="zs-tag">'+e(r.status)+'</span></td>'+
-        '<td>'+e(r.signedCount??'—')+'/'+e(r.signerCount??'—')+'</td>'+
-        '<td>'+e(r.docCount??'—')+'</td>'+
+        '<td>'+signingProgress(r)+'</td>'+
+        '<td>'+pdfProgress(r)+'</td>'+
         '<td>'+stamp(r.created_at)+'</td><td>'+
         b('Manage','open',r.id)+'</td></tr>').join(''):
         '<tr><td colspan="6">No signing requests found.</td></tr>')+
@@ -267,8 +286,10 @@ export function createSupabaseSigning({db,getCompanies,update}) {
   function detailView(){
     const r=detail,draft=r.status==='draft';
     const docs=r.documents.map(d=>'<div class="zs-doc"><span>📄 <b>'+e(d.name)+
-      '</b> <small>'+e(d.pages)+' page(s)</small></span>'+
-      b('Download PDF','pdf',d.id)+'</div>').join('');
+      '</b> <small>'+e(d.pages)+' page(s) · '+
+      (d.ready?'Signed PDF ready':r.status==='finalizing'?'Finalizing signed PDF':'Original PDF — awaiting final signatures')+
+      '</small></span>'+
+      b(d.ready?'Download signed PDF':'Download original PDF','pdf',d.id)+'</div>').join('');
     const signers=r.signers.map(s=>'<div class="zs-signer"><div><b>'+s.position+'. '+e(s.name)+
       '</b> <small>'+e(s.email)+' · '+(s.signedAt?'Signed '+stamp(s.signedAt):'Not signed')+
       ' · '+(s.signedAt?'Completed':r.status==='pending'?'Awaiting signature':'Not sent')+'</small></div>'+
@@ -311,7 +332,9 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     anchor.href=url;anchor.download=detail.documents.find(d=>d.id===id)?.name||'document.pdf';
     document.body.append(anchor);anchor.click();anchor.remove();
     setTimeout(()=>URL.revokeObjectURL(url),30000);
-    feedback('Document downloaded. You can also place signature boxes directly on the PDF preview.');
+    const finalized=detail.documents.find(d=>d.id===id)?.ready;
+    feedback(finalized?'Completed signed PDF downloaded.':
+      'Original PDF downloaded. Final signed PDF will be available after completion.');
   }
   async function copyLink(id) {
     if(!detail||detail.status==='draft')throw Error('Activate the request before sharing links.');
