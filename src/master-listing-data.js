@@ -306,6 +306,48 @@ export function listingCSV(model){
 }
 
 
+/**
+ * Exact, owner-requested Master Listing cleanup.
+ * Removes only ABC SDN BHD (not its Documents company) and replaces the
+ * Unicode thorn value þ with Yes exclusively in the Constitution column.
+ * An exclusion prevents subsequent Documents sync from re-adding the row.
+ */
+export function applyRequestedMasterListingCorrections(model){
+ validateMasterListing(model);
+ const normalizeName=value=>normal(value).toUpperCase()
+  .replace(/[.]/g,'').replace(/\s+/g,' ').trim();
+ const target='ABC SDN BHD';
+ const matches=model.rows.filter(row=>
+  normalizeName(companyData(model,row)?.name)===target);
+ if(matches.length>1)throw Error('Multiple ABC SDN BHD entries found; no changes were saved.');
+ const marked=(model.excludedMasterListingCompanies||[])
+  .some(name=>normalizeName(name)===target);
+ let result=model,removed=0,changed=0;
+ if(matches.length){
+  result=removeMasterListingRow(result,matches[0].id);
+  removed=1;
+ }
+ const cols=result.columns.flatMap((col,i)=>
+  isListingConstitutionColumn(col.label)?[i]:[]);
+ let rows=null;
+ for(let ri=0;ri<result.rows.length;ri++){
+  const row=result.rows[ri];
+  for(const ci of cols){
+   const raw=String(row.values[ci]??'').normalize('NFKC')
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g,'').trim();
+   if(!/^[þÞ]$/.test(raw))continue;
+   if(!rows)rows=result.rows.slice();
+   if(rows[ri]===row)rows[ri]={...row,values:row.values.slice()};
+   rows[ri].values[ci]='Yes';changed++;
+  }
+ }
+ if(rows)result={...result,rows};
+ if(!marked)result={...result,excludedMasterListingCompanies:
+  [...(result.excludedMasterListingCompanies||[]),target]};
+ if(result!==model)validateMasterListing(result);
+ return {model:result,removed,changed,marked:!marked};
+}
+
 /** Append missing Documents companies without touching the existing Master Listing rows or column order. */
 export function mergeDocumentCompanies(model,companies){
  validateMasterListing(model);
@@ -324,8 +366,11 @@ export function mergeDocumentCompanies(model,companies){
   if(Number.isSafeInteger(n)&&n>serial)serial=n;
  }
  const rows=model.rows.slice();
+ const excluded=new Set((model.excludedMasterListingCompanies||[])
+  .map(name=>key(String(name).replace(/[.]/g,''))));
  let added=0,existing=0,invalid=0;
  for(const company of companies){
+  if(excluded.has(key(String(company?.name||'').replace(/[.]/g,'')))){existing++;continue;}
   const name=normal(company?.name);
   const raw=normal(company?.registration_no??company?.registration??'');
   const registration=raw.toUpperCase()==='N/A'?'':raw;
