@@ -10,7 +10,7 @@ export function renderStatutoryRegisterDocument(book,sheetIndex,{showBlanks=fals
     '<span class="sr-ar-value"><strong>'+esc(block.value)+'</strong></span></div>';
   if(block.type==='record'){
    const changesAllowed=/^Register of /i.test(section.title)&&
-    !/^Register of (?:Members|(?:Share )?Transfers|(?:Share )?Allotments)\b/i.test(section.title);
+    !/^Register of (?:(?:Share )?Transfers|(?:Share )?Allotments)\b/i.test(section.title);
    const target=block.status==='Former'?'current':'former';
    return '<div class="sr-ar-record-heading"><strong>'+esc(block.title)+'</strong>'+
     (block.status?'<span class="sr-ar-status">'+esc(block.status)+'</span>':'')+

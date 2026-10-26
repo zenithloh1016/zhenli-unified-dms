@@ -4,13 +4,13 @@
  * names, shares, addresses, dates and transactions must never be copied.
  */
 export const REFERENCE_FIELDS={
- directors:['Director Name','Date of Birth','IC No. / Passport No.','Passport Expiry','Gender','Nationality / Race','Business Occupation','Residential Address','Service Address','Date of Appointment','Date of Cessation'],
+ directors:['Name','Date of Birth','Identification No.','Passport Expiry','Gender','Nationality / Race','Business Occupation','Residential Address','Service Address','Appointment Date','Cessation Date'],
  members:['Folio No.','Name','Date of Birth','ID Type','Nationality/Origin','Identification No.','Race','Occupation','Email Address','Address','Date Entered as A Member','Date Ceased to be A Member','Total Shares Held'],
- allotments:['Date','Allotment No.',"Allottee's Name","Allottee's Address",'No. of Shares Allotted','Amount Paid on Share','Certificate No.','Class of Shares','Folio No.'],
- transfers:['Transfer No.','Date','No. of Shares Transferred','Consideration','No. of Old Certificate','Class of Shares','Transferor Name','IC No. / PP No. / Company No.','Folio of Transferor','Transferee Name','IC No. / PP No. / Company No.','Transferee Address','Folio of Transferee'],
+ allotments:['Allotment Date','Allotment No.','Allottee',"Allottee's Address",'Number of Shares','Amount Paid on Share','Certificate No.','Class','Folio No.'],
+ transfers:['Transfer No.','Transfer Date','Shares','Consideration','No. of Old Certificate','Class of Shares','Transferor','IC No. / PP No. / Company No.','Folio of Transferor','Transferee','Transferee IC No. / PP No. / Company No.','Transferee Address','Folio of Transferee','No. of New Certificate'],
  charges:['Registered No.','Date of Registration','Name of Chargee','Nature of Charge','Amount of Indebtedness','Date of Discharge'],
- secretaries:['Full Name','NRIC No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Date of Appointment','Date of Cessation'],
- beneficialOwners:['Full Name','NRIC No. / Passport No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Ownership / Voting Rights (%)','Type of Beneficial Ownership','Criteria of BO','Date a Person Becomes / Ceases to be BO','Date of Section 56 Notices / Date BO Information Received']
+ secretaries:['Name','Registration No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Appointment Date','Cessation Date'],
+ beneficialOwners:['Full Name','Identification No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Ownership / Voting Rights (%)','Type of Ownership','Criteria','Effective Date','Cessation Date']
 };
 export const MEMBER_LEDGER_FIELDS={
  acquired:['Date','No. of Share Certificate','Allotment or Transfer No.','Folio','Class of Shares','No. of Shares','Consideration'],
@@ -36,13 +36,48 @@ export function referencePriority(name){
 }
 const norm=x=>String(x??'').toLowerCase().replace(/[^a-z0-9%]+/g,' ').replace(/\s+/g,' ').trim();
 const synonyms={
- directors:{'Director Name':['Name','Full Name'],'IC No. / Passport No.':['NRIC No.','Identification No.'],'Date of Appointment':['Appointment Date'],'Date of Cessation':['Cessation Date']},
- members:{'Name':['Full Name','Member Name'],'Identification No.':['Identification / Registration No.','NRIC No.'],'Total Shares Held':['Shares Held','Current Number of Shares Held'],'Date Entered as A Member':['Date Became Member'],'Date Ceased to be A Member':['Date Ceased']},
- allotments:{"Allottee's Name":['Allottee',"Allottee's Name",'Name of Allottee'],"Allottee's Address":["Allotee's Address",'Allottee Address'],'Date':['Allotment Date'],'No. of Shares Allotted':['No. of Share Alloted','Number of Shares','No. of Shares'],'Class of Shares':['Share Class','Class'],'Folio No.':['Folio']},
- transfers:{'Transferor Name':['Transferor','Transferror Name'],'Transferee Name':['Transferee'],'Date':['Transfer Date'],'No. of Shares Transferred':['No. of Share Transferred','Shares','No. of Shares'],'Class of Shares':['Share Class','Class'],'Folio of Transferor':['Folio of Transferror']},
- charges:{'Name of Chargee':['Chargee'],'Date of Registration':['Registration Date'],'Nature of Charge':['Description'],'Date of Discharge':['Date of Satisfaction','Date of Release']},
- secretaries:{'Full Name':['Name'],'NRIC No.':['Identification No.','Registration No.'],'Date of Appointment':['Appointment Date'],'Date of Cessation':['Cessation Date']},
- beneficialOwners:{'Full Name':['Name'],'NRIC No. / Passport No.':['Identification No.','NRIC No.'],'Type of Beneficial Ownership':['Nature of Ownership'],'Criteria of BO':['Criteria'],'Date a Person Becomes / Ceases to be BO':['Effective Date','Date of Becoming BO']}
+ directors:{
+  'Name':['Director Name','Full Name'],
+  'Identification No.':['IC No. / Passport No.','NRIC No.','Identification No.'],
+  'Appointment Date':['Date of Appointment'],'Cessation Date':['Date of Cessation']
+ },
+ members:{
+  'Name':['Full Name','Member Name'],'Identification No.':['NRIC No.','Identification / Registration No.'],
+  'Total Shares Held':['Shares Held','Current Number of Shares Held'],
+  'Date Entered as A Member':['Date Became Member'],'Date Ceased to be A Member':['Date Ceased']
+ },
+ allotments:{
+  'Allotment Date':['Date'],'Allottee':["Allottee's Name",'Name of Allottee'],
+  "Allottee's Address":['Allottee Address','Allotee s Address'],
+  'Number of Shares':['No. of Shares Allotted','No. of Share Alloted','No. of Shares','Shares'],
+  'Class':['Class of Shares','Share Class']
+ },
+ transfers:{
+  'Transfer Date':['Date'],'Shares':['No. of Shares Transferred','No. of Share Transferred','No. of Shares','Number of Shares'],
+  'Transferor':['Transferor Name','Transferror Name','Name of Transferor'],
+  'Transferee':['Transferee Name','Name of Transferee'],
+  'Transferee IC No. / PP No. / Company No.':['Transferee Identification No.'],
+  'Folio of Transferor':['Folio of Transferror'],
+  'Class of Shares':['Share Class','Class']
+ },
+ charges:{
+  'Name of Chargee':['Chargee'],'Date of Registration':['Registration Date'],
+  'Nature of Charge':['Description'],'Date of Discharge':['Date of Satisfaction','Date of Release']
+ },
+ secretaries:{
+  'Name':['Full Name'],
+  // An NRIC and a secretary's registration/practising number are NOT
+  // interchangeable. Preserve NRIC as a separately named source field.
+  'Appointment Date':['Date of Appointment'],'Cessation Date':['Date of Cessation']
+ },
+ beneficialOwners:{
+  'Full Name':['Name'],
+  'Identification No.':['NRIC No. / Passport No.','NRIC No.','Passport No.'],
+  'Type of Ownership':['Type of Beneficial Ownership','Nature of Ownership'],
+  'Criteria':['Criteria of BO','Beneficial Owner Criteria'],
+  'Effective Date':['Date a Person Becomes / Ceases to be BO','Date of Becoming BO','Date a Person Becomes BO'],
+  'Cessation Date':['Date of Cessation','Date Ceased','Date a Person Ceases to be BO']
+ }
 };
 export function referenceFieldIndex(kind,label){
  const q=norm(label),fields=REFERENCE_FIELDS[kind]||[];
@@ -51,21 +86,33 @@ export function referenceFieldIndex(kind,label){
  }
  return -1;
 }
+/**
+ * Screen/PDF labels follow the screenshot template while all cell coordinates
+ * continue to target the original saved worksheet. Preserve unknown extra
+ * columns after the standard particulars, never delete them.
+ */
 export function sortReferenceFields(name,fields){
- const k=referenceKind(name);
- if(!REFERENCE_FIELDS[k])return fields||[];
- // The Majukaya Transfer workbook uses the SAME identity heading for
- // transferor and transferee. Retain each field's edit coordinates, but
- // place its second occurrence after the transferee's name.
- const identity=k==='transfers'?(fields||[]).filter(f=>
-  norm(f.label)===norm('IC No. / PP No. / Company No.'))
+ const kind=referenceKind(name);
+ const all=fields||[];
+ if(!REFERENCE_FIELDS[kind])return all;
+ const dual=kind==='transfers'?all.filter(f=>referenceFieldIndex(kind,f.label)===7)
   .sort((a,b)=>(a.col??0)-(b.col??0)):[];
- const priority=f=>{
-  if(k==='transfers'&&identity.length>=2&&f===identity[1])return 10;
-  const ix=referenceFieldIndex(k,f.label);
-  return ix<0?1000:ix;
- };
- return [...(fields||[])].sort((a,b)=>priority(a)-priority(b));
+ function position(f){
+  if(kind==='transfers'&&dual.length>=2&&f===dual[1])return 10;
+  const i=referenceFieldIndex(kind,f.label);
+  return i<0?1000:i;
+ }
+ return [...all].sort((a,b)=>position(a)-position(b));
+}
+export function referenceDisplayLabel(kind,label,field,allFields=[]){
+ const index=referenceFieldIndex(kind,label);
+ if(index<0)return label;
+ if(kind==='transfers'&&index===7){
+  const dual=allFields.filter(f=>referenceFieldIndex(kind,f.label)===7)
+   .sort((a,b)=>(a.col??0)-(b.col??0));
+  if(dual.length>=2&&dual[1]===field)return REFERENCE_FIELDS.transfers[10];
+ }
+ return REFERENCE_FIELDS[kind][index];
 }
 export function referenceTemplateSheets(){
  return [

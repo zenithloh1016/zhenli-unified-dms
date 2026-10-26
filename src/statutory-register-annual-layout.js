@@ -1,5 +1,5 @@
 import {isCurrentMember,currentMemberKey,positiveShares,hasPendingMemberShares} from './statutory-current-members.js';
-import {sortReferenceFields} from './statutory-register-reference.js';
+import {sortReferenceFields,referenceDisplayLabel,referenceKind} from './statutory-register-reference.js';
 import {formatStatutoryNumber,numericKind,parseStatutoryNumber} from './statutory-number-format.js';
 /**
  * Editable, independent statutory-register document projection.
@@ -26,7 +26,10 @@ function recordsToBlocks(records,sheetIndex,showBlanks,{separateHistory=true,kin
    row:record.row,sheetIndex:si,status:separateHistory?rawStatus:''});
   const visible=sortReferenceFields(title,(record.fields||[]).filter(f=>showBlanks||hasText(f.value)||
    (kind==='charges'&&/^date of (?:discharge|satisfaction|release)$/i.test(f.label))));
-  if(visible.length)result.push(...visible.map(f=>mappedField(f,si)));
+  if(visible.length)result.push(...visible.map(f=>({
+   ...mappedField(f,si),
+   label:referenceDisplayLabel(referenceKind(title),f.label,f,record.fields||[])
+  })));
   else result.push({type:'note',text:'No particulars recorded.'});
  };
  if(!separateHistory){

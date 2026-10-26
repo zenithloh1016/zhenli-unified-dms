@@ -1,5 +1,5 @@
 import {parseMemberFolios} from './statutory-current-members.js';
-import {REFERENCE_FIELDS,referenceKind,referencePriority,referenceFieldIndex} from './statutory-register-reference.js';
+import {REFERENCE_FIELDS,referenceKind,referencePriority,referenceFieldIndex,referenceTemplateSheets} from './statutory-register-reference.js';
 /**
  * Review-only projections over the original imported worksheet cells.
  * No statutory particulars are deleted or written back in a different order.
@@ -324,6 +324,15 @@ export function registerGroupIndices(book,index){
 export function ensureReferenceParticulars(book){
  if(!Array.isArray(book?.sheets))return false;
  let changed=false;
+ // Complete the canonical set for imported books which lack one or more
+ // statutory register worksheets. Never invent a person or transaction.
+ for(const standard of referenceTemplateSheets()){
+  const kind=referenceKind(standard.name);
+  if(book.sheets.some(sheet=>referenceKind(sheet.name)===kind))continue;
+  if(book.sheets.length>=100)break;
+  book.sheets.push(standard);
+  changed=true;
+ }
  for(const sheet of book.sheets){
   const kind=referenceKind(sheet.name);
   if(!REFERENCE_FIELDS[kind]||!Array.isArray(sheet.rows))continue;
@@ -339,23 +348,18 @@ export function ensureReferenceParticulars(book){
   const headings=sheet.rows[header];
   if(!Array.isArray(headings))continue;
   for(const [fieldIndex,name] of REFERENCE_FIELDS[kind].entries()){
+   // Both parties have independent Identification No. columns in transfers.
    if(kind==='transfers'&&fieldIndex===10){
-    // Preserve both parties' identity particulars as separately editable
-    // columns even where the original register gives both the same caption.
-    const identities=headings.filter(h=>{
-     const n=referenceFieldIndex(kind,h);
-     return n===7||n===10;
-    });
-    if(identities.length>=2)continue;
+    const count=headings.filter(x=>referenceFieldIndex(kind,x)===7||
+      referenceFieldIndex(kind,x)===10).length;
+    if(count>=2)continue;
     if(headings.length>=250)break;
-    headings.push('Transferee IC No. / PP No. / Company No.');
-    changed=true;continue;
+    headings.push(name);changed=true;continue;
    }
    const match=referenceFieldIndex(kind,name);
    if(headings.some(value=>referenceFieldIndex(kind,value)===match))continue;
    if(headings.length>=250)break;
-   headings.push(name);
-   changed=true;
+   headings.push(name);changed=true;
   }
  }
  return changed;

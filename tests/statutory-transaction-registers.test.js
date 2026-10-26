@@ -46,13 +46,13 @@ test('entered allotments and transfers preserve exact labels, editable coordinat
  b.sheets[5].rows.push(['15/10/2026','A001','ALLOTTEE ONE','IPOH','1000','1000','-','Ordinary','1']);
  b.sheets[6].rows.push(['T001','20/10/2026','500','500','-','Ordinary','TRANSFEROR ONE','ID-A','1','TRANSFEREE ONE','ID-B','IPOH','2']);
  for(const [i,name,labels] of [
-  [5,'ALLOTTEE ONE',['Date','Allotment No.',"Allottee's Name","Allottee's Address",'No. of Shares Allotted','Amount Paid on Share','Certificate No.','Class of Shares','Folio No.']],
-  [6,'TRANSFEROR ONE',['Transfer No.','Date','No. of Shares Transferred','Consideration','No. of Old Certificate','Class of Shares','Transferor Name','IC No. / PP No. / Company No.','Folio of Transferor','Transferee Name','Transferee IC No. / PP No. / Company No.','Transferee Address','Folio of Transferee']]
+  [5,'ALLOTTEE ONE',['Allotment Date','Allotment No.','Allottee',"Allottee's Address",'Number of Shares','Amount Paid on Share','Certificate No.','Class','Folio No.']],
+  [6,'TRANSFEROR ONE',['Transfer No.','Transfer Date','Shares','Consideration','No. of Old Certificate','Class of Shares','Transferor','IC No. / PP No. / Company No.','Folio of Transferor','Transferee','Transferee IC No. / PP No. / Company No.','Transferee Address','Folio of Transferee','No. of New Certificate']]
  ]){
   const section=buildGroupedRegister(b,i,{showBlanks:true});
   assert.equal(section.blocks.filter(x=>x.type==='record').length,1);
   assert.equal(section.blocks.find(x=>x.type==='record').title,name);
-  assert.deepEqual(section.blocks.filter(x=>x.type==='field').map(x=>x.label),labels);
+  assert.deepEqual(section.blocks.filter(x=>x.type==='field').map(x=>x.label),labels.filter((_,j)=>i===5||j!==13));
   assert(section.blocks.filter(x=>x.type==='field').every(x=>x.sheetIndex===i&&x.row===1));
   const html=renderStatutoryRegisterDocument(b,i);
   assert(html.includes('data-s="'+i+'" data-r="1" data-c="3"'));
