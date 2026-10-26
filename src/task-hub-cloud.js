@@ -31,7 +31,7 @@ function info(message){
 }
 function authPage(){
   return '<main class="zh-login"><form id="zh-cloud-login" autocomplete="on">'+
-    '<h1>UNICOSEC Task Hub</h1><p>Private Supabase workspace. Use the same login as UNICOSEC. All tasks and companies use your private Supabase workspace.</p>'+
+    '<h1>UNICOSEC Task Hub</h1><p>Private Supabase workspace. Use the same login as UNICOSEC - Company Secretarial Management System. All tasks and companies use your private Supabase workspace.</p>'+
     (lastError?'<p class="zh-error" role="alert">'+escapeHtml(lastError)+'</p>':'')+
     '<label>Email<input name="email" type="email" required autocomplete="username"></label>'+
     '<label>Password<input name="password" type="password" required autocomplete="current-password"></label>'+

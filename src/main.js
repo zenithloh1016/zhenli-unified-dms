@@ -391,7 +391,7 @@ function modalHTML() {
 }
 
 function renderAuth() {
-  return `<div class="auth-page"><div class="auth-card"><div class="auth-logo">U</div><p class="eyebrow">UNICOSEC DOCUMENT MANAGEMENT</p><h1>Your company files, organized.</h1><p class="muted">Private, synchronized cloud storage accessible from your laptop and Android phone.</p>
+  return `<div class="auth-page"><div class="auth-card"><div class="auth-logo">U</div><p class="eyebrow">UNICOSEC - Company Secretarial Management System</p><h1>Your company files, organized.</h1><p class="muted">Private, synchronized cloud storage accessible from your laptop and Android phone.</p>
   <div class="switcher">${action('Sign in', 'auth-login', '', state.authMode==='login'?'active':'quiet')}${action('Create account', 'auth-signup', '', state.authMode==='signup'?'active':'quiet')}</div>
   <form id="auth-form"><label class="input-label">Email<input name="email" type="email" autocomplete="email" required placeholder="you@company.com"></label><label class="input-label">Password<input name="password" type="password" minlength="6" autocomplete="${state.authMode==='login'?'current-password':'new-password'}" required></label><button class="btn primary full" type="submit">${state.authMode==='login'?'Sign in':'Create account'}</button></form>
   <p class="fineprint">Each account has a separate private portfolio. Sign in with the <b>same account</b> on both devices.</p>${state.notice ? `<div class="notice">${esc(state.notice)}</div>` : ''}</div></div>`;
@@ -649,10 +649,10 @@ function render() {
   if (!state.user) {ROOT.innerHTML=renderAuth();return;}
   const tabs = ['overview','documents','master-listing','statutory-registers','statutory-deadlines','tasks','annual-return','signing'];
   const label = {overview:'Overview',documents:'Documents','master-listing':'Master Listing','statutory-registers':'Statutory Registers','statutory-deadlines':'Statutory Deadlines',tasks:'Tasks','annual-return':'Annual Return',signing:'Signing'};
-  ROOT.innerHTML = `<div class="app-shell"><header class="topbar"><div class="top-title">UNICOSEC · Document Management System</div><div class="top-right"><span class="online-dot"></span> Private workspace</div></header>
+  ROOT.innerHTML = `<div class="app-shell"><header class="topbar"><div class="top-title">UNICOSEC - Company Secretarial Management System</div><div class="top-right"><span class="online-dot"></span> Private workspace</div></header>
     <nav class="tabbar" aria-label="Main workspace navigation">${tabs.map(t=>`<button type="button" class="tab ${state.tab===t?'current':''}" data-action="tab-${t}" ${state.tab===t?'aria-current="page"':''}>${label[t]}</button>`).join('')}</nav>
     <main class="main-content">${state.tab==='documents'?(state.companyId?renderFolder():renderCompanies()):state.tab==='overview'?renderOverview():state.tab==='master-listing'?masterListingUI.render():state.tab==='statutory-registers'?registerBookUI.render():state.tab==='statutory-deadlines'?renderStatutoryDeadlines(masterListingUI.state.userId===state.user?.id?masterListingUI.model:null,{query:state.deadlineQuery,kind:state.deadlineKind,period:state.deadlinePeriod,loading:masterListingUI.state.loading,error:masterListingUI.state.error}):state.tab==='tasks'?renderTasks():state.tab==='annual-return'?renderAnnualReturn():renderSigning()}</main>
-    <footer class="app-footer"><span>UNICOSEC · Document Management · Web + Android</span><span>${esc(state.user.email || '')} · ${action('Sign out','sign-out')}</span></footer></div>
+    <footer class="app-footer"><span>UNICOSEC - Company Secretarial Management System · Web + Android</span><span>${esc(state.user.email || '')} · ${action('Sign out','sign-out')}</span></footer></div>
   ${state.notice ? `<div class="toast" role="status">${esc(state.notice)} ${action('✕','dismiss')}</div>` : ''}
   ${state.busy ? '<div class="busy-bar">Working… please keep this page open</div>' : ''}
   ${modalHTML()}

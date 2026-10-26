@@ -159,7 +159,7 @@ against current statutory records. If an account encounters folder permission
 issues, select **Ensure Register Book folders** in Documents and check the
 database RLS setup.
 
-# UNICOSEC Document Management System
+# UNICOSEC - Company Secretarial Management System
 
 Please read **[START_HERE.md](START_HERE.md)** for the new combined web and Android build, Supabase setup, Task Hub cloud sync migration, and Sequential Signing EdgeOne access.
 

@@ -11,8 +11,10 @@ test('UNICOSEC is used for web title, sign-in, header, footers and embedded modu
  contains('src/main.js','UNICOSEC · Document Management System');
  contains('src/main.js','UNICOSEC · Document Management · Web + Android');
  contains('public/task-hub/index.html','UNICOSEC<span> / TASK HUB</span>');
- contains('task-hub-cloud/index.html','<title>UNICOSEC | Supabase Task Hub</title>');
+ contains('task-hub-cloud/index.html','<title>UNICOSEC - Company Secretarial Management System | Task Hub</title>');
  contains('sign/index.html','UNICOSEC · Electronic Signing');
+ contains('sign/index.html','<title>UNICOSEC - Company Secretarial Management System | Secure Electronic Signing</title>');
+ contains('annual-return/index.html','<title>UNICOSEC - Company Secretarial Management System | Annual Return PDF</title>');
  contains('annual-return/index.html','<strong>UNICOSEC</strong>');
  contains('src/signing-supabase.js','Administrator workspace directly inside UNICOSEC');
 });
