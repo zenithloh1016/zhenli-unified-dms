@@ -55,7 +55,7 @@ jobs:
           if (-not (Test-Path "release/UNICOSEC-Portable-$v-x64.exe")) { throw "Portable EXE missing" }
           if (-not (Test-Path 'release/latest.yml')) { throw "latest.yml update manifest missing" }
           $metadata = Get-Content release/latest.yml -Raw
-          if ($metadata -notmatch "version:\\s*$v") { throw "Update manifest version incorrect" }
+          if (-not $metadata.Contains("version: $v")) { throw "Update manifest version incorrect" }
           if ($metadata -notmatch 'sha512:') { throw "Update installer SHA-512 missing" }
           if ($metadata -notmatch 'UNICOSEC-Setup-') { throw "Update manifest points to unexpected installer" }
           Get-ChildItem release | Where-Object { $_.Name -match 'exe$|yml$|blockmap$' } |
