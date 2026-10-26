@@ -1,5 +1,5 @@
 import {parseMemberFolios} from './statutory-current-members.js';
-import {REFERENCE_FIELDS,referenceKind,referencePriority,referenceFieldIndex,referenceTemplateSheets,createCompanyDetailsSheet,companyDetailIndex} from './statutory-register-reference.js';
+import {REFERENCE_FIELDS,referenceKind,referencePriority,referenceFieldIndex,referenceTemplateSheets,createCompanyDetailsSheet,companyDetailIndex,isLegacyBoCombinedDateField,extractBoBecomingDate} from './statutory-register-reference.js';
 /**
  * Review-only projections over the original imported worksheet cells.
  * No statutory particulars are deleted or written back in a different order.
@@ -321,6 +321,31 @@ export function registerGroupIndices(book,index){
  * registers are left untouched because their acquisition/transfer ledgers
  * depend on the original source row coordinates.
  */
+/**
+ * Extract the becoming date from a legacy combined BO column. All imported
+ * original cells remain untouched; only the distinct effective-date cell is
+ * filled, and existing dates are never overwritten.
+ */
+export function migrateBoEffectiveDates(sheet,headerIndex){
+ if(!Array.isArray(sheet?.rows)||headerIndex<0)return false;
+ const headings=sheet.rows[headerIndex]||[];
+ const sources=headings.flatMap((label,col)=>isLegacyBoCombinedDateField(label)?[col]:[]);
+ const expected=REFERENCE_FIELDS.beneficialOwners.indexOf('Effective Date Becoming BO');
+ const dest=headings.findIndex(label=>referenceFieldIndex('beneficialOwners',label)===expected);
+ if(!sources.length||dest<0)return false;
+ let changed=false;
+ for(let ri=headerIndex+1;ri<sheet.rows.length;ri++){
+  const row=sheet.rows[ri];
+  if(!Array.isArray(row))continue;
+  const existing=String(row[dest]??'').trim();
+  if(existing&&!/^(?:-|–|—|n\/a|na|nil|none)$/i.test(existing))continue;
+  const dates=[...new Set(sources.map(col=>extractBoBecomingDate(row[col])).filter(Boolean))];
+  if(dates.length!==1)continue;
+  while(row.length<=dest)row.push('');
+  row[dest]=dates[0];changed=true;
+ }
+ return changed;
+}
 export function ensureReferenceParticulars(book){
  if(!Array.isArray(book?.sheets))return false;
  let changed=false;
@@ -378,6 +403,7 @@ export function ensureReferenceParticulars(book){
    if(headings.length>=250)break;
    headings.push(name);changed=true;
   }
+  if(kind==='beneficialOwners'&&migrateBoEffectiveDates(sheet,header))changed=true;
  }
  return changed;
 }
