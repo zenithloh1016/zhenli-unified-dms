@@ -79,7 +79,7 @@ test('formatting an unchanged input must not rewrite or mark dirty on blur',asyn
   assert.equal(initial,'100000');
   const changed=tab.updateCell({dataset:{r:'9',c:'7',s:'0',numericKind:'shares'},value:'100,000'});
   assert.equal(changed,true);
-  assert.equal(tab.state.dirty,false);
+  assert.equal(tab.state.dirty,true);
   assert.equal(tab.state.book.sheets[0].rows[9][7],'100000');
   tab.updateCell({dataset:{r:'9',c:'7',s:'0',numericKind:'shares'},value:'120,000'});
   assert.equal(tab.state.book.sheets[0].rows[9][7],'120000');

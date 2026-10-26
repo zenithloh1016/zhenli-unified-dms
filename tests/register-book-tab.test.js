@@ -112,7 +112,7 @@ test('saves edited register privately and reloads it',async()=>{
  const {tab,blobs,written}=fixture();
  await tab.openCompany('c1');
  globalThis.document={getElementById:()=>null};
- assert.equal(tab.updateCell({dataset:{r:'0',c:'0'},value:'Director Name'}),true);
+ assert.equal(tab.updateCell({dataset:{r:'0',c:'0'},value:'Director Name (Revised)'}),true);
  assert.equal(tab.state.dirty,true);
  await tab.save();
  assert.equal(tab.state.dirty,false);
@@ -120,7 +120,7 @@ test('saves edited register privately and reloads it',async()=>{
  assert(blobs.has('u1/statutory-registers/c1.json'));
  tab.closeCompany();
  await tab.openCompany('c1');
- assert.equal(tab.state.book.sheets[0].rows[0][0],'Director Name');
+ assert.equal(tab.state.book.sheets[0].rows[0][0],'Director Name (Revised)');
 });
 test('directory filters companies and escapes names',()=>{
  const data=[{id:'x',name:'<script>alert(1)</script>',registration_no:'12'},...companies];

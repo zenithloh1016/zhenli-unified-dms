@@ -51,7 +51,7 @@ function mk(){
 test('ACE ALLIANCE prior director entries from different imported editions share one tab',()=>{
  const b=mk();
  assert.deepEqual(registerGroupIndices(b,0),[0,1]);
- assert.deepEqual(visibleRegisterIndices(b),[0,2,3,4,5,6]);
+ assert.deepEqual(visibleRegisterIndices(b),[0,6,5,4,2,3]);
  const consolidated=latestRegisterRecords(b,[0,1]);
  assert.equal(consolidated.length,3);
  assert.equal(consolidated.find(x=>x.title==='DIRECTOR A').status,'former');

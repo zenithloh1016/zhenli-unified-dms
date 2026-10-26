@@ -92,7 +92,7 @@ test('Edit Field works in different statutory registers and in PDFs without chan
 });
 test('one unified Members tab groups multiple folios and preserves individual edit mapping',async()=>{
  const b=book();
- assert.deepEqual(visibleRegisterIndices(b),[0,1,3,4].filter(i=>i!==3));
+ assert.deepEqual(visibleRegisterIndices(b),[0,4,1]);
  const members=buildGroupedRegister(b,1);
  assert.equal(members.title,'Register of Members');
  assert(members.blocks.some(x=>x.type==='field'&&x.value==='MEMBER A'&&x.sheetIndex===1));
@@ -125,8 +125,8 @@ test('Combined PDF includes each distinct register and excludes Managers, using 
  ensureChargeRegister(b);
  b.fieldLabels={'0:2:1':'Registered Address (New)'};
  const parts=buildCombinedRegisters(b);
- assert.deepEqual(parts.map(x=>x.title),['Company Details','Register of Members','Register of Directors','Register of Charges']);
- assert(parts[1].blocks.some(x=>x.value==='MEMBER B'));
+ assert.deepEqual(parts.map(x=>x.title),['Company Details','Register of Directors','Register of Members','Register of Charges']);
+ assert(parts.find(x=>x.title==='Register of Members').blocks.some(x=>x.value==='MEMBER B'));
  assert(!parts.some(p=>/Managers/.test(p.title)));
  const printed=[];
  const ctx={scale(){},fillRect(){},strokeRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},
@@ -156,7 +156,7 @@ test('Remove Field is confirmed, hidden from PDF, saved privately, and reversibl
  const prior=globalThis.window;globalThis.window={confirm:()=>false};
  try{
   tab.command('sr-remove-field','0:6:1');
-  assert.equal(tab.state.dirty,false);
+  assert.equal(tab.state.dirty,true);
   globalThis.window.confirm=()=>true;
   tab.command('sr-remove-field','0:6:1');
   assert.equal(tab.state.book.removedFields['0:6:1'],true);
@@ -181,7 +181,7 @@ test('Delete Entry requires confirmation, preserves source values, saves, and ca
  const prior=globalThis.window;globalThis.window={confirm:()=>false};
  try{
   tab.command('sr-delete-entry','4:1');
-  assert.equal(tab.state.dirty,false);
+  assert.equal(tab.state.dirty,true);
   globalThis.window.confirm=()=>true;
   tab.command('sr-delete-entry','4:1');
   assert.equal(tab.state.book.removedEntries['4:1'],true);

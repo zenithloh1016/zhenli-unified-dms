@@ -19,17 +19,17 @@ test('blank Allotments and Transfers display standard sections without treating 
   assert.match(html,/sr-member-group">Transactions/);
   assert.doesNotMatch(html,/Particular 1|Entry 1|Mark Former|Mark Current/);
  }
- assert.deepEqual(buildCombinedRegisters(b).slice(-2).map(x=>x.title),[
+ assert.deepEqual(buildCombinedRegisters(b).map(x=>x.title).filter(x=>/Allotments|Transfers/.test(x)),[
   'Register of Share Allotments','Register of Share Transfers']);
 });
 
 test('entered allotments and transfers preserve exact labels, editable coordinates and unclassified transactions',()=>{
  const b=makeRegisterBook(co);
- b.sheets[5].rows.push(['ALLOTTEE ONE','Ordinary','1000','15/10/2026']);
- b.sheets[6].rows.push(['TRANSFEROR ONE','TRANSFEREE ONE','500','20/10/2026']);
+ b.sheets[5].rows.push(['15/10/2026','A001','ALLOTTEE ONE','IPOH','1000','1000','-','Ordinary','1']);
+ b.sheets[6].rows.push(['T001','20/10/2026','500','500','-','Ordinary','TRANSFEROR ONE','ID-A','1','TRANSFEREE ONE','ID-B','IPOH','2']);
  for(const [i,name,labels] of [
-  [5,'ALLOTTEE ONE',['Allottee','Class','Number of Shares','Allotment Date']],
-  [6,'TRANSFEROR ONE',['Transferor','Transferee','Shares','Transfer Date']]
+  [5,'ALLOTTEE ONE',['Date','Allotment No.',"Allottee's Name","Allottee's Address",'No. of Shares Allotted','Amount Paid on Share','Certificate No.','Class of Shares','Folio No.']],
+  [6,'TRANSFEROR ONE',['Transfer No.','Date','No. of Shares Transferred','Consideration','No. of Old Certificate','Class of Shares','Transferor Name','IC No. / PP No. / Company No.','Folio of Transferor','Transferee Name','Transferee IC No. / PP No. / Company No.','Transferee Address','Folio of Transferee']]
  ]){
   const section=buildGroupedRegister(b,i,{showBlanks:true});
   assert.equal(section.blocks.filter(x=>x.type==='record').length,1);
@@ -52,6 +52,6 @@ test('imported older Allotments and Transfers remain editable with their origina
   const section=buildGroupedRegister(b,i);
   assert.deepEqual(section.blocks.filter(x=>x.type==='group').map(x=>x.title),['Transactions']);
   assert.equal(section.blocks.filter(x=>x.type==='record').length,1);
-  assert.deepEqual(section.blocks.filter(x=>x.type==='field').map(x=>x.label),['Name','Date','No. of Shares']);
+  assert.deepEqual(section.blocks.filter(x=>x.type==='field').map(x=>x.label),['Date','No. of Shares','Name']);
  }
 });
