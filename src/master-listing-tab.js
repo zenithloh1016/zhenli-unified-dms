@@ -95,7 +95,16 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
   const original=state.model,user=getUser?.();
   if(!original||!user?.id||isMasterListingRestored(original))
    return {restored:false,alreadyRestored:true};
-  const historicalPath=user.id+'/master-listing/history/'+PRE_AMENDMENT_MASTER_LISTING;
+  const historyFolder=user.id+'/master-listing/history';
+  if(typeof storage?.list!=='function')return {restored:false,notFound:true};
+  const {data:history,error:listingError}=await storage.list(historyFolder,{
+   limit:100,offset:0,sortBy:{column:'name',order:'desc'}
+  });
+  if(listingError)throw Error('Cannot verify pre-amendment Master Listing history: '+listingError.message);
+  // Verify the exact authenticated private backup exists before downloading.
+  if(!(history||[]).some(x=>x.name===PRE_AMENDMENT_MASTER_LISTING))
+   return {restored:false,notFound:true};
+  const historicalPath=historyFolder+'/'+PRE_AMENDMENT_MASTER_LISTING;
   const {data,error}=await storage.download(historicalPath);
   if(error){
    if(isMissing(error))return {restored:false,notFound:true};
