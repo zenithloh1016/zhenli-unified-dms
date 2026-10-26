@@ -49,7 +49,8 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   const user=getUser?.();
   if(!user?.id){reset();notify();return;}
   if(state.loading||state.saving)return;
-  if(!force&&state.loaded&&state.userId===user.id)return;
+  if(!force&&state.loaded&&state.userId===user.id&&
+   (getCompanies?.()||[]).every(company=>!company?.id||state.available.has(company.id)))return;
   if(state.userId!==user.id)reset();
   state.userId=user.id;state.loading=true;state.error='';notify();
   try{

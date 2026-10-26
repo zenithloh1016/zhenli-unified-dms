@@ -61,6 +61,18 @@ test('initializes only missing company statutory registers with the same editabl
  assert.match(tab.render(),/Export This Register PDF/);
 });
 
+test('newly added companies receive templates on the next register-tab visit',async()=>{
+ const growing=[companies[0]];
+ const {tab,blobs,written}=fixture(growing);
+ await tab.load();
+ assert(blobs.has('u1/statutory-registers/c1.json'));
+ growing.push(companies[1]);
+ await tab.load();
+ assert(blobs.has('u1/statutory-registers/c2.json'));
+ assert.equal(written.filter(p=>p==='u1/statutory-registers/c1.json').length,1);
+ assert.equal(written.filter(p=>p==='u1/statutory-registers/c2.json').length,1);
+});
+
 test('each statutory register opens independently without Annual Return or Excel layout',async()=>{
  const {tab}=fixture();
  await tab.openCompany('c1');
