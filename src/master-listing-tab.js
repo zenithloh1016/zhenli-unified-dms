@@ -7,6 +7,7 @@
 import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,repairListingConstitutionPlaceholders,isUnknownConstitutionValue,isListingConstitutionColumn,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeDeletedDocumentCompany,sortMasterListingCompanies,reconcileDeletedDocumentRows} from './master-listing-data.js';
 import {previewRegisterParticularsZip,preserveRegisterParticulars,compactRegisterColumns,REGISTER_PARTICULARS_COLUMNS} from './master-listing-register-particulars.js';
 import {applyConstitutionDocumentEvidence} from './master-listing-constitution-sync.js';
+import {restoreHistoricalConstitutionStatuses} from './master-listing-constitution-history.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeText=value=>String(value??'').slice(0,15000);
@@ -28,9 +29,62 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
  const fail=error=>{state.error=String(error?.message||error);state.status='';notify?.('Master Listing: '+state.error);renderUI();};
  const renderUI=()=>{onRender?.();};
  let onRender=null;
+ let constitutionHistoryCheckedForUser='';
  const afterRender=cb=>{onRender=cb;};
 
- const reset=()=>{Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,model:null,error:'',status:'',search:'',page:0,columnStart:0,fullScreen:false,editIndex:null,addOpen:false,addDraft:null,addCreateFolders:true,source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,date1904:false,legacyDateCount:0,preview:null,registerPreview:null,selectedFile:null});};
+ const reset=()=>{constitutionHistoryCheckedForUser='';Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,model:null,error:'',status:'',search:'',page:0,columnStart:0,fullScreen:false,editIndex:null,addOpen:false,addDraft:null,addCreateFolders:true,source:'',sheets:[],sheetIndex:0,headingRow:1,startRow:2,nameColumn:0,regColumn:-1,date1904:false,legacyDateCount:0,preview:null,registerPreview:null,selectedFile:null});};
+ /**
+  * Recover only previously confirmed Constitution = Yes from authenticated
+  * private history. Each company's current No, Yes and detailed notes remain
+  * unchanged. Never restore unrelated columns or rewrite whole snapshots.
+  */
+ async function restoreConstitutionHistory({quiet=false}={}){
+  const user=getUser?.();
+  if(!user?.id||!state.model||typeof storage?.list!=='function')
+   return {count:0,historyCount:0,unavailable:true};
+  const folder=user.id+'/master-listing/history';
+  const {data:items,error:listError}=await storage.list(folder,{
+   limit:100,offset:0,sortBy:{column:'name',order:'desc'}
+  });
+  if(listError)throw Error('Cannot read private Master Listing history: '+listError.message);
+  const candidates=(items||[]).filter(f=>
+   /^\\d{14}-[a-z0-9-]+\\.json$/i.test(String(f.name||'')) &&
+   (!f.metadata?.size||Number(f.metadata.size)<=MAX_JSON_BYTES))
+   .sort((a,b)=>b.name.localeCompare(a.name)).slice(0,60);
+  const snapshots=[],unreadable=[];
+  for(const file of candidates){
+   const {data,error}=await storage.download(folder+'/'+file.name);
+   if(error){unreadable.push(file.name);continue;}
+   try{
+    const snapshot=validateMasterListing(JSON.parse(await data.text()));
+    snapshots.push({name:file.name,model:snapshot});
+   }catch(error){unreadable.push(file.name);}
+  }
+  const result=restoreHistoricalConstitutionStatuses(state.model,snapshots);
+  if(result.count){
+   await saveModel(result.model,{backup:true});
+   state.status='Restored '+result.count+
+    ' confirmed Constitution status(es) from '+snapshots.length+
+    ' previous Master Listing backup(s). All other fields retained; pre-restore backup saved.';
+  }else if(!quiet){
+   state.status=snapshots.length
+    ?'Checked '+snapshots.length+
+     ' historical Master Listings. No additional confirmed Constitution = Yes values were found to restore.'
+    :'No readable previous Master Listing backups found. Existing statuses retained.';
+  }
+  if(unreadable.length&&(!quiet||result.count))
+   state.status+=' '+unreadable.length+' old backup(s) could not be read; these were skipped.';
+  return {...result,historyCount:snapshots.length,unreadable:unreadable.length};
+ }
+ async function restoreConstitutionHistoryNow(){
+  if(state.loading||state.saving)return;
+  await load(true);
+  if(state.error)throw Error(state.error);
+  state.loading=true;state.status='Reviewing earlier Constitution statuses…';onRender?.();
+  try{
+   return await restoreConstitutionHistory();
+  }finally{state.loading=false;onRender?.();}
+ }
  async function load(force=false){
   const user=getUser?.();
   if(!user?.id){reset();return;}
@@ -64,6 +118,17 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
       state.model=original;
      }
     }else state.status='Saved Master Listing loaded.';
+    // One safe authenticated history check per sign-in, including after app
+    // upgrades. Backups are read-only and only confirmed Yes is restored.
+    if(state.model&&constitutionHistoryCheckedForUser!==user.id&&
+       typeof storage?.list==='function'){
+     constitutionHistoryCheckedForUser=user.id;
+     try{await restoreConstitutionHistory({quiet:true});}
+     catch(historyError){
+      console.warn('Previous Constitution status recovery:',historyError);
+      state.status+=' Earlier Constitution history could not be checked. Use Restore Constitution History to retry.';
+     }
+    }
    }
    state.loaded=true;state.legacyDateCount=countLegacyDateSerials(state.model);
    if(!state.model)state.status='No Master Listing has been imported yet.';
@@ -472,6 +537,7 @@ async function saveRepairedDates(){
    (model?act('Export CSV','ml-export','','secondary'):'')+
    (model?act('Fix Constitution N/A','ml-fix-constitution','','secondary'):'')+
     (model?act('Sync Constitution Status','ml-sync-constitution','','secondary'):'')+
+    (model?act('Restore Constitution History','ml-restore-constitution','','secondary'):'')+
    (model?act('Import Register Books','ml-register-upload','','secondary'):'')+(model&&compactRegisterColumns(model).removed?act('Keep Current Names Only','ml-compact-register','','secondary'):'')+act('+ Add Company','ml-add','','primary')+act('Import Excel','ml-upload','','secondary')+'</div></div>'+
    '<input id="ml-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>'+
    '<input id="ml-register-file" type="file" accept=".zip,application/zip" hidden>'+
@@ -589,6 +655,7 @@ function renderEditor(){
   if(action==='ml-repair-dates'){asyncRun(saveRepairedDates);return true;}
   if(action==='ml-fix-constitution'){asyncRun(repairConstitutionNow);return true;}
   if(action==='ml-sync-constitution'){asyncRun(syncConstitutionDocuments);return true;}
+  if(action==='ml-restore-constitution'){asyncRun(restoreConstitutionHistoryNow);return true;}
   if(action==='ml-export'){
    if(!state.model)return true;
    const csv=listingCSV(state.model),blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
