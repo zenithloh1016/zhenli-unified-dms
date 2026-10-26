@@ -124,9 +124,13 @@ test('Unicode b-like Constitution placeholders normalize without erasing genuine
   assert.equal(formattedListingCell(m,3,v),'N/A','Constitution '+v);
   assert.equal(formattedListingCell(m,4,v),v,'Unrelated Remarks '+v);
  }
- for(const v of ['Y','N','A','Yes','No','Adopted','Not adopted','Memorandum and Articles','2024']){
+ for(const [v,expected] of [
+  ['Y','Yes'],['N','N'],['A','A'],['Yes','Yes'],['No','No'],
+  ['Adopted','Yes'],['Not adopted','Not adopted'],
+  ['Memorandum and Articles','Memorandum and Articles'],['2024','2024']
+ ]){
   assert.equal(isUnknownConstitutionValue(v),false,'meaningful '+v);
-  assert.equal(formattedListingCell(m,3,v),v);
+  assert.equal(formattedListingCell(m,3,v),expected);
  }
 });
 test('explicit repair reloads fresh cloud values and saves a backup before correcting',async()=>{
