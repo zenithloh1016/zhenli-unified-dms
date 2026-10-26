@@ -4,11 +4,11 @@ import {buildMasterListing,displayedListingValue} from '../src/master-listing-da
 import {createMasterListingTab} from '../src/master-listing-tab.js';
 import {PRE_AMENDMENT_MASTER_LISTING,isMasterListingRestored} from '../src/master-listing-pre-amendment.js';
 
-const original=()=>buildMasterListing([
+const original=()=>{const model=buildMasterListing([
  ['No.','Company Name','Registration No.','Constitution','Date of Registration','Previous Status'],
  ['1','ORIGINAL ALPHA SDN BHD','202001234567','b','01/01/2020','PRE-CHANGE'],
  ['2','ORIGINAL BETA SDN BHD','202002234567','Adopted','02/02/2020','PRE-CHANGE']
-]);
+]);model.rows[0].values[3]='b';model.rows[1].values[3]='Adopted';return model;};
 const newer=()=>buildMasterListing([
  ['No.','Company Name','Registration No.','Constitution','Date of Registration','Previous Status'],
  ['1','UPDATED ALPHA SDN BHD','202001234567','N/A','01/01/2020','LATER EDIT'],

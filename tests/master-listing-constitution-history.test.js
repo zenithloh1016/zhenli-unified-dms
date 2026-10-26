@@ -87,7 +87,9 @@ test('automatic recovery loads real private history files and saves backup befor
   getUser:()=>user,getCompanies:()=>[],notify:()=>{}
  });
  await tab.load();
- assert.equal(listing.length,1);
+ assert.equal(listing.length,1,'load only checks presence of the pinned pre-amendment backup');
+ tab.onClick('ml-restore-constitution');
+ for(let i=0;i<12;i++)await new Promise(r=>setImmediate(r));
  assert.equal(downloaded.filter(x=>x.includes('/history/')).length,2);
  assert.equal(uploaded.length,2,'backup is uploaded before corrected listing');
  assert.match(uploaded[0].path,/\/history\//);
@@ -96,6 +98,6 @@ test('automatic recovery loads real private history files and saves backup befor
  assert.match(tab.state.status,/Restored 2 confirmed Constitution status/);
  assert.match(tab.render(),/Restore Constitution History/);
  await tab.load(true);
- assert.equal(listing.length,1,'no repeated history lookup on forced reload');
- assert.equal(uploaded.length,2,'idempotent restoration saves only once');
+ assert.equal(listing.length,4,'later refresh only checks pinned restore point, not selective history');
+ assert.equal(uploaded.length,2,'manual selective restoration is not repeated automatically');
 });

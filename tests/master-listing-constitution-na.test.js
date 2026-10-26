@@ -61,7 +61,7 @@ test('edit and save normalization permanently stores N/A while meaningful values
  assert.equal(model.rows[0].values[4],'b');
 });
 
-test('previously saved Master Listing is backed up and permanently repaired on load',async()=>{
+test('previously saved Master Listing is untouched on load; manual Constitution repair still uses backup',async()=>{
  const legacy=example();
  legacy.rows[0].values[3]='b';
  legacy.rows[1].values[3]='b';
@@ -84,6 +84,9 @@ test('previously saved Master Listing is backed up and permanently repaired on l
   notify:()=>{}
  });
  await tab.load();
+ assert.equal(writes.length,0,'automatic Constitution amendment is disabled');
+ tab.onClick('ml-fix-constitution');
+ for(let i=0;i<12;i++)await new Promise(r=>setImmediate(r));
  tab.onClick('ml-fullscreen');
  const html=tab.render();
  assert.match(html,/title="Constitution">Constitution<\/th>/);
@@ -146,6 +149,9 @@ test('explicit repair reloads fresh cloud values and saves a backup before corre
  const tab=createMasterListingTab({db:{storage:{from:()=>storage}},
   getUser:()=>({id:'test-account'}),getCompanies:()=>[],openCompany:()=>{},notify:()=>{}});
  await tab.load();
+ assert.equal(backupCount,0,'no unwanted automatic Constitution repair');
+ tab.onClick('ml-fix-constitution');
+ for(let i=0;i<12;i++)await new Promise(r=>setImmediate(r));
  assert.equal(backupCount,1);
  assert.deepEqual(JSON.parse(server).rows.slice(0,2).map(r=>r.values[3]),['N/A','N/A']);
  assert.match(tab.render(),/Fix Constitution N\/A/);
