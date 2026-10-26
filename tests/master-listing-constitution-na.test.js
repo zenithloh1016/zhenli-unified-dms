@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
  buildMasterListing,changeListingCell,displayedListingValue,formattedListingCell,
- listingCSV,listingRowsForSearch,isListingConstitutionColumn
+ listingCSV,listingRowsForSearch,isListingConstitutionColumn,
+ repairListingConstitutionPlaceholders
 } from '../src/master-listing-data.js';
 import {createMasterListingTab} from '../src/master-listing-tab.js';
 
@@ -60,16 +61,19 @@ test('edit and save normalization permanently stores N/A while meaningful values
  assert.equal(model.rows[0].values[4],'b');
 });
 
-test('previously saved Master Listing JSON immediately displays Constitution N/A',async()=>{
+test('previously saved Master Listing is backed up and permanently repaired on load',async()=>{
  const legacy=example();
  legacy.rows[0].values[3]='b';
  legacy.rows[1].values[3]='b';
  legacy.rows[2].values[3]='b';
  const current=JSON.stringify(legacy);
- let writes=0;
+ const writes=[];
  const storage={
   download:async()=>({data:new Blob([current]),error:null}),
-  upload:async()=>{writes++;return {error:null}}
+  upload:async(name,file,opts)=>{
+   writes.push({name,contents:JSON.parse(await file.text()),opts});
+   return {error:null};
+  }
  };
  const tab=createMasterListingTab({
   db:{storage:{from:()=>storage}},
@@ -87,6 +91,27 @@ test('previously saved Master Listing JSON immediately displays Constitution N/A
  assert.equal(matches.length,3);
  assert.match(html,/Adopted 2024/);
  assert.match(html,/title="b">b<\/td>/,'Remarks b remains unchanged');
- assert.equal(writes,0,'loading must not silently overwrite original cloud JSON');
- assert.equal(tab.state.model.rows[0].values[3],'b','original source remains recoverable');
+ assert.equal(writes.length,2,'one backup and one repaired current.json save');
+ assert.match(writes[0].name,/master-listing\/history\//);
+ assert.match(writes[1].name,/master-listing\/current\.json$/);
+ assert.deepEqual(writes[0].contents.rows.slice(0,3).map(r=>r.values[3]),['b','b','b']);
+ assert.deepEqual(writes[1].contents.rows.map(r=>r.values[3]),['N/A','N/A','N/A','Adopted 2024']);
+ assert.equal(tab.state.model.rows[0].values[3],'N/A');
+ assert.equal(tab.state.error,'');
+ assert.match(tab.state.status,/Repaired 3 Constitution value/);
+});
+
+test('saved Constitution repair is idempotent and never edits unrelated columns',()=>{
+ const model=example();
+ model.rows[0].values[3]='b';
+ model.rows[1].values[3]=' B ';
+ model.rows[2].values[3]='  ';
+ const info=repairListingConstitutionPlaceholders(model);
+ assert.equal(info.count,3);
+ assert.deepEqual(info.model.rows.map(r=>r.values[3]),['N/A','N/A','N/A','Adopted 2024']);
+ assert.deepEqual(info.model.rows.map(r=>r.values[4]),model.rows.map(r=>r.values[4]));
+ assert.equal(model.rows[0].values[3],'b','original is not mutated');
+ const again=repairListingConstitutionPlaceholders(info.model);
+ assert.equal(again.count,0);
+ assert.equal(again.model,info.model);
 });

@@ -97,6 +97,35 @@ export function formattedListingCell(model,columnIndex,value){
  return normalizeListingDateText(raw,{dateColumn,date1904:!!model?.date1904})??raw;
 }
 
+/**
+ * One-time, data-preserving cleanup of the Constitution column in stored
+ * Master Listings. An unchanged model is returned for idempotent reloading;
+ * callers can back up the source before committing the corrected copy.
+ * Only the Constitution column is eligible; genuine Yes/No/adoption text and
+ * other workbook columns are left untouched.
+ */
+export function repairListingConstitutionPlaceholders(model){
+ validateMasterListing(model);
+ const cols=model.columns.flatMap((c,i)=>
+  isListingConstitutionColumn(c.label)?[i]:[]);
+ if(!cols.length)return {model,count:0};
+ let rows=null,count=0;
+ for(let ri=0;ri<model.rows.length;ri++){
+  const old=model.rows[ri];
+  for(const ci of cols){
+   const current=old.values[ci];
+   const formatted=formattedListingCell(model,ci,current);
+   if(formatted===current)continue;
+   if(!rows)rows=model.rows.slice();
+   if(rows[ri]===old)rows[ri]={...old,values:old.values.slice()};
+   rows[ri].values[ci]=formatted;count++;
+  }
+ }
+ const revised=rows?{...model,rows}:model;
+ if(rows)validateMasterListing(revised);
+ return {model:revised,count};
+}
+
 export function excelSerialToDateString(value,{date1904=false}={}){
  const raw=String(value??'').trim();
  if(!/^\d{5}(?:\.0+)?$/.test(raw))return null;

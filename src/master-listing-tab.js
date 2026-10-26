@@ -4,7 +4,7 @@
  * Supabase Storage under the user's own prefix. No new database table or
  * service-role credentials are required. Documents folders change only when the user requests synchronization on add or through Sync.
  */
-import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeDeletedDocumentCompany,sortMasterListingCompanies,reconcileDeletedDocumentRows} from './master-listing-data.js';
+import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,repairListingConstitutionPlaceholders,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeDeletedDocumentCompany,sortMasterListingCompanies,reconcileDeletedDocumentRows} from './master-listing-data.js';
 import {previewRegisterParticularsZip,preserveRegisterParticulars,compactRegisterColumns,REGISTER_PARTICULARS_COLUMNS} from './master-listing-register-particulars.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -45,10 +45,27 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
    }else{
     let json;try{json=JSON.parse(await data.text());}
     catch{throw Error('Saved Master Listing JSON is damaged. The stored file has not been changed.');}
-    state.model=validateMasterListing(json);
+    const original=validateMasterListing(json);
+    state.model=original;
+    const constitution=repairListingConstitutionPlaceholders(original);
+    if(constitution.count){
+     // The old UI patch changed the visible display only. Migrate the source
+     // into the authenticated owner's cloud listing, backing up every previous
+     // value first. This repair runs only when invalid values still exist.
+     try{
+      await saveModel(constitution.model,{backup:true});
+      state.status='Repaired '+constitution.count+
+       ' Constitution value(s) to N/A in saved Master Listing. Original file backed up privately.';
+     }catch(error){
+      state.error='Constitution values display as N/A, but the cloud copy could not be repaired: '+
+       String(error?.message||error)+'. Please check storage permissions and try refreshing.';
+      state.status='Master Listing loaded; Constitution repair could not be saved.';
+      state.model=original;
+     }
+    }else state.status='Saved Master Listing loaded.';
    }
    state.loaded=true;state.legacyDateCount=countLegacyDateSerials(state.model);
-   state.status=state.model?'Saved Master Listing loaded.':'No Master Listing has been imported yet.';
+   if(!state.model)state.status='No Master Listing has been imported yet.';
   }catch(error){state.error=error.message||String(error);}
   finally{state.loading=false;onRender?.();}
  }
