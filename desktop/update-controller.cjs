@@ -20,10 +20,12 @@ function createUpdateController({
     return shell.openExternal(url).catch(e=>logger.warn('Could not open release page',e));
   }
   async function showNotice(title,message,buttons=['OK']) {
-    return dialog.showMessageBox(window(),{
+    const options={
       type:'info',title,message,buttons,noLink:true,
       defaultId:0,cancelId:buttons.length-1
-    });
+    };
+    const owner=window();
+    return owner?dialog.showMessageBox(owner,options):dialog.showMessageBox(options);
   }
   async function showUpdateError(error) {
     logger.warn('UNICOSEC update check failed',error);

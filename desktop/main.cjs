@@ -1,12 +1,15 @@
 'use strict';
 
 const path = require('node:path');
-const { app, BrowserWindow, Menu, shell, session } = require('electron');
+const { app, BrowserWindow, Menu, shell, session, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
+const { createUpdateController } = require('./update-controller.cjs');
 const { HOME_URL, isAppURL, isAppBlobURL, isExternalURL } = require('./url-policy.cjs');
 
 const TITLE = 'UNICOSEC - Company Secretarial Management System';
 const APP_ID = 'com.unicosec.desktop';
 let mainWindow = null;
+let updateController = null;
 
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
 
@@ -73,6 +76,9 @@ function createMenu() {
     {
       label: 'Help',
       submenu: [
+        { label: 'Check for Desktop Updates…', click: () =>
+          updateController && void updateController.check({userInitiated:true}) },
+        { type: 'separator' },
         { label: 'UNICOSEC Website', click: () => openInBrowser(HOME_URL) }
       ]
     }
@@ -142,8 +148,12 @@ if (singleInstance) {
     app.on('web-contents-created', (_event, contents) => {
       configureNavigation(contents);
     });
+    updateController = createUpdateController({
+      app,dialog,shell,BrowserWindow,autoUpdater,fetchImpl:fetch
+    });
     createMenu();
     createWindow();
+    updateController.start();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });

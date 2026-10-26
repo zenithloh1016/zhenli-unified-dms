@@ -14,7 +14,7 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     defaults:
       run:
         working-directory: desktop
@@ -26,6 +26,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Read desktop release version
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          "DESKTOP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Generate application icons
         shell: pwsh
         run: |
@@ -34,43 +39,56 @@ jobs:
       - name: Install Windows desktop dependencies
         shell: pwsh
         run: npm install --no-audit --no-fund
-      - name: Test URL and Electron security
+      - name: Test URL, updater and Electron security
         shell: pwsh
         run: npm test
-      - name: Package Windows installer and portable EXE
+      - name: Package Windows installer, portable EXE and update metadata
         shell: pwsh
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run dist:win
-      - name: Confirm downloadable Windows executables exist
+      - name: Confirm Windows EXEs and signed-checksum update feed
         shell: pwsh
         run: |
-          if (-not (Test-Path 'release/UNICOSEC-Setup-1.0.0-x64.exe')) { throw 'Installer missing' }
-          if (-not (Test-Path 'release/UNICOSEC-Portable-1.0.0-x64.exe')) { throw 'Portable EXE missing' }
-          Get-ChildItem release/*.exe | Select-Object Name,Length
-      - name: Upload Windows desktop programs
+          $v = $env:DESKTOP_VERSION
+          if (-not (Test-Path "release/UNICOSEC-Setup-$v-x64.exe")) { throw "Installer missing" }
+          if (-not (Test-Path "release/UNICOSEC-Portable-$v-x64.exe")) { throw "Portable EXE missing" }
+          if (-not (Test-Path 'release/latest.yml')) { throw "latest.yml update manifest missing" }
+          $metadata = Get-Content release/latest.yml -Raw
+          if ($metadata -notmatch "version:\\s*$v") { throw "Update manifest version incorrect" }
+          if ($metadata -notmatch 'sha512:') { throw "Update installer SHA-512 missing" }
+          if ($metadata -notmatch 'UNICOSEC-Setup-') { throw "Update manifest points to unexpected installer" }
+          Get-ChildItem release | Where-Object { $_.Name -match 'exe$|yml$|blockmap$' } |
+            Select-Object Name,Length
+      - name: Upload desktop installer and update manifest
         uses: actions/upload-artifact@v4
         with:
           name: UNICOSEC-Windows-Desktop
           path: |
             desktop/release/UNICOSEC-Setup-*.exe
             desktop/release/UNICOSEC-Portable-*.exe
+            desktop/release/*.blockmap
+            desktop/release/latest.yml
           if-no-files-found: error
           retention-days: 90
-      - name: Publish Windows desktop download release
+      - name: Publish Windows release with update metadata
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: desktop-v1.0.0
-          name: UNICOSEC Windows Desktop v1.0.0
+          tag_name: desktop-v${{ env.DESKTOP_VERSION }}
+          name: UNICOSEC Windows Desktop v${{ env.DESKTOP_VERSION }}
           make_latest: true
           body: |
-            Windows desktop application for UNICOSEC - Company Secretarial Management System.
-            **Installer:** UNICOSEC-Setup-1.0.0-x64.exe
-            **Portable:** UNICOSEC-Portable-1.0.0-x64.exe
-            Uses the existing UNICOSEC account and Supabase data. Internet access is required.
-            Unsigned build; Windows SmartScreen may ask for confirmation.
+            UNICOSEC - Company Secretarial Management System for Windows.
+            Installer supports built-in update checks and user-approved installation.
+            Portable EXE checks for releases and links to the manual replacement download.
+            Web/DMS features continue to update on refresh without a desktop reinstall.
+            **Existing desktop v1.0.0 users must install v1.1.0 once to enable the updater.**
+            Both installer and updater metadata are distributed via official GitHub Releases over HTTPS.
+            Windows installers are currently unsigned; SmartScreen may ask for confirmation.
           files: |
             desktop/release/UNICOSEC-Setup-*.exe
             desktop/release/UNICOSEC-Portable-*.exe
+            desktop/release/*.blockmap
+            desktop/release/latest.yml
           fail_on_unmatched_files: true
           overwrite_files: true

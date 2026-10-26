@@ -42,6 +42,9 @@ test('Electron desktop enforces sandbox and disabled Node integration', () => {
   assert.match(src, /setPermissionRequestHandler/);
   assert.match(src, /setWindowOpenHandler/);
   assert.match(src, /will-download/);
+  assert.match(src, /Check for Desktop Updates/);
+  assert.match(src, /updateController.start\(\)/);
+  assert.match(src, /createUpdateController/);
   assert.doesNotMatch(src, /nodeIntegration:\s*true/);
 });
 
@@ -53,4 +56,10 @@ test('installer keeps UNICOSEC identity and produces both Windows EXE formats', 
   assert.equal(pkg.build.win.target[1].target, 'portable');
   assert.match(pkg.build.nsis.artifactName, /UNICOSEC-Setup/);
   assert.match(pkg.build.portable.artifactName, /UNICOSEC-Portable/);
+  assert.equal(pkg.version,'1.1.0');
+  assert.equal(pkg.dependencies['electron-updater'],'6.8.11');
+  assert.deepEqual(pkg.build.publish,[{
+    provider:'github',owner:'zenithloh1016',repo:'zhenli-unified-dms',
+    releaseType:'release'
+  }]);
 });

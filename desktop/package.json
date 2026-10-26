@@ -1,7 +1,7 @@
 {
   "name": "unicosec-desktop",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Windows desktop client for UNICOSEC - Company Secretarial Management System",
   "productName": "UNICOSEC",
   "main": "main.cjs",
@@ -28,6 +28,8 @@
     "files": [
       "main.cjs",
       "url-policy.cjs",
+      "update-policy.cjs",
+      "update-controller.cjs",
       "offline.html",
       "build/icon.png",
       "package.json"
@@ -61,6 +63,16 @@
     "portable": {
       "artifactName": "UNICOSEC-Portable-${version}-x64.${ext}"
     },
-    "publish": null
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "zenithloh1016",
+        "repo": "zhenli-unified-dms",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
   }
 }
