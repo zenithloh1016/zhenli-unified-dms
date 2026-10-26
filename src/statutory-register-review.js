@@ -338,12 +338,19 @@ export function ensureReferenceParticulars(book){
   if(header<0)continue;
   const headings=sheet.rows[header];
   if(!Array.isArray(headings))continue;
-  for(const name of REFERENCE_FIELDS[kind]){
-   // The original Majukaya transfer register has two identically headed
-   // IC / Passport / Company No. columns, one for each party.
-   if(kind==='transfers'&&name==='Transferee IC No. / PP No. / Company No.'&&
-      headings.filter(x=>/^IC No\.\s*\/\s*PP No\.\s*\/\s*Company No\.?$/i.test(String(x||'').trim())).length>=2)
-     continue;
+  for(const [fieldIndex,name] of REFERENCE_FIELDS[kind].entries()){
+   if(kind==='transfers'&&fieldIndex===10){
+    // Preserve both parties' identity particulars as separately editable
+    // columns even where the original register gives both the same caption.
+    const identities=headings.filter(h=>{
+     const n=referenceFieldIndex(kind,h);
+     return n===7||n===10;
+    });
+    if(identities.length>=2)continue;
+    if(headings.length>=250)break;
+    headings.push('Transferee IC No. / PP No. / Company No.');
+    changed=true;continue;
+   }
    const match=referenceFieldIndex(kind,name);
    if(headings.some(value=>referenceFieldIndex(kind,value)===match))continue;
    if(headings.length>=250)break;
