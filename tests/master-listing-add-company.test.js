@@ -156,11 +156,11 @@ test('Deleting Documents company also removes one matching Master Listing row wi
 
 test('Do not remove unrelated or ambiguously identified listing rows',async()=>{
  const x=makeWorkspace();
- await x.ui.syncDocumentCompanies([{name:'ABC SDN BHD',registration_no:'202601111111'}]);
- const miss=await x.ui.removeDeletedCompany({name:'ABC SDN BHD',registration_no:'202609999999'},[]);
+ await x.ui.syncDocumentCompanies([{name:'UNRELATED SDN BHD',registration_no:'202601111111'}]);
+ const miss=await x.ui.removeDeletedCompany({name:'UNRELATED SDN BHD',registration_no:'202609999999'},[]);
  assert.equal(miss.removed,0);
  assert.equal(x.saved.rows.length,1);
- const protectedEntry=removeDeletedDocumentCompany(x.ui.model,{name:'ABC SDN BHD',registration_no:'202601111111'},[{name:'ABC SDN BHD',registration_no:'202601111111'}]);
+ const protectedEntry=removeDeletedDocumentCompany(x.ui.model,{name:'UNRELATED SDN BHD',registration_no:'202601111111'},[{name:'UNRELATED SDN BHD',registration_no:'202601111111'}]);
  assert.equal(protectedEntry.removed,0);
 });
 
