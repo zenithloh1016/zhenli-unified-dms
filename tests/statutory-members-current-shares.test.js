@@ -67,7 +67,7 @@ test('member folios show only identity/contact particulars and current shares he
  assert.equal(address.composite,true);
  assert.equal(address.row,12);
  assert.equal(address.col,1);
- assert(!labels.includes('Date Entered as A Member'));
+ assert(labels.includes('Date Entered as A Member'));
  assert(!labels.includes('Date Ceased to be A Member'));
  assert(!labels.includes('Class of Shares'));
  assert(!labels.includes('Balance of Shares'));
