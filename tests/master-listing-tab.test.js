@@ -259,7 +259,7 @@ test('remove Task Hub V3 version labels without changing Task Hub functionality'
  assert.match(main,/Task Hub/);
  assert.match(main,/TASK_HUB_BUNDLED/);
  assert.match(main,/tab-tasks/);
- assert.match(hub,/ZHENLI.*TASK HUB/i);
+ assert.match(hub,/UNICOSEC.*TASK HUB/i);
 });
 test('No. and FYE are center aligned through table CSS in full-screen and normal views',()=>{
  const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
