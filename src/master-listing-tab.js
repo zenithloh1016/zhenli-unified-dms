@@ -4,7 +4,7 @@
  * Supabase Storage under the user's own prefix. No new database table or
  * service-role credentials are required. Documents folders change only when the user requests synchronization on add or through Sync.
  */
-import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,repairListingConstitutionPlaceholders,isUnknownConstitutionValue,isListingConstitutionColumn,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeDeletedDocumentCompany,sortMasterListingCompanies,reconcileDeletedDocumentRows,applyRequestedMasterListingCorrections} from './master-listing-data.js';
+import {buildMasterListing,detectListingColumns,validateMasterListing,companyData,findCompanyMatch,changeListingCell,listingRowsForSearch,listingCSV,displayedListingValue,countLegacyDateSerials,repairLegacyDateSerials,repairListingConstitutionPlaceholders,isUnknownConstitutionValue,isListingConstitutionColumn,isAffirmativeConstitutionValue,isListingOrdinalColumn,listingOrdinalValue,isListingDateColumn,isListingFyeColumn,mergeDocumentCompanies,removeDeletedDocumentCompany,sortMasterListingCompanies,reconcileDeletedDocumentRows,applyRequestedMasterListingCorrections} from './master-listing-data.js';
 import {previewRegisterParticularsZip,preserveRegisterParticulars,compactRegisterColumns,REGISTER_PARTICULARS_COLUMNS} from './master-listing-register-particulars.js';
 import {applyConstitutionDocumentEvidence} from './master-listing-constitution-sync.js';
 import {restoreHistoricalConstitutionStatuses} from './master-listing-constitution-history.js';
@@ -692,9 +692,10 @@ function renderAddCompany(){
   const hint=isName?'Required':isReg?'Optional':'Optional';
   const draft=state.addDraft?.[i]??'';
   if(isListingConstitutionColumn(col.label)&&!isMasterListingRestored(model)){
-   const selected=['Yes','No','N/A'].includes(draft)?draft:'N/A';
+   const selected=isAffirmativeConstitutionValue(draft)?'YES':
+    ['No','N/A'].includes(draft)?draft:'N/A';
    return '<label><span>'+esc(col.label)+' <small>(Company Constitution)</small></span>'+
-    '<select name="ml-new-'+i+'">'+['N/A','Yes','No'].map(v=>
+    '<select name="ml-new-'+i+'">'+['N/A','YES','No'].map(v=>
      '<option value="'+v+'"'+(selected===v?' selected':'')+'>'+v+'</option>').join('')+
     '</select></label>';
   }
@@ -719,9 +720,9 @@ function renderEditor(){
    '<p class="muted">Edit any imported column. Save updates your private Master Listing without changing uploaded statutory documents.</p>'+
    '<form id="ml-edit-form"><div class="ml-edit-fields">'+model.columns.map((col,i)=>{
     const value=displayedListingValue(model,i,row.values[i]);
-    if(isListingConstitutionColumn(col.label)&&!isMasterListingRestored(model)&&['Yes','No','N/A'].includes(value))
+    if(isListingConstitutionColumn(col.label)&&!isMasterListingRestored(model)&&['YES','No','N/A'].includes(value))
      return '<label><span>'+esc(col.label)+' <small>('+String(i+1)+')</small></span>'+
-      '<select name="ml-col-'+i+'">'+['N/A','Yes','No'].map(v=>
+      '<select name="ml-col-'+i+'">'+['N/A','YES','No'].map(v=>
        '<option value="'+v+'"'+(value===v?' selected':'')+'>'+v+'</option>').join('')+
       '</select></label>';
     return '<label><span>'+esc(col.label)+' <small>('+String(i+1)+')</small></span>'+

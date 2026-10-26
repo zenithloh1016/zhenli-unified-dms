@@ -163,8 +163,19 @@ export function excelSerialToDateString(value,{date1904=false}={}){
  if(!Number.isFinite(date.getTime()))return null;
  return String(date.getUTCDate()).padStart(2,'0')+'/'+String(date.getUTCMonth()+1).padStart(2,'0')+'/'+date.getUTCFullYear();
 }
+/**
+ * The capitalized presentation format applies to the Constitution column
+ * only. Keep all original cloud fields and previous version metadata
+ * unchanged; visible rows, editor and CSV export share this projection.
+ * The historical þ symbol explicitly means "has Constitution" in the
+ * user's original 26 October Master Listing.
+ */
 export function displayedListingValue(model,columnIndex,value){
- return formattedListingCell(model,columnIndex,value);
+ const result=formattedListingCell(model,columnIndex,value);
+ if(isListingConstitutionColumn(model?.columns?.[columnIndex]?.label)&&
+    (isAffirmativeConstitutionValue(result)||
+     /^[þÞ]$/.test(String(result??'').trim())))return 'YES';
+ return result;
 }
 export function countLegacyDateSerials(model){
  if(!model?.columns||!model?.rows)return 0;
