@@ -54,7 +54,7 @@ export function isMemberPersonalOrSharesLabel(label){
  const v=tidy(label).replace(/:$/,'').toLowerCase();
  // Personal/contact information and the CURRENT total held only;
  // no acquired/transferred/ledger, certificate, consideration or balance history.
- return /^(?:name|full name|member'?s? name|shareholder'?s? name|individual\/corporate|id type|identification (?:no\.?|number)|nric(?:\/passport)?(?: no\.?)?|passport(?: no\.?)?|company registration (?:no\.?|number)|registration (?:no\.?|number)|date of birth|nationality(?:\/origin)?|race|occupation|email(?: address)?|address(?: · continued)?|contact(?: no\.?| number)?|phone(?: number)?|mobile(?: number)?|postal address|residential address|current (?:no\.? of |number of )?shares held|total (?:no\.? of |number of )?shares held|(?:no\.? of |number of )?shares held|shares held|shareholding(?: held)?|total shareholding)$/i.test(v);
+ return /^(?:name|full name|member'?s? name|shareholder'?s? name|individual\/corporate|id type|identification (?:no\.?|number)|nric(?:\/passport)?(?: no\.?)?|passport(?: no\.?)?|company registration (?:no\.?|number)|registration (?:no\.?|number)|date of birth|date entered as a member|date became member|nationality(?:\/origin)?|race|occupation|email(?: address)?|address(?: · continued)?|contact(?: no\.?| number)?|phone(?: number)?|mobile(?: number)?|postal address|residential address|current (?:no\.? of |number of )?shares held|total (?:no\.? of |number of )?shares held|(?:no\.? of |number of )?shares held|shares held|shareholding(?: held)?|total shareholding)$/i.test(v);
 }
 export function registerKind(name){
  const s=tidy(name).toLowerCase();
