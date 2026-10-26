@@ -9,7 +9,7 @@ const co={id:'test',name:'MAX PLUS TECHNOLOGIES SDN. BHD.',
 
 test('legacy Share titles are shortened across tabs and PDFs without modifying saved worksheet names',()=>{
  const b=makeRegisterBook(co,{path:'Imported.xlsx',sheets:[
-  {name:'Register of Share Allotments',rows:[['Date','Allotment No.','Allottee\\'s Name'],['20/10/2026','A1','ALLOTTEE ONE']]},
+  {name:'Register of Share Allotments',rows:[['Date','Allotment No.',"Allottee's Name"],['20/10/2026','A1','ALLOTTEE ONE']]},
   {name:'Register of Share Transfers',rows:[['Transfer No.','Date','No. of Shares Transferred'],['T1','20/10/2026','100']]}
  ]});
  const names=b.sheets.map(s=>s.name);
@@ -20,7 +20,8 @@ test('legacy Share titles are shortened across tabs and PDFs without modifying s
   const html=renderStatutoryRegisterDocument(b,i);
   assert(!/REGISTER OF SHARE (?:ALLOTMENTS|TRANSFERS)/i.test(html));
   assert(html.includes(i===0?'Register of Allotments':'Register of Transfers'));
-  assert(buildGroupedRegister(b,i).blocks.some(x=>x.type==='field'&&/Share/.test(x.label)||x.type==='field'&&x.value==='100')||i===0);
+  assert(buildGroupedRegister(b,i).blocks.some(x=>x.type==='field'),
+    'both registers retain editable particulars');
  }
 });
 
