@@ -8,6 +8,7 @@ import {renderStatutoryRegisterDocument} from './statutory-register-annual-ui.js
 import {buildGroupedRegister} from './statutory-register-annual-layout.js';
 import {registerLabel,registerKind,describeStatutorySheet,isManagerRegister,normalizeRegisterName,ensureChargeRegister,ensureReferenceParticulars,visibleRegisterIndices,registerGroupIndices} from './statutory-register-review.js';
 import {formatStatutoryNumberByKind,normalizeStatutoryNumberByKind} from './statutory-number-format.js';
+import {referenceKind,referenceFieldIndex} from './statutory-register-reference.js';
 import {browserDownload,saveOrShareFile} from './file-transfer.js';
 import {Capacitor} from '@capacitor/core';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
@@ -187,7 +188,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    state.historyPreviewName='';state.historyLoaded=false;state.historyLoading=false;
    state.dirty=!!changed;
    state.sheetIndex=visibleRegisterIndices(book)[0]??0;
-   state.showBlankFields=!!changed||book.sourceFile==='Manual entry';
+   state.showBlankFields=true; // Always display the reference particulars, including blanks.
    state.message=changed?'Missing MAJUKAYA ENTITI reference fields were added as blank editable particulars. Review and Save Changes to preserve them with a private version backup.':
     book.sourceFile==='Manual entry'?'Register templates follow the MAJUKAYA ENTITI reference. Enter actual particulars before relying on them.':'Statutory registers loaded in MAJUKAYA ENTITI reference sequence.';
   }catch(error){state.error=String(error?.message||error);}
@@ -356,7 +357,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   if(action==='sr-sheet'){
    const n=Number(id);
    if(Number.isInteger(n)&&n>=0&&n<(state.book?.sheets?.length||0)&&!isManagerRegister(state.book.sheets[n].name)){
-    state.sheetIndex=n;state.showBlankFields=state.dirty||state.book?.sourceFile==='Manual entry';notify();
+    state.sheetIndex=n;notify(); // Keep the user's field visibility choice across tabs.
    }return true;
   }
   if(action==='sr-set-status'){
@@ -484,11 +485,26 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     sheet.rows.push([normValue(value||'New entry')]);
    }else if(kind==='table'){
     const description=describeStatutorySheet(sheet);
-    const firstLabel=window.prompt('Name or reference for the new register entry:');
-    if(!firstLabel?.trim())return true;
+    // Allotments starts with Date; prompt for the allottee's name and insert
+    // it in the correct named field instead of corrupting the date column.
+    const rk=referenceKind(sheet.name);
+    const prompts={
+     directors:['Director Name','Name of director:'],
+     allotments:["Allottee's Name","Name of allottee:"],
+     transfers:['Transfer No.','Transfer reference number:'],
+     charges:['Registered No.','Registered charge number:'],
+     secretaries:['Full Name','Name of secretary:'],
+     beneficialOwners:['Full Name','Name of beneficial owner:']
+    };
+    const [target,prompt]=prompts[rk]||['','Name or reference for the new register entry:'];
+    const value=window.prompt(prompt);
+    if(!value?.trim())return true;
     const width=Math.max(1,...sheet.rows.map(r=>r.length));
     const record=Array.from({length:Math.min(250,width)},()=> '');
-    record[0]=normValue(firstLabel);
+    const header=description.headerRow>=0?sheet.rows[description.headerRow]:[];
+    const wanted=referenceFieldIndex(rk,target);
+    const index=wanted>=0?header.findIndex(label=>referenceFieldIndex(rk,label)===wanted):-1;
+    record[index>=0&&index<record.length?index:0]=normValue(value);
     sheet.rows.push(record);
     if(description.headerRow===-1)state.showBlankFields=true;
    }else{
