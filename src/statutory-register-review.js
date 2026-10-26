@@ -54,7 +54,7 @@ export function isMemberPersonalOrSharesLabel(label){
  const v=tidy(label).replace(/:$/,'').toLowerCase();
  // Personal/contact information and the CURRENT total held only;
  // no acquired/transferred/ledger, certificate, consideration or balance history.
- return /^(?:name|full name|member'?s? name|shareholder'?s? name|individual\/corporate|id type|identification (?:no\.?|number)|nric(?:\/passport)?(?: no\.?)?|passport(?: no\.?)?|company registration (?:no\.?|number)|registration (?:no\.?|number)|date of birth|date entered as a member|date became member|nationality(?:\/origin)?|race|occupation|email(?: address)?|address(?: · continued)?|contact(?: no\.?| number)?|phone(?: number)?|mobile(?: number)?|postal address|residential address|current (?:no\.? of |number of )?shares held|total (?:no\.? of |number of )?shares held|(?:no\.? of |number of )?shares held|shares held|shareholding(?: held)?|total shareholding)$/i.test(v);
+ return /^(?:name|full name|member'?s? name|shareholder'?s? name|individual\/corporate|id type|identification (?:no\.?|number)|nric(?:\/passport)?(?: no\.?)?|passport(?: no\.?)?|company registration (?:no\.?|number)|registration (?:no\.?|number)|date of birth|folio(?: no\.?)?|date entered as a member|date became member|nationality(?:\/origin)?|race|occupation|email(?: address)?|address(?: · continued)?|contact(?: no\.?| number)?|phone(?: number)?|mobile(?: number)?|postal address|residential address|current (?:no\.? of |number of )?shares held|total (?:no\.? of |number of )?shares held|(?:no\.? of |number of )?shares held|shares held|shareholding(?: held)?|total shareholding)$/i.test(v);
 }
 export function registerKind(name){
  const s=tidy(name).toLowerCase();
@@ -339,6 +339,11 @@ export function ensureReferenceParticulars(book){
   const headings=sheet.rows[header];
   if(!Array.isArray(headings))continue;
   for(const name of REFERENCE_FIELDS[kind]){
+   // The original Majukaya transfer register has two identically headed
+   // IC / Passport / Company No. columns, one for each party.
+   if(kind==='transfers'&&name==='Transferee IC No. / PP No. / Company No.'&&
+      headings.filter(x=>/^IC No\.\s*\/\s*PP No\.\s*\/\s*Company No\.?$/i.test(String(x||'').trim())).length>=2)
+     continue;
    const match=referenceFieldIndex(kind,name);
    if(headings.some(value=>referenceFieldIndex(kind,value)===match))continue;
    if(headings.length>=250)break;
