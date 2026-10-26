@@ -109,9 +109,9 @@ test('BO effective date becoming BO is retained, Section 56 notice date is hidde
  assert(fields.some(x=>x.label==='Cessation Date'&&x.value==='05/05/2026'));
  assert(fields.some(x=>x.label==='Criteria'&&x.value==='A'));
  const effective=fields.filter(x=>x.label==='Effective Date Becoming BO');
- assert.equal(effective.length,2,'retain both original becoming-BO source fields without losing data');
- assert(effective.some(x=>x.value==='01/01/2020'));
- assert(effective.some(x=>x.value==='Date becoming BO: 01/01/2020'));
+ assert.equal(effective.length,1,'the old combined date column must not appear');
+ assert.equal(effective[0].value,'01/01/2020');
+ assert(!fields.some(x=>/Date a Person Becomes \/ Ceases/i.test(x.label)));
  assert(!fields.some(x=>/notices|notice/i.test(x.label)));
  const html=renderStatutoryRegisterDocument(b,0,{showBlanks:true});
  assert(html.includes('Effective Date Becoming BO'));
@@ -135,14 +135,15 @@ test('all companies have a standard editable Effective Date Becoming BO field by
  const original=JSON.stringify(old.sheets[0].rows);
  assert.equal(ensureReferenceParticulars(old),true);
  const after=old.sheets[0].rows[0];
- assert.equal(after.filter(label=>/^(?:Effective Date Becoming BO|Date a Person Becomes \/ Ceases to Become BO)$/.test(label)).length,1,
-  'existing becoming-BO heading must not be duplicated');
+ assert.equal(after.filter(label=>label==='Effective Date Becoming BO').length,1,
+  'a separate effective date field must be added to legacy records');
  assert.equal(old.sheets[0].rows[1][2],'Date becoming BO: 23/07/2014');
  const layout=buildGroupedRegister(old,0,{showBlanks:true});
  assert(layout.blocks.some(x=>x.type==='field'&&x.label==='Effective Date Becoming BO'));
  assert(!layout.blocks.some(x=>x.type==='field'&&/notice/i.test(x.label)));
- assert.equal(JSON.stringify(old.sheets[0].rows.slice(1)),JSON.stringify(JSON.parse(original).slice(1)),
-  'standardizing fields must not rewrite original BO records');
+ assert.equal(old.sheets[0].rows[1][after.indexOf('Effective Date Becoming BO')],'23/07/2014');
+ assert.deepEqual(old.sheets[0].rows[1].slice(0,4),JSON.parse(original)[1],
+  'original BO source values remain intact in the legacy columns');
  assert.deepEqual(old.sheets[0].rows[0].slice(0,4),JSON.parse(original)[0],
   'original BO header columns remain unchanged; only new blank labels may append');
 });
