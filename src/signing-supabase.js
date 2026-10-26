@@ -263,7 +263,9 @@ export function createSupabaseSigning({db,getCompanies,update}) {
         '<td>'+signingProgress(r)+'</td>'+
         '<td>'+pdfProgress(r)+'</td>'+
         '<td>'+stamp(r.created_at)+'</td><td>'+
-        b('Manage','open',r.id)+'</td></tr>').join(''):
+        b('Manage','open',r.id)+
+        (r.status!=='finalizing'?b('Delete','delete-one',r.id,'danger'):'')+
+        '</td></tr>').join(''):
         '<tr><td colspan="6">No signing requests found.</td></tr>')+
       '</tbody></table></div></section>';
   }
@@ -302,6 +304,7 @@ export function createSupabaseSigning({db,getCompanies,update}) {
         ?b('↕ Edit signing order','order',r.id):'')+
       (r.status!=='finalizing'?b('Reset signing request','reset',r.id):'')+
       (r.status!=='completed'&&r.status!=='revoked'?b('Revoke signing links','revoke',r.id):'')+
+      (r.status!=='finalizing'?b('Delete this signing request','delete-one',r.id,'danger'):'')+
       '</div>'+mailInfo()+'<section class="zs-panel">'+
       '<div class="zs-details-heading"><div><h2>'+e(r.company)+'</h2>'+
       '<p class="muted">'+e(r.subject)+' · '+e(r.status)+' · Expires '+stamp(r.expiresAt)+'</p></div></div>'+
@@ -374,6 +377,26 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     if(!action?.startsWith('ns-'))return false;
     action=action.slice(3);
     if(action==='refresh') {work(list);return true;}
+    if(action==='delete-one'){
+      const selected=(detail?.id===id?detail:requests.find(r=>r.id===id));
+      if(!selected)return feedback('Signing request not found. Refresh and retry.',true),true;
+      if(selected.status==='finalizing')
+        return feedback('Complete PDF finalization before deletion.',true),true;
+      if(!confirm('Remove ONLY '+selected.company+' — '+selected.subject+
+        ' from the signing requests list? Outstanding links will be revoked. '+
+        'Signed PDFs and audit evidence remain preserved.'))return true;
+      const typed=prompt('Type DELETE REQUEST to remove this one signing request:');
+      if(typed!=='DELETE REQUEST'){
+        feedback('Deletion cancelled. Type DELETE REQUEST exactly.',true);return true;
+      }
+      work(async()=>{
+        const result=await api('delete-one',{requestId:id,confirmation:typed});
+        await list();
+        feedback(result.deleted?'Selected signing request removed. Signed documents and audit evidence retained.':
+          'Request no longer active.');
+      });
+      return true;
+    }
     if(action==='delete-all'){
       if(totalRequests<1)return true;
       const count=totalRequests;

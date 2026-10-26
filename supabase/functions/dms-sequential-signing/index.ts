@@ -301,6 +301,15 @@ async function handleAdmin(action,req,body) {
     });
     return {requests,total:count||0};
   }
+  if(action==="delete-one"){
+    if(body.confirmation!=="DELETE REQUEST")
+      throw Error("Type DELETE REQUEST exactly to confirm");
+    if(!isUuid(body.requestId))throw Error("Invalid signing request identifier");
+    const hidden=rowError(await admin.rpc("dms_native_hide_sign_request",{
+      p_owner_id:user,p_request_id:body.requestId
+    }));
+    return {deleted:!!hidden,evidencePreserved:true};
+  }
   if(action==="delete-all"){
     // This does not erase legally relevant signed records or PDF evidence.
     // It removes requests from the active DMS UI, invalidates pending links
