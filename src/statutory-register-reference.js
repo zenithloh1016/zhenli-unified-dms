@@ -1,0 +1,72 @@
+/**
+ * Field labels and section sequence taken from the original MAJUKAYA ENTITI
+ * SDN. BHD. Register Book. These are schema definitions ONLY; company-specific
+ * names, shares, addresses, dates and transactions must never be copied.
+ */
+export const REFERENCE_FIELDS={
+ directors:['Director Name','Date of Birth','IC No. / Passport No.','Passport Expiry','Gender','Nationality / Race','Business Occupation','Residential Address','Service Address','Date of Appointment','Date of Cessation'],
+ members:['Name','Date of Birth','ID Type','Nationality/Origin','Identification No.','Race','Occupation','Email Address','Address','Date Entered as A Member','Date Ceased to be A Member','Total Shares Held'],
+ allotments:['Date','Allotment No.',"Allottee's Name","Allottee's Address",'No. of Shares Allotted','Amount Paid on Share','Certificate No.','Class of Shares','Folio No.'],
+ transfers:['Transfer No.','Date','No. of Shares Transferred','Consideration','No. of Old Certificate','Class of Shares','Transferor Name','IC No. / PP No. / Company No.','Folio of Transferor','Transferee Name','Transferee IC No. / PP No. / Company No.','Transferee Address','Folio of Transferee'],
+ charges:['Registered No.','Date of Registration','Name of Chargee','Nature of Charge','Amount of Indebtedness','Date of Discharge'],
+ secretaries:['Full Name','NRIC No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Date of Appointment','Date of Cessation'],
+ beneficialOwners:['Full Name','NRIC No. / Passport No.','Date of Birth','Nationality / Race','Business Occupation','Residential Address','Ownership / Voting Rights (%)','Type of Beneficial Ownership','Criteria of BO','Date a Person Becomes / Ceases to be BO','Date of Section 56 Notices / Date BO Information Received']
+};
+export const MEMBER_LEDGER_FIELDS={
+ acquired:['Date','No. of Share Certificate','Allotment or Transfer No.','Folio','Class of Shares','No. of Shares','Consideration'],
+ transferred:['Date','Transfer No.','Folio','Class of Shares','No. of Shares','Consideration','Balance of Shares']
+};
+const KINDS=['directors','members','allotments','transfers','charges','secretaries','beneficialOwners'];
+export function referenceKind(name){
+ const s=String(name??'').toLowerCase().trim().replace(/\s+\(imported.*$/,'');
+ if(s==='master'||s==='company details')return 'profile';
+ if(/^register (?:of|or) managers?\b/.test(s))return 'managers';
+ if(/^register (?:of|or) directors?\b/.test(s))return 'directors';
+ if(/^register (?:of|or) members?\b/.test(s))return 'members';
+ if(/^register (?:of|or) (?:share )?allotments?\b/.test(s))return 'allotments';
+ if(/^register (?:of|or) (?:share )?transfers?\b/.test(s))return 'transfers';
+ if(/^register (?:of|or) charges?\b/.test(s))return 'charges';
+ if(/^register (?:of|or) secretar(?:y|ies)\b/.test(s))return 'secretaries';
+ if(/^register (?:of|or) (?:bo|beneficial owners?)\b/.test(s))return 'beneficialOwners';
+ return '';
+}
+export function referencePriority(name){
+ const k=referenceKind(name);
+ return k==='profile'?0:KINDS.indexOf(k)<0?99:1+KINDS.indexOf(k);
+}
+const norm=x=>String(x??'').toLowerCase().replace(/[^a-z0-9%]+/g,' ').replace(/\s+/g,' ').trim();
+const synonyms={
+ directors:{'Director Name':['Name','Full Name'],'IC No. / Passport No.':['NRIC No.','Identification No.'],'Date of Appointment':['Appointment Date'],'Date of Cessation':['Cessation Date']},
+ members:{'Name':['Full Name','Member Name'],'Identification No.':['Identification / Registration No.','NRIC No.'],'Total Shares Held':['Shares Held','Current Number of Shares Held'],'Date Entered as A Member':['Date Became Member'],'Date Ceased to be A Member':['Date Ceased']},
+ allotments:{"Allottee's Name":['Allottee',"Allottee's Name",'Name of Allottee'],"Allottee's Address":["Allotee's Address",'Allottee Address'],'Date':['Allotment Date'],'No. of Shares Allotted':['No. of Share Alloted','Number of Shares','No. of Shares'],'Class of Shares':['Share Class','Class'],'Folio No.':['Folio']},
+ transfers:{'Transferor Name':['Transferor','Transferror Name'],'Transferee Name':['Transferee'],'Date':['Transfer Date'],'No. of Shares Transferred':['No. of Share Transferred','Shares','No. of Shares'],'Class of Shares':['Share Class','Class'],'Folio of Transferor':['Folio of Transferror']},
+ charges:{'Name of Chargee':['Chargee'],'Date of Registration':['Registration Date'],'Nature of Charge':['Description'],'Date of Discharge':['Date of Satisfaction','Date of Release']},
+ secretaries:{'Full Name':['Name'],'NRIC No.':['Identification No.','Registration No.'],'Date of Appointment':['Appointment Date'],'Date of Cessation':['Cessation Date']},
+ beneficialOwners:{'Full Name':['Name'],'NRIC No. / Passport No.':['Identification No.','NRIC No.'],'Type of Beneficial Ownership':['Nature of Ownership'],'Criteria of BO':['Criteria'],'Date a Person Becomes / Ceases to be BO':['Effective Date','Date of Becoming BO']}
+};
+export function referenceFieldIndex(kind,label){
+ const q=norm(label),fields=REFERENCE_FIELDS[kind]||[];
+ for(let i=0;i<fields.length;i++){
+  if(q===norm(fields[i])||(synonyms[kind]?.[fields[i]]||[]).some(x=>q===norm(x)))return i;
+ }
+ return -1;
+}
+export function sortReferenceFields(name,fields){
+ const k=referenceKind(name);
+ if(!REFERENCE_FIELDS[k])return fields||[];
+ return [...(fields||[])].sort((a,b)=>{
+  const x=referenceFieldIndex(k,a.label),y=referenceFieldIndex(k,b.label);
+  return (x<0?1000:x)-(y<0?1000:y);
+ });
+}
+export function referenceTemplateSheets(){
+ return [
+  {name:'Register of Directors',rows:[[...REFERENCE_FIELDS.directors]]},
+  {name:'Register of Members',rows:[[...REFERENCE_FIELDS.members]]},
+  {name:'Register of Beneficial Owners',rows:[[...REFERENCE_FIELDS.beneficialOwners]]},
+  {name:'Register of Secretaries',rows:[[...REFERENCE_FIELDS.secretaries]]},
+  {name:'Register of Charges',rows:[[...REFERENCE_FIELDS.charges]]},
+  {name:'Register of Share Allotments',rows:[[...REFERENCE_FIELDS.allotments]]},
+  {name:'Register of Share Transfers',rows:[[...REFERENCE_FIELDS.transfers]]}
+ ];
+}
