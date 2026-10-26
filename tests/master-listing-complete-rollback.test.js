@@ -68,7 +68,8 @@ test('rollback uses exact pre-amendment 24 October backup, never reconstruction 
  assert.deepEqual(restored.rows,historical.rows);
  assert.deepEqual(restored.rows.map(x=>x.values[3]),['b','Adopted']);
  assert.equal(displayedListingValue(restored,3,restored.rows[0].values[3]),'b');
- assert.equal(displayedListingValue(restored,3,restored.rows[1].values[3]),'Adopted');
+ assert.equal(displayedListingValue(restored,3,restored.rows[1].values[3]),'YES',
+  'the original Adopted source is intact while presentation uses uppercase YES');
  assert.equal(restored.rows.length,2,'newer company rows are not merged into original');
  assert(isMasterListingRestored(restored));
  assert.match(h.tab.state.status,/Restored original Master Listing from 24 October 2026/);

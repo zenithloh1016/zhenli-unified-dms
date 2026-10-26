@@ -38,7 +38,7 @@ test('uploaded mapping updates Yes and N/A exclusively by SSM registration numbe
  assert.equal(model.restoredPreAmendment.source,original.restoredPreAmendment.source);
  assert.equal(model.constitutionSourceVersion,'sha256:private-test');
  assert.equal(JSON.stringify(original),prior,'must not mutate original before backup');
- assert.equal(displayedListingValue(model,3,'Yes'),'Yes');
+ assert.equal(displayedListingValue(model,3,'Yes'),'YES');
  assert.equal(displayedListingValue(model,3,'N/A'),'N/A');
  const second=applyUploadedConstitutionStatuses(model,statusMap,'sha256:private-test');
  assert.strictEqual(second.model,model);

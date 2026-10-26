@@ -118,5 +118,5 @@ test('authenticated Master Listing sync stores Yes with private backup and suppo
  tab.onClick('ml-edit','0');
  const html=tab.render();
  assert.match(html,/<select name="ml-col-3">/);
- assert.match(html,/<option value="Yes" selected>Yes<\/option>/);
+ assert.match(html,/<option value="YES" selected>YES<\/option>/);
 });
