@@ -115,6 +115,14 @@ export function parseMemberFolios(rows){
    (row||[]).some(v=>/^shares acquired$/i.test(txt(v))));
   const detailsEnd=movement>=0?movement:end;
   const fields=[];
+  // Folio No. is printed above the member's Name in the source workbook.
+  // Keep its original row and column coordinates for editing.
+  for(let ri=Math.max(0,start-4);ri<start;ri++){
+   const row=rows[ri]||[];
+   for(let col=0;col<row.length-1;col++)
+    if(/^folio no\.?:$/i.test(txt(row[col])))
+     fields.push(asField(ri,col+1,row[col],row[col+1]));
+  }
   for(let ri=start;ri<detailsEnd;ri++){
    const row=rows[ri]||[];
    for(let col=0;col<row.length-1;col++){
