@@ -459,7 +459,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     const folioName='Register of Members '+String(n).padStart(3,'0');
     const firstIndex=state.book.sheets.findIndex(s=>registerLabel(s.name)==='Register of Members');
     state.book.sheets.push({name:folioName,rows:[
-     ['Name:','New member'],['Date of Birth:',''],['ID Type:',''],
+     ['Folio No.:',String(n)],['Name:','New member'],['Date of Birth:',''],['ID Type:',''],
      ['Nationality/Origin:',''],['Identification No.:',''],['Race:',''],
      ['Occupation:',''],['Email Address:',''],['Address:',''],
      ['Date Entered as A Member:',''],['Date Ceased to be A Member:',''],
