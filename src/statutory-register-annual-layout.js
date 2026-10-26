@@ -1,4 +1,4 @@
-import {isCurrentMember,currentMemberKey,positiveShares} from './statutory-current-members.js';
+import {isCurrentMember,currentMemberKey,positiveShares,hasPendingMemberShares} from './statutory-current-members.js';
 import {sortReferenceFields} from './statutory-register-reference.js';
 import {formatStatutoryNumber,numericKind,parseStatutoryNumber} from './statutory-number-format.js';
 /**
@@ -81,7 +81,7 @@ export function currentMemberRecords(book,indices){
  for(const sheetIndex of indices){
   const description=describeStatutorySheet(book.sheets[sheetIndex]);
   for(const rec of description.records||[]){
-   const id=currentMemberKey(rec);
+   const id=currentMemberKey(rec,{sheetIndex});
    if(!id)continue;
    // Relatively newer folios / imported revisions supersede older entries.
    if(latest.has(id))latest.delete(id);
@@ -98,10 +98,10 @@ export function formerMemberRecords(book,indices){
  for(const sheetIndex of indices){
   const description=describeStatutorySheet(book.sheets[sheetIndex]);
   for(const record of description.records||[]){
-   const id=currentMemberKey(record);
+   const id=currentMemberKey(record,{sheetIndex});
    if(!id)continue;
    if(record.status!=='former'&&
-      (positiveShares(record.shareField?.value)||!record.shareField))continue;
+      (positiveShares(record.shareField?.value)||hasPendingMemberShares(record)||!record.shareField))continue;
    const cessation=String(record.ceasedField?.value??'').trim();
    const amount=String(record.shareField?.value??'').trim().replace(/,/g,'');
    const key=id+'|'+cessation+'|'+amount;
@@ -192,11 +192,14 @@ function memberPersonBlocks(item,{showBlanks=false,former=false,total=0}={}){
 function memberDisplayBlocks(book,indices,options={}){
  const current=currentMemberRecords(book,indices);
  const former=formerMemberRecords(book,indices);
+ const pending=current.filter(item=>hasPendingMemberShares(item.record));
  const total=current.reduce((sum,item)=>sum+(parseStatutoryNumber(item.record.shareField?.value)||0),0);
  const blocks=[{type:'group',title:'Current'}];
  if(current.length){
   for(const item of current)blocks.push(...memberPersonBlocks(item,{...options,total}));
-  blocks.push({type:'note',text:'Shareholding percentages are calculated against the total positive current holdings recorded in this register, not independently verified issued share capital.'});
+  if(pending.length)blocks.push({type:'note',text:pending.length+
+   ' current member folio(s) have blank shareholdings. Complete the actual particulars and total shares held; these entries are provisional, not verified shareholdings.'});
+  if(total>0)blocks.push({type:'note',text:'Shareholding percentages are calculated against the total positive current holdings recorded in this register, not independently verified issued share capital.'});
  }else blocks.push({type:'note',text:'No current shareholders with verified positive shares are recorded. Review recent SSM returns and share transfers.'});
  blocks.push({type:'group',title:'Former'});
  if(former.length){

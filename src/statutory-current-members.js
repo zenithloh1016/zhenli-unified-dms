@@ -151,13 +151,22 @@ export function parseMemberFolios(rows){
  }
  return records;
 }
-export function currentMemberKey(record){
+/** A new, incomplete member folio has no shareholding yet; this is not a cessation. */
+export function hasPendingMemberShares(record){
+ return !!record?.shareField&&blank(record.shareField.value);
+}
+export function currentMemberKey(record,{sheetIndex=null}={}){
  const identity=txt(record?.identityField?.value).replace(/[^a-z0-9]/gi,'').toUpperCase();
  if(identity)return 'ID:'+identity;
- const name=txt(record?.title).replace(/[^a-z0-9]/gi,'').toUpperCase();
+ const title=txt(record?.title);
+ // Two new folios both default to "New member": retain them independently.
+ if(sheetIndex!==null&&/^new member$/i.test(title)&&hasPendingMemberShares(record))
+  return 'DRAFT:'+sheetIndex+':'+record.row;
+ const name=title.replace(/[^a-z0-9]/gi,'').toUpperCase();
  return name?'NAME:'+name:'';
 }
 export function isCurrentMember(record){
- return record?.status!=='former'&&positiveShares(record?.shareField?.value)&&
+ return record?.status!=='former'&&
+  (positiveShares(record?.shareField?.value)||hasPendingMemberShares(record))&&
   !!txt(record?.title)&&!/^(?:-|n\/a|nil|none)$/i.test(txt(record.title));
 }
