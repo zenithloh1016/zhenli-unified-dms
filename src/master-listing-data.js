@@ -324,7 +324,7 @@ export function applyRequestedMasterListingCorrections(model){
   .some(name=>normalizeName(name)===target);
  let result=model,removed=0,changed=0;
  if(matches.length){
-  result=removeMasterListingRow(result,matches[0].id);
+  result=removeMasterListingRow(result,matches[0].id).model;
   removed=1;
  }
  const cols=result.columns.flatMap((col,i)=>
@@ -342,10 +342,10 @@ export function applyRequestedMasterListingCorrections(model){
   }
  }
  if(rows)result={...result,rows};
- if(!marked)result={...result,excludedMasterListingCompanies:
+ if(!marked&&removed)result={...result,excludedMasterListingCompanies:
   [...(result.excludedMasterListingCompanies||[]),target]};
  if(result!==model)validateMasterListing(result);
- return {model:result,removed,changed,marked:!marked};
+ return {model:result,removed,changed,marked:!marked&&!!removed};
 }
 
 /** Append missing Documents companies without touching the existing Master Listing rows or column order. */
