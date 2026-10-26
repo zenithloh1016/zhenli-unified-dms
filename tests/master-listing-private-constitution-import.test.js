@@ -55,7 +55,10 @@ test('invalid or missing mapping cannot blank a Master Listing',()=>{
 });
 
 test('loading DMS updates only private Constitution statuses, backs up first, then leaves later edits unchanged',async()=>{
- let current=JSON.stringify(listing());
+ const initial=listing();
+ initial.rows[0].values[3]='No';
+ initial.excludedMasterListingCompanies=['ABC SDN BHD'];
+ let current=JSON.stringify(initial);
  const writes=[],queries=[];
  const store={
   download:async()=>({data:new Blob([current]),error:null}),
@@ -80,7 +83,7 @@ test('loading DMS updates only private Constitution statuses, backs up first, th
  await ui.load();
  assert.equal(writes.length,2);
  assert.match(writes[0].path,/master-listing\/history/);
- assert.deepEqual(writes[0].data.rows.map(r=>r.values[3]),['þ','Adopted','N/A','No']);
+ assert.deepEqual(writes[0].data.rows.map(r=>r.values[3]),['No','Adopted','N/A','No']);
  assert.equal(writes[1].path.endsWith('/current.json'),true);
  assert.deepEqual(JSON.parse(current).rows.map(r=>r.values[3]),['Yes','N/A','Yes','No']);
  assert.match(ui.state.status,/Constitution updated from uploaded Master Listing/);
@@ -91,7 +94,10 @@ test('loading DMS updates only private Constitution statuses, backs up first, th
 });
 
 test('private source is inaccessible or empty: no Master Listing changes',async()=>{
- const m=listing(),baseline=JSON.stringify(m);
+ const m=listing();
+ m.rows[0].values[3]='No';
+ m.excludedMasterListingCompanies=['ABC SDN BHD'];
+ const baseline=JSON.stringify(m);
  let writes=0;
  const db={
   storage:{from:()=>({
