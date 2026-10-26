@@ -5,7 +5,7 @@
  */
 export const REFERENCE_FIELDS={
  directors:['Director Name','Date of Birth','IC No. / Passport No.','Passport Expiry','Gender','Nationality / Race','Business Occupation','Residential Address','Service Address','Date of Appointment','Date of Cessation'],
- members:['Name','Date of Birth','ID Type','Nationality/Origin','Identification No.','Race','Occupation','Email Address','Address','Date Entered as A Member','Date Ceased to be A Member','Total Shares Held'],
+ members:['Folio No.','Name','Date of Birth','ID Type','Nationality/Origin','Identification No.','Race','Occupation','Email Address','Address','Date Entered as A Member','Date Ceased to be A Member','Total Shares Held'],
  allotments:['Date','Allotment No.',"Allottee's Name","Allottee's Address",'No. of Shares Allotted','Amount Paid on Share','Certificate No.','Class of Shares','Folio No.'],
  transfers:['Transfer No.','Date','No. of Shares Transferred','Consideration','No. of Old Certificate','Class of Shares','Transferor Name','IC No. / PP No. / Company No.','Folio of Transferor','Transferee Name','Transferee IC No. / PP No. / Company No.','Transferee Address','Folio of Transferee'],
  charges:['Registered No.','Date of Registration','Name of Chargee','Nature of Charge','Amount of Indebtedness','Date of Discharge'],
@@ -54,10 +54,18 @@ export function referenceFieldIndex(kind,label){
 export function sortReferenceFields(name,fields){
  const k=referenceKind(name);
  if(!REFERENCE_FIELDS[k])return fields||[];
- return [...(fields||[])].sort((a,b)=>{
-  const x=referenceFieldIndex(k,a.label),y=referenceFieldIndex(k,b.label);
-  return (x<0?1000:x)-(y<0?1000:y);
- });
+ // The Majukaya Transfer workbook uses the SAME identity heading for
+ // transferor and transferee. Retain each field's edit coordinates, but
+ // place its second occurrence after the transferee's name.
+ const identity=k==='transfers'?(fields||[]).filter(f=>
+  norm(f.label)===norm('IC No. / PP No. / Company No.'))
+  .sort((a,b)=>(a.col??0)-(b.col??0)):[];
+ const priority=f=>{
+  if(k==='transfers'&&identity.length>=2&&f===identity[1])return 10;
+  const ix=referenceFieldIndex(k,f.label);
+  return ix<0?1000:ix;
+ };
+ return [...(fields||[])].sort((a,b)=>priority(a)-priority(b));
 }
 export function referenceTemplateSheets(){
  return [
