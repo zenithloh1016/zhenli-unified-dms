@@ -15,6 +15,9 @@ function listing(){
   ['3','THREE SDN BHD','202601234569','N/A','Preserve 3'],
   ['4','FOUR SDN BHD','202699999999','No','Preserve 4']
  ]);
+ // Simulate saved pre-amendment source values before the importer normalizes the cells.
+ m.rows[0].values[3]='þ';
+ m.rows[1].values[3]='Adopted';
  m.restoredPreAmendment={source:'original-history.json'};
  return m;
 }
