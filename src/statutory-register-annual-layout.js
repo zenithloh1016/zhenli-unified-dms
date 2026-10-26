@@ -1,4 +1,5 @@
 import {isCurrentMember,currentMemberKey,positiveShares,hasPendingMemberShares} from './statutory-current-members.js';
+import {formatMemberFolioNumber} from './statutory-member-folio-format.js';
 import {sortReferenceFields,referenceDisplayLabel,referenceKind,excludeRegisterField,sortCompanyDetails} from './statutory-register-reference.js';
 import {formatStatutoryNumber,numericKind,parseStatutoryNumber} from './statutory-number-format.js';
 /**
@@ -148,6 +149,10 @@ function memberPersonBlocks(item,{showBlanks=false,former=false,total=0}={}){
    blocks.push({...mappedField(f,sheetIndex),label:'Address',
     value:[f,...continuation].map(x=>String(x.value||'').trim()).filter(Boolean).join('\n'),
     composite:true,continuation:continuation.map(x=>({row:x.row,col:x.col}))});
+  }else if(/^folio\s*(?:no\.?|number)$/i.test(f.label)){
+   // A folio is an identifier, not a monetary amount. Preserve original data.
+   blocks.push({...mappedField(f,sheetIndex),label:'Folio No.',
+    value:formatMemberFolioNumber(f.value)});
   }else blocks.push(mappedField(f,sheetIndex));
  }
  if(former){
@@ -170,18 +175,20 @@ function memberPersonBlocks(item,{showBlanks=false,former=false,total=0}={}){
  // Totals are derived (read-only), never linked to a single editable Excel
  // cell: a member can have many share movements with different amounts.
  const ledger=record.ledgerTotals;
+ // Consistent acquisition consideration row for all CURRENT members. A missing
+ // source amount is unknown, not RM0. Former members retain transfer totals.
+ if(!former){
+  const count=ledger?.acquisitionValueCount||0;
+  blocks.push({type:'metric',label:'Total Share Consideration (Acquisitions)',
+   value:count>0
+    ?formatStatutoryNumber('Share Consideration',ledger.acquisitionConsideration)
+    :'Not recorded'});
+  if(ledger?.acquisitionCount>count)
+   blocks.push({type:'note',text:count>0
+    ?'Some acquisitions have no consideration recorded; the displayed acquisition amount is a partial total.'
+    :'Acquisition consideration is not recorded in the source ledger. Verify the allotment and acquisition documents.'});
+ }
  if(ledger){
-  // Acquisition consideration is relevant to the current holder view only.
-  // Do not show former members' historical acquisitions; their transferred
-  // shares and transfer consideration are the figures required in that view.
-  if(!former&&ledger.acquisitionValueCount>0){
-   blocks.push({type:'metric',
-    label:'Total Share Consideration (Acquisitions)',
-    value:formatStatutoryNumber('Share Consideration',
-     ledger.acquisitionConsideration)});
-   if(ledger.acquisitionValueCount<ledger.acquisitionCount)
-    blocks.push({type:'note',text:'Some acquisitions have no consideration recorded; the displayed acquisition amount is a partial total.'});
-  }
   if(former){
    if(ledger.transferCount>0){
     blocks.push({type:'metric',label:'Total Number of Shares Transferred',
