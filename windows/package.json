@@ -1,0 +1,51 @@
+{
+  "name": "unicosec-windows",
+  "version": "1.0.0",
+  "private": true,
+  "description": "UNICOSEC Company Secretarial Management System for Windows",
+  "main": "main.cjs",
+  "scripts": {
+    "dist:windows": "node scripts/generate-icon.cjs && electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0",
+    "sharp": "0.34.4"
+  },
+  "build": {
+    "appId": "com.zhenli.unicosec.windows",
+    "productName": "UNICOSEC",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "forceCodeSigning": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "UNICOSEC",
+      "artifactName": "UNICOSEC-Setup-${version}-${arch}.${ext}"
+    }
+  }
+}
