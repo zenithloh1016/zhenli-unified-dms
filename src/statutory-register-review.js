@@ -1,4 +1,5 @@
 import {parseMemberFolios} from './statutory-current-members.js';
+import {REFERENCE_FIELDS,referenceKind,referencePriority,referenceFieldIndex} from './statutory-register-reference.js';
 /**
  * Review-only projections over the original imported worksheet cells.
  * No statutory particulars are deleted or written back in a different order.
@@ -305,7 +306,7 @@ export function visibleRegisterIndices(book){
   }
   indices.push(i);
  }
- return indices;
+ return indices.sort((a,b)=>referencePriority(book.sheets[a].name)-referencePriority(book.sheets[b].name));
 }
 export function registerGroupIndices(book,index){
  const sheet=book?.sheets?.[index];
@@ -313,6 +314,39 @@ export function registerGroupIndices(book,index){
  if(isChronologicalRegister(sheet.name))
   return (book.sheets||[]).map((s,i)=>registerLabel(s.name)===registerLabel(sheet.name)?i:-1).filter(i=>i>=0);
  return [index];
+}
+/**
+ * Append unrecorded reference headings to supported table registers. Never
+ * overwrite data or reorder the original stored rows. Folio-style member
+ * registers are left untouched because their acquisition/transfer ledgers
+ * depend on the original source row coordinates.
+ */
+export function ensureReferenceParticulars(book){
+ if(!Array.isArray(book?.sheets))return false;
+ let changed=false;
+ for(const sheet of book.sheets){
+  const kind=referenceKind(sheet.name);
+  if(!REFERENCE_FIELDS[kind]||!Array.isArray(sheet.rows))continue;
+  let header=-1;
+  if(kind==='members'){
+   if(sheet.rows.some(row=>(row||[]).some(v=>/^Name:\s*$/i.test(String(v||'')))))continue;
+   if(/^name$/i.test(String(sheet.rows[0]?.[0]||'').trim()))header=0;
+  }else{
+   const info=describeStatutorySheet(sheet);
+   if(info.kind==='table'&&info.headerRow>=0)header=info.headerRow;
+  }
+  if(header<0)continue;
+  const headings=sheet.rows[header];
+  if(!Array.isArray(headings))continue;
+  for(const name of REFERENCE_FIELDS[kind]){
+   const match=referenceFieldIndex(kind,name);
+   if(headings.some(value=>referenceFieldIndex(kind,value)===match))continue;
+   if(headings.length>=250)break;
+   headings.push(name);
+   changed=true;
+  }
+ }
+ return changed;
 }
 /** An explicit saved display classification never destroys original cessation data. */
 export function registerRecordStatus(book,si,record){

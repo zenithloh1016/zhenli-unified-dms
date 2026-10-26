@@ -6,6 +6,7 @@
 import {unzipSync,strFromU8} from 'fflate';
 import {openMasterListingWorkbook} from './master-listing-reader.js';
 import {matchRegisterBook} from './register-book-zip.js';
+import {referenceTemplateSheets} from './statutory-register-reference.js';
 
 const MAX_ZIP=80*1024*1024,MAX_UNPACKED=160*1024*1024;
 const MAX_WORKBOOK=20*1024*1024,MAX_PDF=35*1024*1024;
@@ -165,15 +166,7 @@ export function makeRegisterBook(company,row){
  const value={version:1,companyId:company.id,companyName:company.name,
   registrationNo:company.registration_no||'',sourceFile:row?.path||'Manual entry',
   importedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),
-  sheets:row?.sheets?.map(s=>({name:s.name,rows:s.rows.map(r=>r.slice())}))||[
-   {name:'Register of Directors',rows:[['Name','Identification No.','Appointment Date','Cessation Date','Remarks']]},
-   {name:'Register of Members',rows:[['Name','Identification / Registration No.','Share Class','Shares Held','Date Became Member','Date Ceased']]},
-   {name:'Register of Beneficial Owners',rows:[['Full Name','Identification No.','Criteria','Nature of Ownership','Effective Date','Cessation Date']]},
-   {name:'Register of Secretaries',rows:[['Name','Registration No.','Appointment Date','Cessation Date']]},
-   {name:'Register of Charges',rows:[['Registered No.','Date of Registration','Name of Chargee','Nature of Charge','Amount of Indebtedness','Date of Discharge']]},
-   {name:'Register of Share Allotments',rows:[['Allottee','Class','Number of Shares','Allotment Date']]},
-   {name:'Register of Share Transfers',rows:[['Transferor','Transferee','Shares','Transfer Date']]}
-  ]};
+  sheets:row?.sheets?.map(s=>({name:s.name,rows:s.rows.map(r=>r.slice())}))||referenceTemplateSheets()};
  return validateRegisterBook(value);
 }
 
