@@ -368,15 +368,14 @@ async function repairConstitutionNow(){
  if(state.error)throw Error(state.error);
  const model=state.model;
  if(!model)throw Error('No saved Master Listing found to repair.');
- const columns=model.columns.flatMap((c,i)=>
-  isListingConstitutionColumn(c.label)?[i]:[]);
- if(!columns.length){
-  state.status='Constitution check: No Constitution column exists in the saved Master Listing.';
- }else if(!/^Repaired \d+ Constitution value/.test(state.status)){
-  const missing=model.rows.reduce((n,row)=>n+
-   columns.filter(i=>isUnknownConstitutionValue(row.values[i])).length,0);
-  state.status='Constitution cloud listing checked. '+missing+
-   ' N/A value(s); no remaining legacy placeholders were found.';
+ if(isMasterListingRestored(model))
+  throw Error('This Master Listing was restored to the original backup. Use Edit to update a Constitution record intentionally.');
+ const repair=repairListingConstitutionPlaceholders(model);
+ if(repair.count){
+  await saveModel(repair.model,{backup:true});
+  state.status='Repaired '+repair.count+' Constitution value(s) to N/A in saved Master Listing. Original file backed up privately.';
+ }else{
+  state.status='Constitution cloud listing checked. No invalid Constitution values need repair.';
  }
  onRender?.();
 }
