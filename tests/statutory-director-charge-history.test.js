@@ -60,7 +60,8 @@ test('all applicable registers separate current/former while Transfers and Allot
  }
  for(const i of [5,6]){
   const reg=buildGroupedRegister(b,i);
-  assert(!reg.blocks.some(x=>x.type==='group'));
+  assert.deepEqual(reg.blocks.filter(x=>x.type==='group').map(x=>x.title),['Transactions']);
+   assert(!reg.blocks.some(x=>x.status==='Current'||x.status==='Former'));
  }
  const combined=buildCombinedRegisters(b);
  assert(combined.some(x=>x.title==='Register of Directors'));

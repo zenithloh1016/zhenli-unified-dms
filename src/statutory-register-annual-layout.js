@@ -251,6 +251,14 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
   if(onlyHeadings||!result.blocks.some(b=>b.type==='record'&&b.title&&!/^(?:no entries|entry 1)$/i.test(b.title)))
    if(onlyHeadings)result.blocks=[{type:'note',text:'N/A — No charge record'}];
  }
+ // Transactions are neither Current nor Former, but need the same
+ // document-style section layout as all other statutory registers.
+ if(historyExcluded(result.title)){
+  result.blocks.unshift({type:'group',title:'Transactions'});
+  if(!result.blocks.some(b=>b.type==='record'))
+   result.blocks.push({type:'note',text:'No '+(/allotment/i.test(result.title)?'allotment':'share transfer')+
+    ' transactions recorded. Choose Add Entry to begin.'});
+ }
  if(!result.blocks.length)result.blocks.push({type:'note',text:'No entries recorded. Choose Add Entry to begin.'});
  return finishDisplay(book,result);
 }

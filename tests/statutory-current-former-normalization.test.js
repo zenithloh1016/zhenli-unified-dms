@@ -94,7 +94,8 @@ test('Current/Former section names identical for Directors, Secretaries, BO and 
  }
  for(const i of [5,6]){
   const layout=buildGroupedRegister(b,i);
-  assert(!layout.blocks.some(x=>x.type==='group'));
+  assert.deepEqual(layout.blocks.filter(x=>x.type==='group').map(x=>x.title),['Transactions']);
+   assert(!layout.blocks.some(x=>x.status==='Current'||x.status==='Former'));
  }
  const combined=buildCombinedRegisters(b);
  assert.equal(combined.filter(x=>x.title==='Register of Directors').length,1);

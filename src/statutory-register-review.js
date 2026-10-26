@@ -102,7 +102,7 @@ function headerCandidate(row){
  // header, but must never be interpreted as a new header. Check the first
  // heading using these actual Malaysian statutory workbook labels.
  const first=tidy(row?.[0]||'');
- if(!/^(?:director name|full name|name|date|registered no\.?|registration no\.?|allotment no\.?|transfer no\.?|chargee(?: name)?|folio(?: no\.?)?|no\.?(?: of)?(?: shares)?)$/i.test(first))return -1;
+ if(!/^(?:director name|full name|name|allottee(?: name)?|name of allottee|transferor(?: name)?|name of transferor|transferee(?: name)?|date|registered no\.?|registration no\.?|allotment no\.?|transfer no\.?|chargee(?: name)?|folio(?: no\.?)?|no\.?(?: of)?(?: shares)?)$/i.test(first))return -1;
  const short=entries.filter(x=>x.value.length<=95);
  if(short.length<Math.max(3,Math.ceil(entries.length*0.68)))return -1;
  const texts=entries.map(x=>x.value);
@@ -134,7 +134,7 @@ function statusFor(fields){
  return 'unknown';
 }
 function titleFor(fields,index){
- const preferred=fields.find(f=>/^(?:director name|full name|name|allottee'?s? name|chargee(?: name)?|name of chargee|transferor name|registered no\.?)$/i.test(f.label));
+ const preferred=fields.find(f=>/^(?:director name|full name|name|allottee|allottee'?s? name|name of allottee|chargee(?: name)?|name of chargee|transferor|transferor name|name of transferor|registered no\.?)$/i.test(f.label));
  const named=preferred||fields.find(f=>/\b(?:name|registered no|allotment no|transfer no)\b/i.test(f.label));
  const first=named||fields.find(f=>!absent(f.value));
  return first&&!absent(first.value)?tidy(first.value).slice(0,160):'Entry '+(index+1);
