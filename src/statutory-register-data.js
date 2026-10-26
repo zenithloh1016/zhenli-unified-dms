@@ -170,7 +170,7 @@ export function makeRegisterBook(company,row){
    {name:'Register of Members',rows:[['Name','Identification / Registration No.','Share Class','Shares Held','Date Became Member','Date Ceased']]},
    {name:'Register of Beneficial Owners',rows:[['Full Name','Identification No.','Criteria','Nature of Ownership','Effective Date','Cessation Date']]},
    {name:'Register of Secretaries',rows:[['Name','Registration No.','Appointment Date','Cessation Date']]},
-   {name:'Register of Charges',rows:[['Chargee','Description','Creation Date','Registration Date','Status']]},
+   {name:'Register of Charges',rows:[['Registered No.','Date of Registration','Name of Chargee','Nature of Charge','Amount of Indebtedness','Date of Discharge']]},
    {name:'Register of Share Allotments',rows:[['Allottee','Class','Number of Shares','Allotment Date']]},
    {name:'Register of Share Transfers',rows:[['Transferor','Transferee','Shares','Transfer Date']]}
   ]};

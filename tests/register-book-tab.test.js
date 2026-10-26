@@ -32,6 +32,35 @@ test('Statutory Registers replaces the old file directory',()=>{
  assert.doesNotMatch(html,/Folder not yet created/);
  assert.match(html,/ALPHA SDN BHD/);
 });
+test('initializes only missing company statutory registers with the same editable DMS layout',async()=>{
+ const {tab,blobs,written}=fixture();
+ const prior=makeRegisterBook(companies[0],{path:'Existing Registers.xlsx',sheets:[
+  {name:'Register of Directors',rows:[['Name','Identification No.','Appointment Date'],['Existing director','ID1','01/01/2026']]}
+ ]});
+ const original=new Blob([JSON.stringify(prior)],{type:'application/json'});
+ blobs.set('u1/statutory-registers/c1.json',original);
+ await tab.load();
+ assert.equal(tab.state.available.size,2);
+ assert.equal(written.filter(p=>p==='u1/statutory-registers/c1.json').length,0,'imported originals must not be overwritten');
+ assert.strictEqual(blobs.get('u1/statutory-registers/c1.json'),original);
+ assert(written.includes('u1/statutory-registers/c2.json'));
+ const created=JSON.parse(await blobs.get('u1/statutory-registers/c2.json').text());
+ assert.equal(created.companyId,'c2');
+ assert.equal(created.sourceFile,'Manual entry');
+ assert.deepEqual(created.sheets.map(s=>s.name),[
+  'Register of Directors','Register of Members','Register of Beneficial Owners',
+  'Register of Secretaries','Register of Charges',
+  'Register of Share Allotments','Register of Share Transfers'
+ ]);
+ assert(created.sheets.find(s=>s.name==='Register of Charges').rows[0].includes('Date of Discharge'));
+ assert(created.sheets.every(s=>s.rows.length===1),'do not invent any statutory particulars');
+ await tab.load(true);
+ assert.equal(written.filter(p=>p==='u1/statutory-registers/c2.json').length,1,'repeat refresh must be idempotent');
+ await tab.openCompany('c2');
+ assert.match(tab.render(),/Register of Directors/);
+ assert.match(tab.render(),/Export This Register PDF/);
+});
+
 test('each statutory register opens independently without Annual Return or Excel layout',async()=>{
  const {tab}=fixture();
  await tab.openCompany('c1');

@@ -64,8 +64,69 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    }
    if(getUser?.()?.id!==user.id)return;
    state.available=files;state.loaded=true;
+   const companies=(getCompanies?.()||[]).filter(company=>company?.id);
+   const absent=companies.filter(company=>!files.has(company.id));
+   if(absent.length){
+    state.message='Creating standard blank statutory registers for '+absent.length+' companies…';
+    notify();
+    const result=await createMissingRegisterTemplates(user.id,absent,files);
+    if(getUser?.()?.id===user.id&&state.userId===user.id){
+     state.message=result.created+' missing company register set(s) created using the existing DMS layout. '+
+      'No director, member, charge or other statutory particulars have been assumed.';
+     if(result.failed.length)
+      state.error='Unable to create '+result.failed.length+' register set(s): '+result.failed.slice(0,2).join(' | ')+
+       '. Select Refresh to retry without overwriting saved records.';
+    }
+   }
   }catch(error){state.error=String(error?.message||error);}
   finally{state.loading=false;notify();}
+ }
+ /** Only insert absent templates: never replace imported worksheets or edited history. */
+ async function createMissingRegisterTemplates(uid,companies,available){
+  const pending=(companies||[]).filter(company=>company?.id&&!available.has(company.id));
+  const outcome={created:0,existing:0,failed:[]};
+  let cursor=0,processed=0;
+  async function worker(){
+   while(cursor<pending.length){
+    const company=pending[cursor++];
+    if(getUser?.()?.id!==uid||state.userId!==uid)return;
+    try{
+     // Recheck Storage: another device may have saved this company after list().
+     const existing=await remoteBook(uid,company.id);
+     if(existing){
+      outcome.existing++;
+     }else{
+      const book=makeRegisterBook(company);
+      ensureChargeRegister(book);
+      validateRegisterBook(book);
+      if(getUser?.()?.id!==uid||state.userId!==uid)return;
+      const body=new Blob([JSON.stringify(book)],{type:'application/json'});
+      const {error}=await storage.upload(path(uid,company.id),body,{
+       upsert:false,contentType:'application/json',cacheControl:'0'
+      });
+      if(error){
+       // A concurrent create is not an error, but a real storage failure is.
+       const concurrent=await remoteBook(uid,company.id);
+       if(!concurrent)throw Error(error.message||'Unable to create standard register.');
+       outcome.existing++;
+      }else outcome.created++;
+     }
+     if(getUser?.()?.id===uid&&state.userId===uid)available.add(company.id);
+    }catch(error){
+     outcome.failed.push(company.name+': '+String(error?.message||error));
+    }finally{
+     processed++;
+     if(processed%5===0||processed===pending.length){
+      if(getUser?.()?.id===uid&&state.userId===uid){
+       state.message='Standardizing statutory register templates: '+processed+' / '+pending.length+' checked…';
+       notify();
+      }
+     }
+    }
+   }
+  }
+  await Promise.all(Array.from({length:Math.min(3,pending.length)},()=>worker()));
+  return outcome;
  }
  async function remoteBook(uid,cid){
   const response=await storage.download(path(uid,cid));
