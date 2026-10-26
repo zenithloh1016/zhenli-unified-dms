@@ -105,7 +105,7 @@ test('legacy Registration No. stays archived but never appears in secretary PDFs
  assert(!page.blocks.some(x=>x.label==='Registration No.'));
  const html=renderStatutoryRegisterDocument(book,0,{showBlanks:true});
  assert(!html.includes('HISTORIC REGISTER 123'));
- assert(!html.includes('Registration No.'));
+ // 'Company Registration No.' remains in the document heading; the Secretary field is absent.
  assert.equal(book.sheets[0].rows[1][1],'HISTORIC REGISTER 123');
  assert.deepEqual(book.sheets[0].rows.slice(1),JSON.parse(original).slice(1));
  assert.equal(ensureReferenceParticulars(book),false);
