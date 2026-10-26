@@ -1,6 +1,6 @@
 {
   "appId": "com.zhenli.unifieddms",
-  "appName": "ZHENLI Unified DMS",
+  "appName": "UNICOSEC",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

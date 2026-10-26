@@ -84,7 +84,7 @@ export async function buildStatutoryRegistersPdf(book,{sheetIndex=0,combined=fal
   if(!number)return;
   ctx.textAlign='left';setFont(500,10);
   ctx.strokeStyle=C.line;ctx.beginPath();ctx.moveTo(LM,H-56);ctx.lineTo(RM,H-56);ctx.stroke();
-  text('ZHENLI · STATUTORY REGISTERS',LM,H-35,C.muted);
+  text('UNICOSEC · STATUTORY REGISTERS',LM,H-35,C.muted);
   ctx.textAlign='right';text('Page '+number,RM,H-35,C.muted);ctx.textAlign='left';
   const blob=await jpeg(ctxCanvas);
   images.push({w:ctxCanvas.width,h:ctxCanvas.height,bytes:new Uint8Array(await blob.arrayBuffer())});
@@ -97,7 +97,7 @@ export async function buildStatutoryRegistersPdf(book,{sheetIndex=0,combined=fal
   background(C.white,0,0,W,H);
   background(C.navy,0,0,W,6);
   setFont(750,10);
-  text('ZHENLI · STATUTORY REGISTERS · COMPANY PARTICULARS',LM,40,C.blue);
+  text('UNICOSEC · STATUTORY REGISTERS · COMPANY PARTICULARS',LM,40,C.blue);
   setFont(750,21);
   const names=wrap(ctx,book.companyName||'Company Name',RM-LM);
   for(let i=0;i<Math.min(2,names.length);i++)text(names[i],LM,73+i*24,C.navy);

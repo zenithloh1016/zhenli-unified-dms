@@ -638,7 +638,7 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     },
     render:()=>'<div class="integration-heading"><div>'+
       '<p class="eyebrow">DOCUMENT SIGNING</p><h1>Sequential Signing</h1>'+
-      '<p class="muted">Administrator workspace directly inside ZHENLI DMS</p></div>'+
+      '<p class="muted">Administrator workspace directly inside UNICOSEC</p></div>'+
       '<span class="zs-version">Supabase Signing · EdgeOne-compatible layout</span></div>'+
       (message?'<div class="zs-message'+(error?' zs-error':'')+'" role="status">'+e(message)+'</div>':'')+
       (busy?'<div class="zs-message">Connecting to private signing service…</div>':'')+

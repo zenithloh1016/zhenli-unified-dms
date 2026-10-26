@@ -1,4 +1,4 @@
-name: Deploy DMS Web and Build Android APK
+name: Deploy UNICOSEC Web and Build Android APK
 on:
   push:
     branches: [main]
@@ -99,11 +99,11 @@ jobs:
           chmod +x android/gradlew
           cd android
           ./gradlew assembleDebug --no-daemon
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/ZHENLI-DMS-V1.2-Add-Company.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/UNICOSEC.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: ZHENLI-DMS-V1.2-Add-Company-${{ github.run_number }}
-          path: android/app/build/outputs/apk/debug/ZHENLI-DMS-V1.2-Add-Company.apk
+          name: UNICOSEC-${{ github.run_number }}
+          path: android/app/build/outputs/apk/debug/UNICOSEC.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -139,7 +139,7 @@ jobs:
           ./gradlew assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: ZHENLI-Annual-Return-PDF-Android-APK
+          name: UNICOSEC-Annual-Return-PDF-Android-APK
           path: annual-return/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 90

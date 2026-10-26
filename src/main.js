@@ -391,7 +391,7 @@ function modalHTML() {
 }
 
 function renderAuth() {
-  return `<div class="auth-page"><div class="auth-card"><div class="auth-logo">Z</div><p class="eyebrow">ZHENLI DOCUMENT MANAGEMENT</p><h1>Your company files, organized.</h1><p class="muted">Private, synchronized cloud storage accessible from your laptop and Android phone.</p>
+  return `<div class="auth-page"><div class="auth-card"><div class="auth-logo">U</div><p class="eyebrow">UNICOSEC DOCUMENT MANAGEMENT</p><h1>Your company files, organized.</h1><p class="muted">Private, synchronized cloud storage accessible from your laptop and Android phone.</p>
   <div class="switcher">${action('Sign in', 'auth-login', '', state.authMode==='login'?'active':'quiet')}${action('Create account', 'auth-signup', '', state.authMode==='signup'?'active':'quiet')}</div>
   <form id="auth-form"><label class="input-label">Email<input name="email" type="email" autocomplete="email" required placeholder="you@company.com"></label><label class="input-label">Password<input name="password" type="password" minlength="6" autocomplete="${state.authMode==='login'?'current-password':'new-password'}" required></label><button class="btn primary full" type="submit">${state.authMode==='login'?'Sign in':'Create account'}</button></form>
   <p class="fineprint">Each account has a separate private portfolio. Sign in with the <b>same account</b> on both devices.</p>${state.notice ? `<div class="notice">${esc(state.notice)}</div>` : ''}</div></div>`;
@@ -585,7 +585,7 @@ function renderAnnualReturn(){
  '<p class="muted">Choose any existing company from the complete Documents company dropdown inside Company Details; registration number fills automatically. Complete the statutory particulars and save your bilingual PDF.</p></div>'+
  '<div class="header-buttons"><button type="button" class="btn secondary" data-action="open-ar-fullscreen">Full-screen view ⛶</button></div></div>'+
  '<div class="integration-info">Drafts save locally on this device under the current DMS user and company. Resume Draft reopens your work. No cloud draft synchronisation. The full-screen button will not reload this form.</div>'+
- '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="ZHENLI Annual Return PDF Generator V1.8" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share; fullscreen" allowfullscreen></iframe></div>'+
+ '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="UNICOSEC Annual Return PDF Generator" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share; fullscreen" allowfullscreen></iframe></div>'+
  '</div></section>';
 }
 function setAnnualReturnFullscreen(open){
@@ -608,7 +608,7 @@ function renderTasks(){
       Task creation, company tasks, checklists, recurring tasks, Kanban, calendar and Master Listing import all use the same original layout.
       Previously saved tasks and company records are retained. Export a Task Hub JSON backup before replacing or importing any records.</div>
     <div class="frame-shell ${state.taskFullscreen?'task-expanded':''}">${state.taskFullscreen?'<div class="frame-toolbar"><strong>Task Hub</strong><button type="button" class="btn secondary" data-action="exit-tasks">Exit full screen ✕</button></div>':''}
-    <iframe id="zh-task-frame" class="integration-frame" title="ZHENLI Secretarial Task Hub · Supabase" src="${esc(TASK_HUB_BUNDLED)}" loading="lazy" referrerpolicy="same-origin"></iframe></div>`;
+    <iframe id="zh-task-frame" class="integration-frame" title="UNICOSEC Secretarial Task Hub · Supabase" src="${esc(TASK_HUB_BUNDLED)}" loading="lazy" referrerpolicy="same-origin"></iframe></div>`;
 }
 // ZHENLI_SIGNING_COOKIE_SAFE_LAUNCH_V1_2
 // ZHENLI_SIGNING_DIRECT_LAUNCH_V1_3
@@ -618,7 +618,7 @@ const signingSupabaseUI=createSupabaseSigning({db,getCompanies:()=>state.compani
 // Same contained full-screen layout as Task Hub. Preserve the native signing DOM
 // on toggle so unsaved PDF placements and request fields are never discarded.
 function renderSigning(){
-  return `<section id="zh-signing-shell" class="signing-frame-shell ${state.signingFullscreen?'signing-expanded':''}" aria-label="ZHENLI Sequential Signing workspace">
+  return `<section id="zh-signing-shell" class="signing-frame-shell ${state.signingFullscreen?'signing-expanded':''}" aria-label="UNICOSEC Sequential Signing workspace">
     <div class="signing-fullscreen-toolbar">
       <strong>✍️ Sequential Signing</strong>
       ${action('Exit full screen ✕','exit-signing-fullscreen','','secondary')}
@@ -645,14 +645,14 @@ function setSigningFullscreen(open){
 function render() {
   document.body.classList.toggle('zh-signing-fullscreen-open',!!(state.user && state.tab==='signing' && state.signingFullscreen));
   document.body.classList.toggle('zh-ar-fullscreen-open',!!(state.user && state.tab==='annual-return' && state.arFullscreen));
-  if (!db) { ROOT.innerHTML=`<div class="auth-page"><div class="auth-card"><div class="auth-logo">Z</div><h1>Set up private workspace</h1><p>Connect a Supabase project to enable authenticated documents and synced company folders.</p><p class="muted">Follow START_HERE.md in the downloadable source package. The Task Hub and Signing code is already bundled.</p></div></div>`;return; }
+  if (!db) { ROOT.innerHTML=`<div class="auth-page"><div class="auth-card"><div class="auth-logo">U</div><h1>Set up private workspace</h1><p>Connect a Supabase project to enable authenticated documents and synced company folders.</p><p class="muted">Follow START_HERE.md in the downloadable source package. The Task Hub and Signing code is already bundled.</p></div></div>`;return; }
   if (!state.user) {ROOT.innerHTML=renderAuth();return;}
   const tabs = ['overview','documents','master-listing','statutory-registers','statutory-deadlines','tasks','annual-return','signing'];
   const label = {overview:'Overview',documents:'Documents','master-listing':'Master Listing','statutory-registers':'Statutory Registers','statutory-deadlines':'Statutory Deadlines',tasks:'Tasks','annual-return':'Annual Return',signing:'Signing'};
-  ROOT.innerHTML = `<div class="app-shell"><header class="topbar"><div class="top-title">Document Management System</div><div class="top-right"><span class="online-dot"></span> Private workspace</div></header>
+  ROOT.innerHTML = `<div class="app-shell"><header class="topbar"><div class="top-title">UNICOSEC · Document Management System</div><div class="top-right"><span class="online-dot"></span> Private workspace</div></header>
     <nav class="tabbar" aria-label="Main workspace navigation">${tabs.map(t=>`<button type="button" class="tab ${state.tab===t?'current':''}" data-action="tab-${t}" ${state.tab===t?'aria-current="page"':''}>${label[t]}</button>`).join('')}</nav>
     <main class="main-content">${state.tab==='documents'?(state.companyId?renderFolder():renderCompanies()):state.tab==='overview'?renderOverview():state.tab==='master-listing'?masterListingUI.render():state.tab==='statutory-registers'?registerBookUI.render():state.tab==='statutory-deadlines'?renderStatutoryDeadlines(masterListingUI.state.userId===state.user?.id?masterListingUI.model:null,{query:state.deadlineQuery,kind:state.deadlineKind,period:state.deadlinePeriod,loading:masterListingUI.state.loading,error:masterListingUI.state.error}):state.tab==='tasks'?renderTasks():state.tab==='annual-return'?renderAnnualReturn():renderSigning()}</main>
-    <footer class="app-footer"><span>ZHENLI DMS V1.2 · Add Company · Web + Android</span><span>${esc(state.user.email || '')} · ${action('Sign out','sign-out')}</span></footer></div>
+    <footer class="app-footer"><span>UNICOSEC · Document Management · Web + Android</span><span>${esc(state.user.email || '')} · ${action('Sign out','sign-out')}</span></footer></div>
   ${state.notice ? `<div class="toast" role="status">${esc(state.notice)} ${action('✕','dismiss')}</div>` : ''}
   ${state.busy ? '<div class="busy-bar">Working… please keep this page open</div>' : ''}
   ${modalHTML()}

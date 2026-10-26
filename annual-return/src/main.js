@@ -452,7 +452,7 @@ async function generate(){
  finally{setBusy(false);}
 }
 $('import-combined-register').addEventListener('click',()=>{
- if(window.parent===window)return status('Open Annual Return inside ZHENLI DMS to import its private statutory records.',true);
+ if(window.parent===window)return status('Open Annual Return inside UNICOSEC to import its private statutory records.',true);
  if(pendingRegisterImport)return;
  if(!selectedDmsCompanyId)return status('Select the company in Company Details before importing combined registers.',true);
  if(!confirm('Import matching fields from this company’s saved Combined Statutory Registers?\n\nExisting non-blank Annual Return values will be kept. Current directors, members, beneficial owners and registered charges will be imported where supported. Verify everything before generating.'))return;

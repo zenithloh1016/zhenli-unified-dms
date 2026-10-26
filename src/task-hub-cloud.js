@@ -31,7 +31,7 @@ function info(message){
 }
 function authPage(){
   return '<main class="zh-login"><form id="zh-cloud-login" autocomplete="on">'+
-    '<h1>ZHENLI Task Hub</h1><p>Private Supabase workspace. Use the same login as ZHENLI Unified DMS. All tasks and companies use your private Supabase workspace.</p>'+
+    '<h1>UNICOSEC Task Hub</h1><p>Private Supabase workspace. Use the same login as UNICOSEC. All tasks and companies use your private Supabase workspace.</p>'+
     (lastError?'<p class="zh-error" role="alert">'+escapeHtml(lastError)+'</p>':'')+
     '<label>Email<input name="email" type="email" required autocomplete="username"></label>'+
     '<label>Password<input name="password" type="password" required autocomplete="current-password"></label>'+
@@ -40,12 +40,12 @@ function authPage(){
     '</form></main>';
 }
 function cloudPage(){
-  return '<main class="zh-cloud"><header class="zh-toolbar"><div><h1>ZHENLI | Task Hub</h1>'+
+  return '<main class="zh-cloud"><header class="zh-toolbar"><div><h1>UNICOSEC | Task Hub</h1>'+
     '<small>Same Task Hub · Private Supabase cloud storage</small></div>'+
     '<div class="zh-actions"><span style="font-size:12px;color:#607a90">'+escapeHtml(currentUser?.email||'')+'</span>'+
     '<a class="zh-btn" href="'+escapeHtml(dmsUrl)+'">Open DMS</a>'+
     '<button type="button" class="zh-btn" id="zh-signout">Sign out</button></div></header>'+
-    '<iframe id="zh-task-frame" title="ZHENLI Secretarial Task Hub" src="'+
+    '<iframe id="zh-task-frame" title="UNICOSEC Secretarial Task Hub" src="'+
       escapeHtml(shellUrl)+'" loading="eager" referrerpolicy="same-origin"></iframe>'+
     '<div id="zh-status" role="status" hidden></div></main>';
 }

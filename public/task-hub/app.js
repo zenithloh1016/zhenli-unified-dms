@@ -376,7 +376,7 @@ function mergeCompanyRecords(payload,overwriteDates=false){
 
   async function exportJson(){
     const now=new Date(),stamp=now.toISOString().replace(/[:.]/g,'-');
-    lastExport={filename:'ZHENLI_TaskHub_Backup_'+stamp+'.json',mime:'application/json',contents:JSON.stringify({...data,exportedAt:timestamp(),app:'ZHENLI Secretarial Task Hub'},null,2)};
+    lastExport={filename:'UNICOSEC_TaskHub_Backup_'+stamp+'.json',mime:'application/json',contents:JSON.stringify({...data,exportedAt:timestamp(),app:'UNICOSEC Secretarial Task Hub'},null,2)};
     if(lastExportUrl)URL.revokeObjectURL(lastExportUrl);
     lastExportUrl=URL.createObjectURL(new Blob([lastExport.contents],{type:lastExport.mime}));
     displayBackupStatus(lastExport.filename,'Preparing your file…');
@@ -386,7 +386,7 @@ function mergeCompanyRecords(payload,overwriteDates=false){
     }
   }
   function csvCell(v){let s=String(v??'');if(/^[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"'}
-  function exportCsv(){const fields=['Title','Company','Category','Priority','Status','Due Date','Assigned To','Reference','Notes','Repeat','Checklist Done','Checklist Total','Created At','Updated At','Completed At'];let rows=[fields.join(',')];for(const t of data.tasks){rows.push([t.title,t.company,t.category,priorityObj(t.priority).name,statusObj(t.status).name,t.dueDate,t.assignee,t.reference,t.notes,t.recurrence,(t.checklist||[]).filter(s=>s.done).length,(t.checklist||[]).length,t.createdAt,t.updatedAt,t.completedAt].map(csvCell).join(','))}download(`ZHENLI_Tasks_${todayStr()}.csv`,'text/csv;charset=utf-8','\uFEFF'+rows.join('\r\n'));toast('CSV downloaded for Excel.')}
+  function exportCsv(){const fields=['Title','Company','Category','Priority','Status','Due Date','Assigned To','Reference','Notes','Repeat','Checklist Done','Checklist Total','Created At','Updated At','Completed At'];let rows=[fields.join(',')];for(const t of data.tasks){rows.push([t.title,t.company,t.category,priorityObj(t.priority).name,statusObj(t.status).name,t.dueDate,t.assignee,t.reference,t.notes,t.recurrence,(t.checklist||[]).filter(s=>s.done).length,(t.checklist||[]).length,t.createdAt,t.updatedAt,t.completedAt].map(csvCell).join(','))}download(`UNICOSEC_Tasks_${todayStr()}.csv`,'text/csv;charset=utf-8','\uFEFF'+rows.join('\r\n'));toast('CSV downloaded for Excel.')}
   async function importJson(file){
     if(!file)return;
     try{
@@ -464,7 +464,7 @@ function mergeCompanyRecords(payload,overwriteDates=false){
       hubReady=true;
       block.remove();render();
       const pill=document.querySelector('.sidebar-footer');
-      if(pill)pill.textContent='Cloud sync active · ZHENLI DMS';
+      if(pill)pill.textContent='Cloud sync active · UNICOSEC';
     });
     window.parent.postMessage({type:'ZHENLI_HUB_READY'},window.location.origin);
   }

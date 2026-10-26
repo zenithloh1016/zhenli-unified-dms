@@ -39,7 +39,7 @@ export function renderStatutoryRegisterDocument(book,sheetIndex,{showBlanks=fals
  }).join('');
  return '<article class="sr-ar-paper sr-register-paper" aria-label="'+esc(section.title)+' statutory register">'+
   '<header class="sr-ar-document-header"><div class="sr-ar-topline"></div>'+
-   '<p class="sr-ar-kicker">ZHENLI · COMPANY STATUTORY REGISTERS</p>'+
+   '<p class="sr-ar-kicker">UNICOSEC · COMPANY STATUTORY REGISTERS</p>'+
    '<h2>'+esc(book.companyName||'Company')+'</h2>'+
    '<p class="sr-ar-subtitle">'+esc(section.title).toUpperCase()+'</p>'+
    '<div class="sr-ar-meta"><span>Company Registration No.</span><strong>'+
@@ -48,6 +48,6 @@ export function renderStatutoryRegisterDocument(book,sheetIndex,{showBlanks=fals
    '<section class="sr-ar-section" data-sheet="'+sheetIndex+'">'+
     '<div class="sr-ar-section-header"><h3>'+esc(section.title)+'</h3><span>STATUTORY REGISTER</span></div>'+
     parts+'</section></div>'+
-  '<footer class="sr-ar-document-footer">ZHENLI · STATUTORY REGISTERS'+
+  '<footer class="sr-ar-document-footer">UNICOSEC · STATUTORY REGISTERS'+
    '<span>Working statutory record · Verify against SSM documents</span></footer></article>';
 }
