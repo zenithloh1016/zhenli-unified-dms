@@ -33,8 +33,8 @@ export function registerLabel(name){
   'charge satisfaction':'Satisfaction of Charges',
   transfer:'Transfers',transfers:'Transfers',
   allotment:'Allotments',allotments:'Allotments',
-  'share transfer':'Share Transfers','share transfers':'Share Transfers',
-  'share allotment':'Share Allotments','share allotments':'Share Allotments'
+  'share transfer':'Transfers','share transfers':'Transfers',
+  'share allotment':'Allotments','share allotments':'Allotments'
  };
  const standardized=replacements[bare.toLowerCase()]||
   (/^register\b/i.test(bare)?'Other Records — '+bare:bare);

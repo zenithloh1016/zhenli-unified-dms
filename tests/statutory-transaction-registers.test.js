@@ -7,6 +7,23 @@ import {renderStatutoryRegisterDocument} from '../src/statutory-register-annual-
 const co={id:'test',name:'MAX PLUS TECHNOLOGIES SDN. BHD.',
  registration_no:'202301009667 (1503588-X)'};
 
+test('legacy Share titles are shortened across tabs and PDFs without modifying saved worksheet names',()=>{
+ const b=makeRegisterBook(co,{path:'Imported.xlsx',sheets:[
+  {name:'Register of Share Allotments',rows:[['Date','Allotment No.','Allottee\\'s Name'],['20/10/2026','A1','ALLOTTEE ONE']]},
+  {name:'Register of Share Transfers',rows:[['Transfer No.','Date','No. of Shares Transferred'],['T1','20/10/2026','100']]}
+ ]});
+ const names=b.sheets.map(s=>s.name);
+ assert.deepEqual(buildCombinedRegisters(b).map(x=>x.title),
+  ['Register of Allotments','Register of Transfers']);
+ assert.deepEqual(b.sheets.map(s=>s.name),names,'existing stored names must not be changed');
+ for(let i=0;i<2;i++){
+  const html=renderStatutoryRegisterDocument(b,i);
+  assert(!/REGISTER OF SHARE (?:ALLOTMENTS|TRANSFERS)/i.test(html));
+  assert(html.includes(i===0?'Register of Allotments':'Register of Transfers'));
+  assert(buildGroupedRegister(b,i).blocks.some(x=>x.type==='field'&&/Share/.test(x.label)||x.type==='field'&&x.value==='100')||i===0);
+ }
+});
+
 test('blank Allotments and Transfers display standard sections without treating column labels as transactions',()=>{
  const b=makeRegisterBook(co);
  for(const i of [5,6]){
@@ -20,7 +37,7 @@ test('blank Allotments and Transfers display standard sections without treating 
   assert.doesNotMatch(html,/Particular 1|Entry 1|Mark Former|Mark Current/);
  }
  assert.deepEqual(buildCombinedRegisters(b).map(x=>x.title).filter(x=>/Allotments|Transfers/.test(x)),[
-  'Register of Share Allotments','Register of Share Transfers']);
+  'Register of Allotments','Register of Transfers']);
 });
 
 test('entered allotments and transfers preserve exact labels, editable coordinates and unclassified transactions',()=>{

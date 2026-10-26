@@ -74,7 +74,7 @@ export function referenceTemplateSheets(){
   {name:'Register of Beneficial Owners',rows:[[...REFERENCE_FIELDS.beneficialOwners]]},
   {name:'Register of Secretaries',rows:[[...REFERENCE_FIELDS.secretaries]]},
   {name:'Register of Charges',rows:[[...REFERENCE_FIELDS.charges]]},
-  {name:'Register of Share Allotments',rows:[[...REFERENCE_FIELDS.allotments]]},
-  {name:'Register of Share Transfers',rows:[[...REFERENCE_FIELDS.transfers]]}
+  {name:'Register of Allotments',rows:[[...REFERENCE_FIELDS.allotments]]},
+  {name:'Register of Transfers',rows:[[...REFERENCE_FIELDS.transfers]]}
  ];
 }
