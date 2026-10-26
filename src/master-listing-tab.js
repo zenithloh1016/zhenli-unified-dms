@@ -9,6 +9,7 @@ import {previewRegisterParticularsZip,preserveRegisterParticulars,compactRegiste
 import {applyConstitutionDocumentEvidence} from './master-listing-constitution-sync.js';
 import {restoreHistoricalConstitutionStatuses} from './master-listing-constitution-history.js';
 import {PRE_AMENDMENT_MASTER_LISTING,isMasterListingRestored,restoredMasterListingSnapshot} from './master-listing-pre-amendment.js';
+import {applyUploadedConstitutionStatuses} from './master-listing-constitution-source.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeText=value=>String(value??'').slice(0,15000);
@@ -119,6 +120,55 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
    'All original company records and columns were restored. The previous listing was backed up.';
   return {restored:true,rows:earlier.rows.length,columns:earlier.columns.length};
  }
+ /**
+  * Owner-private Constitution map from the attached Excel file. Company
+  * registration numbers are matched exactly and no other columns are edited.
+  * Marking the source version prevents later reapplication over manual edits.
+  */
+ async function importUploadedConstitutionSource(){
+  const user=getUser?.();
+  if(!user?.id||!state.model)return {updated:0,skipped:true};
+  const client=typeof db?.from==='function'?
+   db.from('dms_master_listing_constitution_imports'):null;
+  if(!client||typeof client.select!=='function')
+   return {updated:0,unavailable:true};
+  const selected=client.select('source_version,statuses');
+  if(!selected||typeof selected.eq!=='function')
+   return {updated:0,unavailable:true};
+  const filtered=selected.eq('user_id',user.id);
+  if(!filtered||typeof filtered.maybeSingle!=='function')
+   return {updated:0,unavailable:true};
+  const {data,error}=await filtered.maybeSingle();
+  if(error)throw Error('Cannot read private Constitution source: '+error.message);
+  if(!data)return {updated:0,noSource:true};
+  const result=applyUploadedConstitutionStatuses(
+   state.model,data.statuses,data.source_version);
+  if(result.alreadyApplied)return result;
+  if(!result.matched){
+   state.status='Uploaded Constitution list does not match existing company registration numbers. No values changed.';
+   return {...result,noMatches:true};
+  }
+  await saveModel(result.model,{backup:true});
+  state.status='Constitution updated from uploaded Master Listing: '+
+   result.matched+' company row(s) matched; '+result.updated+
+   ' Constitution cell(s) set to Yes / N/A. Previous Master Listing backed up.';
+  if(result.unmatched)
+   state.status+=' '+result.unmatched+' source registration number(s) were not found in this DMS listing.';
+  return result;
+ }
+ async function importConstitutionNow(){
+  if(state.loading||state.saving)return;
+  await load(true);
+  if(state.error)throw Error(state.error);
+  state.loading=true;
+  try{
+   const result=await importUploadedConstitutionSource();
+   if(result?.alreadyApplied)
+    state.status='Uploaded Constitution list has already been applied. No further changes.';
+   if(result?.noSource)
+    state.status='No uploaded private Constitution source was found for this account.';
+  }finally{state.loading=false;onRender?.();}
+ }
  async function load(force=false){
   const user=getUser?.();
   if(!user?.id){reset();return;}
@@ -165,6 +215,13 @@ export function createMasterListingTab({db,bucket='dms-private',getUser,getCompa
      }catch(error){
       state.error='Requested Master Listing correction could not be saved: '+
        String(error?.message||error)+'. Existing cloud listing is preserved.';
+     }
+    }
+    if(state.model&&!state.error){
+     try{await importUploadedConstitutionSource();}
+     catch(error){
+      state.error='Uploaded Constitution update failed: '+
+       String(error?.message||error)+'. The prior Master Listing was not intentionally changed.';
      }
     }
    }
@@ -572,6 +629,7 @@ async function saveRepairedDates(){
    '<p class="muted">Import an Excel workbook, keep all company-information columns, and edit each company inside this private DMS tab.</p></div>'+
    '<div class="header-buttons">'+(model?act(state.fullScreen?'Exit full screen ✕':'Full screen ⛶','ml-fullscreen','','secondary'):'')+
    (model?act('Export CSV','ml-export','','secondary'):'')+
+    (model?act('Apply Uploaded Constitution List','ml-apply-constitution-source','','secondary'):'')+
    (model&&!isMasterListingRestored(model)?act('Fix Constitution N/A','ml-fix-constitution','','secondary'):'')+
     (model&&!isMasterListingRestored(model)?act('Sync Constitution Status','ml-sync-constitution','','secondary'):'')+
     (model&&!isMasterListingRestored(model)?act('Restore Constitution History','ml-restore-constitution','','secondary'):'')+
@@ -690,6 +748,7 @@ function renderEditor(){
    onRender?.();return true;
   }
   if(action==='ml-repair-dates'){asyncRun(saveRepairedDates);return true;}
+  if(action==='ml-apply-constitution-source'){asyncRun(importConstitutionNow);return true;}
   if(action==='ml-fix-constitution'){asyncRun(repairConstitutionNow);return true;}
   if(action==='ml-sync-constitution'){asyncRun(syncConstitutionDocuments);return true;}
   if(action==='ml-restore-constitution'){asyncRun(restoreConstitutionHistoryNow);return true;}
