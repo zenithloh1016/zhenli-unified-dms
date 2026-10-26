@@ -6,10 +6,10 @@ const file=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const contains=(p,text)=>assert(file(p).includes(text),p+' missing '+text);
 
 test('UNICOSEC is used for web title, sign-in, header, footers and embedded modules',()=>{
- contains('index.html','<title>UNICOSEC | Document Management System</title>');
- contains('src/main.js','UNICOSEC DOCUMENT MANAGEMENT');
- contains('src/main.js','UNICOSEC · Document Management System');
- contains('src/main.js','UNICOSEC · Document Management · Web + Android');
+ contains('index.html','<title>UNICOSEC - Company Secretarial Management System</title>');
+ contains('src/main.js','UNICOSEC - Company Secretarial Management System');
+ contains('src/main.js','UNICOSEC - Company Secretarial Management System');
+ contains('src/main.js','UNICOSEC - Company Secretarial Management System · Web + Android');
  contains('public/task-hub/index.html','UNICOSEC<span> / TASK HUB</span>');
  contains('task-hub-cloud/index.html','<title>UNICOSEC - Company Secretarial Management System | Task Hub</title>');
  contains('sign/index.html','UNICOSEC · Electronic Signing');
