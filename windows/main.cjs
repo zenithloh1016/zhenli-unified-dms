@@ -3,6 +3,8 @@ const {app,BrowserWindow,shell}=require('electron');
 const path=require('node:path');
 const APP_URL='https://zenithloh1016.github.io/zhenli-unified-dms/';
 let mainWindow;
+// Hidden temporary tabs keep async document opens reliable without showing blank windows.
+const hiddenDocumentPopups=new WeakSet();
 function appUrl(url){
  try{
   const value=new URL(url);
@@ -21,9 +23,15 @@ function external(url){
 }
 function secure(contents){
  contents.setWindowOpenHandler(({url})=>{
-  // Suppress the empty Electron child window pre-opened by the web document viewer.
-  // The viewer then falls back to the direct signed link, opened externally below.
-  if(url==='about:blank')return {action:'deny'};
+  // Preserve the document viewer's pre-opened tab so async signed links work,
+  // but never display it as a separate, empty UNICOSEC window.
+  if(url==='about:blank')return {
+   action:'allow',
+   overrideBrowserWindowOptions:{
+    show:false,autoHideMenuBar:true,
+    webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true}
+   }
+  };
   if(appUrl(url)||safeBlankOrBlob(url))return {
    action:'allow',
    overrideBrowserWindowOptions:{
@@ -33,7 +41,18 @@ function secure(contents){
   };
   external(url);return {action:'deny'};
  });
+ contents.on('did-create-window',(popup,details)=>{
+  if(details.url==='about:blank')hiddenDocumentPopups.add(popup.webContents);
+ });
  contents.on('will-navigate',(event,url)=>{
+  if(hiddenDocumentPopups.has(contents)){
+   if(url==='about:blank')return;
+   event.preventDefault();
+   external(url);
+   const popup=BrowserWindow.fromWebContents(contents);
+   if(popup&&!popup.isDestroyed())popup.close();
+   return;
+  }
   if(appUrl(url)||safeBlankOrBlob(url))return;
   event.preventDefault();external(url);
  });
