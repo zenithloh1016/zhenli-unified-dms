@@ -7,13 +7,14 @@
 (function () {
   const STORAGE_KEY = 'zhenli_secretarial_task_hub_v1'; // preserve existing tasks on the same website origin
   const CATEGORIES = ['Annual Return (AR)','Financial Statements (AFS)','Beneficial Ownership (BO)','SSM Lodgement / CRS','Board Resolution','Members’ Resolution','Banking & Signatories','Auditor / Tax Agent','Company Incorporation','Strike-off / Winding-up','Director / Secretary Changes','Shares & Allotments','Registered Charges','Client Follow-up','Electronic Signing','Registers & Statutory Books','General / Other'];
-  // Eight selectable statuses; completed tasks remain in their archive.
+  // Nine selectable statuses; completed tasks remain in their archive.
   // Retain legacy progress and completed records exactly as saved in Supabase.
   const STATUSES = [
     {id:'todo',name:'To do',short:'To do'},
     {id:'progress',name:'In progress',short:'In progress'},
     {id:'ctc',name:'Waiting CTC',short:'Waiting CTC'},
     {id:'client',name:'Waiting client',short:'Waiting client'},
+    {id:'banker',name:'Waiting banker',short:'Waiting banker'},
     {id:'ssm',name:'Waiting SSM',short:'Waiting SSM'},
     {id:'auditor',name:'Waiting auditor',short:'Waiting auditor'},
     {id:'tax',name:'Waiting tax agent',short:'Waiting tax agent'},
