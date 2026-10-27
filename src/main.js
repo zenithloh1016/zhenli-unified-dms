@@ -1,4 +1,3 @@
-import {createNativeSigning} from './signing-native.js';
 import {createSupabaseSigning} from './signing-supabase.js';
 import { createClient } from '@supabase/supabase-js';
 import readExcelFile from 'read-excel-file/browser';
@@ -22,20 +21,9 @@ import {removeDeletedCompanyStorage} from './company-cleanup.js';
 
 const ROOT = document.getElementById('app');
 const BUCKET = 'dms-private';
-const SIGNING_BASE = 'https://zhenli-sequential-signing.edgeone.cool/';
 const TASK_HUB_BUNDLED = new globalThis.URL('./task-hub/index.html', document.baseURI).href + '?v=20261023-eight-status-v4';
 const TASK_HUB_CLOUD = new globalThis.URL('./task-hub-cloud/index.html', document.baseURI).href;
 const ANNUAL_RETURN_BUNDLED = new globalThis.URL('./annual-return/index.html', document.baseURI).href;
-function allowedHttpsUrl(value, expectedHost = '') {
-  const url = new globalThis.URL(String(value || '').trim());
-  if (url.protocol !== 'https:' || (expectedHost && url.hostname !== expectedHost)) throw new Error('Use the valid HTTPS URL for the selected app.');
-  return url.href;
-}
-function getSigningUrl() {
-  try { return allowedHttpsUrl(sessionStorage.getItem('zhenli:signing:session') || SIGNING_BASE, 'zhenli-sequential-signing.edgeone.cool'); }
-  catch { return SIGNING_BASE; }
-}
-
 const rawSupabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || '').trim().replace(/^['"]|['"]$/g, '');
 const parsedSupabaseUrl = rawSupabaseUrl ? new globalThis.URL(rawSupabaseUrl) : null;
 const URL = parsedSupabaseUrl?.protocol === 'https:' && parsedSupabaseUrl.hostname.endsWith('.supabase.co') ? parsedSupabaseUrl.origin : '';
@@ -48,7 +36,6 @@ const state = {
   user: null, companies: [], folders: [], documents: [],
   companyId: null, folderId: null, search: '', busy: false, notice: '',
   tab: 'documents', totalDocs: 0, taskFullscreen: false, signingFullscreen: false, arFullscreen: false,
-  signingProvider: localStorage.getItem('zhenli:signing:provider')==='supabase'?'supabase':'edgeone',
   arSelectedCompanyId: null,
   deadlineQuery: '', deadlineKind: 'all', deadlinePeriod: 'all',
   modal: null, authMode: 'login', importData: null, importWorkbook: null, importReader: '',
@@ -556,7 +543,7 @@ function renderOverview() {
     <button class="metric" data-action="tab-documents"><span>📄</span><strong>${state.totalDocs}</strong><small>Uploaded documents</small></button>
     <button class="metric" data-action="tab-tasks"><span>✓</span><strong>Task Hub</strong><small>Open existing tasks</small></button>
     <button class="metric" data-action="tab-annual-return"><span>📑</span><strong>Annual Return</strong><small>Generate bilingual PDF</small></button>
-    <button class="metric" data-action="tab-signing"><span>✍️</span><strong>Signing</strong><small>EdgeOne workspace</small></button>
+    <button class="metric" data-action="tab-signing"><span>✍️</span><strong>Signing</strong><small>Supabase signing</small></button>
   </section>
   <section class="info-panel"><h2>Welcome to your private workspace</h2><p>Import your full Excel Master Listing under <b>Master Listing</b>, manage deadlines and tasks under <b>Tasks</b>, and access signing requests under <b>Signing</b>, and prepare review PDFs under <b>Annual Return</b>.</p><div class="quick-actions">${action('View company folders','tab-documents','','primary')}${action('Master Listing','tab-master-listing','','secondary')}${action('Open Task Hub','tab-tasks','','secondary')}${action('Annual Return PDFs','tab-annual-return','','secondary')}${action('Open Signing','tab-signing','','secondary')}</div></section>`;
 }
@@ -610,12 +597,8 @@ function renderTasks(){
     <div class="frame-shell ${state.taskFullscreen?'task-expanded':''}">${state.taskFullscreen?'<div class="frame-toolbar"><strong>Task Hub</strong><button type="button" class="btn secondary" data-action="exit-tasks">Exit full screen ✕</button></div>':''}
     <iframe id="zh-task-frame" class="integration-frame" title="UNICOSEC Secretarial Task Hub · Supabase" src="${esc(TASK_HUB_BUNDLED)}" loading="lazy" referrerpolicy="same-origin"></iframe></div>`;
 }
-// ZHENLI_SIGNING_COOKIE_SAFE_LAUNCH_V1_2
-// ZHENLI_SIGNING_DIRECT_LAUNCH_V1_3
-// ZHENLI_DMS_NATIVE_SIGNING_V1_5
-const signingUI=createNativeSigning({update:()=>render(),getCompanies:()=>state.companies});
 const signingSupabaseUI=createSupabaseSigning({db,getCompanies:()=>state.companies,update:()=>render()});
-// Same contained full-screen layout as Task Hub. Preserve the native signing DOM
+// Same contained full-screen layout as Task Hub. Preserve the Supabase signing DOM
 // on toggle so unsaved PDF placements and request fields are never discarded.
 function renderSigning(){
   return `<section id="zh-signing-shell" class="signing-frame-shell ${state.signingFullscreen?'signing-expanded':''}" aria-label="UNICOSEC Sequential Signing workspace">
@@ -625,11 +608,7 @@ function renderSigning(){
     </div>
     <div class="signing-workspace">
       <div class="signing-fullscreen-launch">${action('Full-screen view','open-signing-fullscreen','','secondary')}</div>
-      <div class="zs-toolbar" aria-label="Signing service options">
-        <button type="button" class="btn ${state.signingProvider==='supabase'?'primary':'secondary'}" data-action="signing-provider" data-id="supabase">Supabase signing (independent)</button>
-        <button type="button" class="btn ${state.signingProvider==='edgeone'?'primary':'secondary'}" data-action="signing-provider" data-id="edgeone">Existing Tencent EdgeOne</button>
-      </div>
-      ${state.signingProvider==='supabase'?signingSupabaseUI.render():signingUI.render()}
+      ${signingSupabaseUI.render()}
     </div>
   </section>`;
 }
@@ -657,7 +636,7 @@ function render() {
   ${state.busy ? '<div class="busy-bar">Working… please keep this page open</div>' : ''}
   ${modalHTML()}
   <input id="document-upload" type="file" multiple hidden />`;
-  if(state.tab==='signing') (state.signingProvider==='supabase'?signingSupabaseUI:signingUI).mount();
+  if(state.tab==='signing') signingSupabaseUI.mount();
    if(state.tab==='annual-return'){
      ROOT.querySelector('#zh-annual-return-frame')?.addEventListener('load',()=>{sendAnnualReturnCompanyList();sendAnnualReturnCompany();},{once:true});
    }
@@ -836,9 +815,7 @@ ROOT.addEventListener('click', event=>{
   const button=event.target.closest('[data-action]');if(!button)return;
   const a=button.dataset.action,id=button.dataset.id;
   if(masterListingUI.onClick(a,id))return;
-  if(a==='signing-provider'){if(id==='supabase'||id==='edgeone'){state.signingProvider=id;localStorage.setItem('zhenli:signing:provider',id);render();}return;}
   if(signingSupabaseUI.onClick(a,id,event))return;
-  if(signingUI.onClick(a,id,event))return;
   if(a==='rb-refresh'){busyDo(()=>registerBookUI.load(true));return;}
   if(a==='sr-pick'){ROOT.querySelector('#sr-zip-input')?.click();return;}
   if(a==='sr-open'){busyDo(()=>registerBookUI.openCompany(id));return;}
@@ -905,21 +882,12 @@ ROOT.addEventListener('click', event=>{
     if(state.tab==='signing')setSigningFullscreen(a==='open-signing-fullscreen');
     return;
   }
-  if(a==='clear-signing'){sessionStorage.removeItem('zhenli:signing:session');render();return;}
   if(a==='open-tasks'||a==='exit-tasks'){
     state.taskFullscreen = a==='open-tasks';render();return;
   }
-  if(a==='open-signing'||a==='launch-cloud-task'){
-    const url=a==='open-signing'?getSigningUrl():TASK_HUB_CLOUD;
-    if(a==='open-signing'){
-      const time = new globalThis.URL(url).searchParams.get('eo_time');
-      if(time && /^\d{10}$/.test(time) && Number(time)*1000 < Date.now()){
-        toast('Your temporary EdgeOne access link has expired. Paste a fresh link from the EdgeOne console and try again.');
-        return;
-      }
-    }
-    if(Capacitor.isNativePlatform()) busyDo(()=>Browser.open({url}));
-    else window.open(url,'_blank','noopener,noreferrer');
+  if(a==='launch-cloud-task'){
+    if(Capacitor.isNativePlatform()) busyDo(()=>Browser.open({url:TASK_HUB_CLOUD}));
+    else window.open(TASK_HUB_CLOUD,'_blank','noopener,noreferrer');
     return;
   }
   if(a==='auth-login'||a==='auth-signup'){state.authMode=a==='auth-login'?'login':'signup';state.notice='';render();return;}
@@ -995,14 +963,6 @@ ROOT.addEventListener('click', event=>{
 ROOT.addEventListener('submit',event=>{
   if(masterListingUI.onSubmit(event.target)){event.preventDefault();return;}
   if(signingSupabaseUI.submit(event.target)){event.preventDefault();return;}
-  if(signingUI.submit(event.target)){event.preventDefault();return;}
-  if(event.target.id==='signing-link-form'){
-    event.preventDefault();
-    const input=event.target.elements.signingLink.value;
-    try { sessionStorage.setItem('zhenli:signing:session', allowedHttpsUrl(input, 'zhenli-sequential-signing.edgeone.cool'));render(); }
-    catch(e){toast(e.message)}
-    return;
-  }
   if(!['auth-form','modal-form'].includes(event.target.id)) return;
   event.preventDefault(); if(state.busy) return;
   const form=new FormData(event.target);
@@ -1078,13 +1038,12 @@ ROOT.addEventListener('input',e=>{
     input?.focus();input?.setSelectionRange(pos,pos);
     return;
   }
- if(state.tab==='signing'){if(state.signingProvider==='supabase')signingSupabaseUI.input(e.target);else signingUI.input(e.target);}if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
+ if(state.tab==='signing')signingSupabaseUI.input(e.target);if(e.target.id==='search'){state.search=e.target.value;const position=e.target.selectionStart;render();const target=document.getElementById('search');target?.focus();target?.setSelectionRange(position,position);}});
 ROOT.addEventListener('change',e=>{
   if(e.target.id==='sd-kind'){state.deadlineKind=e.target.value;render();return;}
   if(e.target.id==='sd-period'){state.deadlinePeriod=e.target.value;render();return;}
   if(masterListingUI.onChange(e.target,prepareExcelImport))return;
   if(signingSupabaseUI.changed(e.target))return;
-  if(signingUI.changed(e.target))return;
   if(e.target.id==='document-upload'){const files=[...e.target.files];e.target.value='';if(files.length)busyDo(()=>uploadFiles(files));}
   if(e.target.id==='sr-zip-input'){const file=e.target.files?.[0];e.target.value='';if(file)busyDo(()=>registerBookUI.readZip(file));return;}
   if(e.target.matches?.('.rb-cell')){registerBookUI.updateCell(e.target);return;}
