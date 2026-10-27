@@ -40,7 +40,8 @@ test('UNICOSEC branding appears in statutory and annual-return generated PDFs',(
 test('technical bridges and legal company identity remain unchanged',()=>{
  const main=file('src/main.js');
  assert.match(main,/ZHENLI_DMS_AR_COMPANY_LIST/);
- assert.match(main,/zhenli:signing:provider/);
+ assert.match(main,/signingSupabaseUI\.render\(\)/);
+ assert.doesNotMatch(main,/signingProvider|createNativeSigning|Existing Tencent EdgeOne/);
  const sign=file('sign/index.html');
  assert.match(sign,/ZHENLI CONSULTANCY SERVICES SDN BHD/);
 });
