@@ -31,8 +31,10 @@ test('DMS Task Hub stays embedded in Supabase without a standalone launch button
   assert.match(dms,/action\('Full-screen view','open-tasks'/);
   assert.match(dms,/id="zh-task-frame"/);
   assert.match(dms,/a==='launch-cloud-task'/);
-  assert.doesNotMatch(dms.slice(dms.indexOf('function renderTasks()'),dms.indexOf('// ZHENLI_SIGNING_COOKIE_SAFE_LAUNCH')),/getTaskHubUrl\(\)|edgeone\.cool|Connection settings/);
-  assert.match(dms,/Existing Tencent EdgeOne/,'separate EdgeOne signing remains available');
+  assert.doesNotMatch(dms.slice(dms.indexOf('function renderTasks()'),dms.indexOf('const signingSupabaseUI=')),/getTaskHubUrl\(\)|edgeone\.cool|Connection settings/);
+  assert.match(dms,/const signingSupabaseUI=createSupabaseSigning\(/,'Supabase signing remains available');
+  assert.match(dms,/\$\{signingSupabaseUI\.render\(\)\}/,'Signing tab renders Supabase directly');
+  assert.doesNotMatch(dms,/Existing Tencent EdgeOne|createNativeSigning|signingProvider/,'legacy EdgeOne signing UI was removed');
   assert.match(dms,/TASK_HUB_CLOUD/);
 });
 test('task create, edit, checklists, recurring tasks, calendar and backup remain original',()=>{
