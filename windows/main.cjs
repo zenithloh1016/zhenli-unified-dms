@@ -21,6 +21,9 @@ function external(url){
 }
 function secure(contents){
  contents.setWindowOpenHandler(({url})=>{
+  // Suppress the empty Electron child window pre-opened by the web document viewer.
+  // The viewer then falls back to the direct signed link, opened externally below.
+  if(url==='about:blank')return {action:'deny'};
   if(appUrl(url)||safeBlankOrBlob(url))return {
    action:'allow',
    overrideBrowserWindowOptions:{
