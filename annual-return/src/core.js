@@ -14,10 +14,7 @@ export const COMPANY_DETAILS={
 };
 export function syncCompanyDetails(doc,{preferFields=true}={}){
  if(!doc?.company||!Array.isArray(doc.particulars))return doc;
- const first=doc.particulars.findIndex(x=>x.type==='section');
- const end=doc.particulars.findIndex((x,i)=>i>first&&x.type==='section');
- const from=first>=0?first+1:0,to=end>=0?end:doc.particulars.length;
- for(let i=from;i<to;i++){
+ for(let i=0;i<doc.particulars.length;i++){
   const item=doc.particulars[i];if(item.type!=='field')continue;
   const key=COMPANY_DETAILS[item.en];
   if(!key)continue;
@@ -27,13 +24,50 @@ export function syncCompanyDetails(doc,{preferFields=true}={}){
  }
  return doc;
 }
+/** Keep the schema's canonical 'en' labels intact: MSIC, company identity,
+ * member, charge and beneficial-owner logic depend on them. User edits live in
+ * displayEn/displayCn and remain editable in drafts and exported PDFs.
+ */
+export function displayParticularLabel(item,language='en'){
+ const property=language==='cn'?'displayCn':'displayEn';
+ const fallback=language==='cn'?'cn':'en';
+ return typeof item?.[property]==='string'?item[property]:String(item?.[fallback]??'');
+}
+export function updateParticularLabel(doc,index,en,cn=''){
+ const items=doc?.particulars;
+ if(!Array.isArray(items)||!Number.isInteger(index)||index<0||index>=items.length)
+  throw Error('Item does not exist.');
+ const item=items[index];
+ if(!['field','section','heading'].includes(item.type))throw Error('This item cannot be renamed.');
+ const label=String(en||'').trim(),chinese=String(cn||'').trim();
+ if(!label)throw Error('Enter an English label.');
+ item.displayEn=safe(label,350);
+ item.displayCn=safe(chinese,350);
+ return item;
+}
+export function removeParticularSection(doc,index){
+ const items=doc?.particulars;
+ if(!Array.isArray(items)||!Number.isInteger(index)||items[index]?.type!=='section')
+  throw Error('Section does not exist.');
+ let end=index+1;
+ while(end<items.length&&items[end].type!=='section')end++;
+ const removed=items.splice(index,end-index);
+ return {name:displayParticularLabel(removed[0]),fields:removed.filter(x=>x.type==='field').length,items:removed.length};
+}
+export function removeParticularHeading(doc,index){
+ const items=doc?.particulars;
+ if(!Array.isArray(items)||!Number.isInteger(index)||items[index]?.type!=='heading')
+  throw Error('Heading does not exist.');
+ let end=index+1;
+ while(end<items.length&&!['heading','section'].includes(items[end].type))end++;
+ const removed=items.splice(index,end-index);
+ return {name:displayParticularLabel(removed[0]),fields:removed.length-1};
+}
 export function deleteParticularField(doc,index){
  if(!doc||!Array.isArray(doc.particulars))throw Error('Annual Return particulars are unavailable.');
  if(!Number.isInteger(index)||index<0||index>=doc.particulars.length)throw Error('Field does not exist.');
  const item=doc.particulars[index];
  if(item.type!=='field')throw Error('Only individual fields can be deleted.');
- if(['Company Name','Company Registration No.'].includes(item.en))
-  throw Error(item.en+' is required for PDF generation and cannot be deleted.');
  doc.particulars.splice(index,1);
  return item;
 }
@@ -78,9 +112,7 @@ export function removeAnnualReturnRecord(doc,headingIndex){
 }
 
 export function setCompanyDetail(doc,index,value){
- const first=doc.particulars.findIndex(x=>x.type==='section');
- const end=doc.particulars.findIndex((x,i)=>i>first&&x.type==='section');
- if(first<0||index<=first||(end>=0&&index>=end))return;
+ if(!Number.isInteger(index)||doc.particulars[index]?.type!=='field')return;
  const key=COMPANY_DETAILS[doc.particulars[index]?.en];
  if(key)doc.company[key]=String(value||'');
 }
@@ -191,6 +223,8 @@ export function normalizeDocument(raw){
         type:x.type,
         en:oldNonCash?'Shares Issued Otherwise Than in Cash':oldPaid?'Amount Considered Paid on Non-Cash Allotment':safe(x.en,350),
         cn:oldNonCash?'以非现金方式发行的股份':oldPaid?'非现金配发视为已缴金额':safe(x.cn,350),
+        ...(typeof x.displayEn==='string'?{displayEn:safe(x.displayEn,350)}:{}),
+        ...(typeof x.displayCn==='string'?{displayCn:safe(x.displayCn,350)}:{}),
         value:x.type==='field'?safe(x.value,15000):''
       };
     })
@@ -201,7 +235,8 @@ export function normalizeDocument(raw){
     if(i>=0)doc.particulars.splice(i+1,0,{type:'field',en:'Type of Shares Issued',cn:'股份发行方式（现金／非现金）',value:''});
   }
   ensureMemberPersonalFields(doc.particulars);
-  if(!doc.particulars.length)throw Error('No valid Annual Return particulars found.');
+  if(!doc.particulars.length&&Number(raw.schemaVersion||0)<SCHEMA_VERSION)
+    throw Error('No valid Annual Return particulars found.');
   // Old Google Apps Script files called this first group "COMPANY INFORMATION".
   // Show the new Company Details title without changing any supplied values.
   const firstSection=doc.particulars.find(x=>x.type==='section');
