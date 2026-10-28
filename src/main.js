@@ -19,6 +19,30 @@ import './style.css';
 import {installHubBridge,waitForHubWrites,forgetDeletedHubCompany} from './integrated-modules.js';
 import {removeDeletedCompanyStorage} from './company-cleanup.js';
 
+/** Download a generated review PDF in the website and Windows Electron host.
+ * Keep the blob URL alive long enough for the desktop Save As flow to begin.
+ * The return value confirms dispatch, not that a human completed Save As.
+ */
+function browserDownload(blob,filename){
+ const safeName=validatedPdf(blob,filename);
+ if(typeof document==='undefined'||!document.body)throw Error('Cannot access the download window.');
+ const objectUrl=globalThis.URL.createObjectURL(blob);
+ const link=document.createElement('a');
+ link.href=objectUrl;
+ link.download=safeName;
+ link.rel='noopener';
+ link.style.display='none';
+ document.body.appendChild(link);
+ try{link.click();}
+ catch(error){globalThis.URL.revokeObjectURL(objectUrl);throw error;}
+ finally{
+  link.remove();
+  // Do not revoke synchronously: Windows Electron must receive the blob download.
+  setTimeout(()=>globalThis.URL.revokeObjectURL(objectUrl),120000);
+ }
+ return {filename:safeName};
+}
+
 const ROOT = document.getElementById('app');
 const BUCKET = 'dms-private';
 const TASK_HUB_BUNDLED = new globalThis.URL('./task-hub/index.html', document.baseURI).href + '?v=20261027-nine-status-v1';
