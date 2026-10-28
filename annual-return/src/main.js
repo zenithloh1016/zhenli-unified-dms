@@ -339,24 +339,103 @@ function companyNameControl(item,index){
   '<option value="">— Select a company from the complete list —</option>'+options+'</select></label>'+
   '<p class="msic-help">All '+dmsCompanies.length+' DMS companies are available in the dropdown. Selecting a new company fills its registration number and starts a blank review for that company; the current review is saved automatically on this device.</p></div>';
 }
+// Use an in-app dialog instead of window.prompt(), which may be suppressed in
+// Electron desktop windows and Android WebViews (including the DMS iframe).
+let pendingCustomFieldTarget=null;
+function customFieldDialog(){
+ let dialog=$('ar-custom-field-dialog');
+ if(dialog)return dialog;
+ dialog=document.createElement('dialog');
+ dialog.id='ar-custom-field-dialog';
+ dialog.setAttribute('aria-labelledby','ar-custom-field-title');
+ dialog.className='ar-custom-field-dialog';
+ dialog.innerHTML=
+  '<form id="ar-custom-field-form">'+
+  '<h2 id="ar-custom-field-title">Add Annual Return field</h2>'+
+  '<p id="ar-custom-field-location" class="status"></p>'+
+  '<label for="ar-custom-field-en">Field name (English) <span aria-hidden="true">*</span></label>'+
+  '<input id="ar-custom-field-en" type="text" maxlength="350" required autocomplete="off" placeholder="Enter the English field name">'+
+  '<label for="ar-custom-field-cn">Field name (Chinese, optional)</label>'+
+  '<input id="ar-custom-field-cn" type="text" maxlength="350" autocomplete="off" placeholder="输入中文字段名称（选填）">'+
+  '<p id="ar-custom-field-error" class="status" role="alert" hidden></p>'+
+  '<div class="ar-custom-field-actions">'+
+  '<button type="button" class="button outline" id="ar-custom-field-cancel">Cancel</button>'+
+  '<button type="submit" class="button primary">Add field</button>'+
+  '</div></form>';
+ // Keep the dialog styling with the dialog itself so the fix is bundled into
+ // the installed Windows, Android and browser versions together.
+ const style=document.createElement('style');
+ style.textContent=[
+  '.ar-custom-field-dialog{box-sizing:border-box;width:min(92vw,490px);max-height:90vh;overflow:auto;'+
+  'margin:auto;padding:22px;border:1px solid #bdcedb;border-radius:16px;background:#fff;color:#15364c;'+
+  'box-shadow:0 20px 60px #092a4255;}',
+  '.ar-custom-field-dialog::backdrop{background:rgba(7,26,43,.65);}',
+  '.ar-custom-field-dialog form{display:grid;gap:10px;}',
+  '.ar-custom-field-dialog h2{margin:0 0 4px;font-size:21px;}',
+  '.ar-custom-field-dialog label{font-weight:700;font-size:14px;}',
+  '.ar-custom-field-dialog input{box-sizing:border-box;width:100%;min-height:44px;padding:10px 12px;'+
+  'border:1px solid #afc5d5;border-radius:8px;font:inherit;color:#15364c;background:#fff;}',
+  '.ar-custom-field-dialog input:focus-visible{outline:3px solid #8bc8ef;outline-offset:1px;}',
+  '.ar-custom-field-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:10px;}',
+  '@media(max-width:480px){.ar-custom-field-dialog{padding:16px;}.ar-custom-field-actions .button{flex:1;}}'
+ ].join('');
+ document.head.appendChild(style);
+ document.body.appendChild(dialog);
+ dialog.querySelector('#ar-custom-field-cancel').addEventListener('click',()=>dialog.close());
+ dialog.querySelector('#ar-custom-field-form').addEventListener('submit',event=>{
+  event.preventDefault();
+  saveCustomField(dialog);
+ });
+ dialog.addEventListener('close',()=>{pendingCustomFieldTarget=null;});
+ return dialog;
+}
 function addCustomField({sectionIndex=null,headingIndex=null}={}){
  if(doc.particulars.length>=1200)return status('The Annual Return field limit is reached.',true);
- const en=(prompt('New field label in English:')||'').trim();if(!en)return;
- const cn=(prompt('New field label in Chinese (optional):')||'').trim();
- const field={type:'field',en:en.slice(0,350),cn:cn.slice(0,350),value:''};
+ if(headingIndex!==null&&doc.particulars[headingIndex]?.type!=='heading')
+  return status('The selected member record no longer exists.',true);
+ if(sectionIndex!==null&&doc.particulars[sectionIndex]?.type!=='section')
+  return status('Section no longer exists.',true);
+ pendingCustomFieldTarget={sectionIndex,headingIndex};
+ const dialog=customFieldDialog();
+ const target=headingIndex!==null?doc.particulars[headingIndex]?.en:
+  sectionIndex!==null?doc.particulars[sectionIndex]?.en:'the end of the form';
+ dialog.querySelector('#ar-custom-field-location').textContent='New field will be added to '+target+'.';
+ dialog.querySelector('#ar-custom-field-en').value='';
+ dialog.querySelector('#ar-custom-field-cn').value='';
+ dialog.querySelector('#ar-custom-field-error').hidden=true;
+ if(!dialog.open){
+  if(typeof dialog.showModal==='function')dialog.showModal();
+  else if(typeof dialog.show==='function')dialog.show();
+  else dialog.setAttribute('open','');
+ }
+ dialog.querySelector('#ar-custom-field-en').focus();
+}
+function saveCustomField(dialog){
+ const error=dialog.querySelector('#ar-custom-field-error');
+ const english=dialog.querySelector('#ar-custom-field-en');
+ const en=english.value.trim().slice(0,350);
+ if(!en){error.textContent='Enter an English field name.';error.hidden=false;english.focus();return;}
+ if(doc.particulars.length>=1200){error.textContent='The Annual Return field limit is reached.';error.hidden=false;return;}
+ const cn=dialog.querySelector('#ar-custom-field-cn').value.trim().slice(0,350);
+ const {sectionIndex=null,headingIndex=null}=pendingCustomFieldTarget||{};
  let pos=doc.particulars.length;
  if(headingIndex!==null){
-  if(doc.particulars[headingIndex]?.type!=='heading')return status('The selected member record no longer exists.',true);
+  if(doc.particulars[headingIndex]?.type!=='heading'){
+   error.textContent='The selected member record no longer exists. Reopen Add field.';error.hidden=false;return;
+  }
   pos=headingIndex+1;
   while(pos<doc.particulars.length&&doc.particulars[pos].type==='field')pos++;
  }else if(sectionIndex!==null){
-  if(doc.particulars[sectionIndex]?.type!=='section')return status('Section no longer exists.',true);
+  if(doc.particulars[sectionIndex]?.type!=='section'){
+   error.textContent='Section no longer exists. Reopen Add field.';error.hidden=false;return;
+  }
   pos=sectionIndex+1;
   while(pos<doc.particulars.length&&doc.particulars[pos].type!=='section')pos++;
  }
- doc.particulars.splice(pos,0,field);
+ doc.particulars.splice(pos,0,{type:'field',en,cn,value:''});
+ dialog.close();
  renderSections();queueDraftSave();
- status('Added "'+field.en+'" to '+(headingIndex!==null?'the selected member record':'the selected section')+'. It will appear in the PDF.');
+ status('Added "'+en+'" to '+(headingIndex!==null?'the selected member record':sectionIndex!==null?'the selected section':'the end of the form')+'. It will appear in the PDF.');
 }
 function removeReviewField(index){
  const item=doc.particulars[index];if(!item||item.type!=='field')return;
