@@ -1,5 +1,5 @@
 'use strict';
-const {app,BrowserWindow,shell}=require('electron');
+const {app,BrowserWindow,shell,session}=require('electron');
 const path=require('node:path');
 const APP_URL='https://zenithloh1016.github.io/zhenli-unified-dms/';
 let mainWindow;
@@ -75,6 +75,10 @@ if(!app.requestSingleInstanceLock()){app.quit();}else{
   if(mainWindow){if(mainWindow.isMinimized())mainWindow.restore();mainWindow.focus();}
  });
  app.whenReady().then(()=>{
+  // Use Windows Save As for PDFs generated in the hosted Annual Return editor.
+  session.defaultSession.on('will-download',(_event,item)=>{
+   item.setSaveDialogOptions({title:'Save UNICOSEC PDF',defaultPath:item.getFilename()});
+  });
   createWindow();
   app.on('activate',()=>{if(BrowserWindow.getAllWindows().length===0)createWindow();});
  });
