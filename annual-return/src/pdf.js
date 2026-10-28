@@ -5,6 +5,7 @@ import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
 import {outputFilename,showMemberField,displayParticularLabel} from './core.js';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
+import {selectedBoCriteria} from './bo-criteria.js';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
 const blank=value=>String(value??'').trim()||'NOT PROVIDED / 未提供资料';
@@ -178,6 +179,21 @@ export function renderPages(doc){
    continue;
   }
   if(item.type!=='field')continue;
+  // Print the actual selected BO criteria AND their full descriptions.
+  // The editor saves "Criteria A, Criteria C", so the descriptions must be
+  // expanded here for every BO record, including imported or resumed drafts.
+  if(/^Criteria of Beneficial Ownership$/i.test(item.en||'')){
+   const criteria=selectedBoCriteria(item.value);
+   if(criteria.length){
+    appendRow(tableRow('field',displayParticularLabel(item),displayParticularLabel(item,'cn'),blank(item.value)));
+    for(const {label,description} of criteria){
+     const row=tableRow('field',label,'实益拥有标准 '+label.slice(-1),description);
+     row.classList.add('pdf-criteria-row');
+     appendRow(row);
+    }
+    continue;
+   }
+  }
   const parts=divideValue(item.value);
   parts.forEach((part,i)=>{
    const continued=parts.length>1?'Part '+(i+1)+' of '+parts.length:'';
