@@ -1,4 +1,5 @@
 import './style.css';
+import {createAnnualReturnHistory} from './history.js';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
@@ -11,6 +12,21 @@ const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
 const DEFAULT_PARTICULARS=JSON.stringify(cloneBlank().particulars);
+const history=createAnnualReturnHistory(doc);
+const sectionOpenState=new Map();
+function historyControls(){
+ const {canUndo,canRedo}=history.state;
+ const undo=$('undo-ar'),redo=$('redo-ar');
+ if(undo)undo.disabled=!canUndo;
+ if(redo)redo.disabled=!canRedo;
+}
+function applyHistoryChange(direction){
+ const next=direction==='undo'?history.undo():history.redo();
+ if(!next)return status('No '+direction+' changes available.');
+ doc=next;generated=null;$('download-box').hidden=true;
+ signingInputs();renderSections();historyControls();saveDraftNow({quiet:true});
+ status(direction==='undo'?'Undid last change.':'Redid change.');
+}
 
 let arFullscreen=false;
 function setFullscreenUi(open){
@@ -55,7 +71,7 @@ function draftOptions(preferred=''){
  select.value=chosen?.key||'';$('resume-draft').disabled=!rows.length;$('delete-draft').disabled=!rows.length;
 }
 function saveDraftNow({quiet=false}={}){
- if(!hasDraftData())return true;
+ if(!hasDraftData()&&!history.state.canUndo&&!history.state.canRedo)return true;
  if(window.parent!==window&&draftScope==='dms:pending'){draftStatus('Waiting for DMS session before saving.',true);return false;}
  try{
   const result=saveAnnualReturnDraft(localStorage,draftScope,currentDraftId(),doc);
@@ -65,9 +81,8 @@ function saveDraftNow({quiet=false}={}){
  }catch(err){draftStatus('Draft NOT saved: '+err.message+'. Keep this page open.',true);return false;}
 }
 function queueDraftSave(){
- // Write immediately so switching DMS tabs cannot lose the last typed character.
- // Browser/Android localStorage is synchronous; a pagehide flush is a backup.
- if(!hasDraftData())return;
+ // Snapshot values and structural edits before persisting the same device draft.
+ history.capture(doc);historyControls();
  saveDraftNow({quiet:true});
 }
 function flushDraft(){if(draftTimer){clearTimeout(draftTimer);draftTimer=null;}return saveDraftNow({quiet:true});}
@@ -167,7 +182,7 @@ if(window.parent!==window){
     const result=importCombinedRegisterSnapshot(doc,payload);
     doc=result.document;
     generated=null;$('download-box').hidden=true;
-    resetView();queueDraftSave();
+    resetView({preserveHistory:true});queueDraftSave();
     const count=result.summary;
     const breakdown=Object.entries(count.records).filter(([,n])=>n>0)
      .map(([key,n])=>n+' '+key).join(', ');
@@ -291,16 +306,19 @@ function addRecord(kind){
  const headings=[];
  for(let i=section+1;i<until;i++)if(doc.particulars[i].type==='heading'&&rule.heading.test(doc.particulars[i].en||''))headings.push(i);
  if(!headings.length){
-  if(kind==='bo'){
-   const source=cloneBlank().particulars,src=source.findIndex(x=>x.type==='heading'&&rule.heading.test(x.en||''));
-   if(src<0)return status('Beneficial Owner template is missing.',true);
-   let stop=src+1;while(stop<source.length&&source[stop].type==='field')stop++;
-   const entry=source.slice(src,stop).map(x=>({...x,value:''}));
-   if(doc.particulars.length+entry.length>1200)return status('Too many fields.',true);
-   doc.particulars.splice(until,0,...entry);renderSections();queueDraftSave();
-   status('Added Beneficial Owner 1.');return;
+  // Recreate the first record after the user intentionally removed every one.
+  const source=cloneBlank().particulars,src=source.findIndex(x=>x.type==='heading'&&rule.heading.test(x.en||''));
+  if(src<0)return status(rule.label+' template is missing.',true);
+  let stop=src+1;while(stop<source.length&&source[stop].type==='field')stop++;
+  const entry=source.slice(src,stop).map(x=>({...x,value:''}));
+  if(doc.particulars.length+entry.length>1200)return status('Too many fields.',true);
+  let insertAt=until;
+  if(kind==='director'){
+   const office=doc.particulars.findIndex((item,i)=>i>section&&i<until&&item.type==='heading'&&/^(COMPANY SECRETARY|AUDITOR)$/i.test(item.en||''));
+   if(office>=0)insertAt=office;
   }
-  return status('At least one Director or Member record is required.',true);
+  doc.particulars.splice(insertAt,0,...entry);renderSections();queueDraftSave();
+  status('Added '+rule.label+' 1 with blank fields.');return;
  }
  const start=headings[0],last=headings[headings.length-1];
  let end=until;
@@ -436,21 +454,55 @@ function addReviewSection(){
  if(doc.particulars.length>=1200)return status('The Annual Return item limit is reached.',true);
  openLabelEditor({mode:'add-section'});
 }
+/** Browser confirm() is unreliable inside Electron and some Android WebViews.
+ * Show an application-owned modal with an explicit destructive action instead.
+ */
+function confirmRemoval(message,action){
+ let modal=$('ar-removal-confirm');
+ if(!modal){
+  modal=document.createElement('dialog');
+  modal.id='ar-removal-confirm';
+  modal.className='ar-custom-field-dialog ar-remove-dialog';
+  modal.innerHTML='<div class="ar-remove-content">'+
+   '<h2>Confirm removal</h2><p id="ar-removal-message"></p>'+
+   '<div class="ar-custom-field-actions">'+
+   '<button type="button" class="button outline" id="ar-removal-cancel">Cancel</button>'+
+   '<button type="button" class="button primary ar-confirm-remove" id="ar-removal-accept">Remove</button>'+
+   '</div></div>';
+  document.body.appendChild(modal);
+ }
+ modal.querySelector('#ar-removal-message').textContent=message;
+ const cancel=modal.querySelector('#ar-removal-cancel');
+ const accept=modal.querySelector('#ar-removal-accept');
+ cancel.onclick=()=>modal.close();
+ accept.onclick=()=>{
+  modal.close();
+  try{action();}catch(error){status('Removal failed: '+(error.message||error),true);}
+ };
+ if(!modal.open)modal.showModal();
+}
 function removeReviewSection(index){
- const item=doc.particulars[index];if(item?.type!=='section')return;
+ const item=doc.particulars[index];if(item?.type!=='section')return status('Section no longer exists.',true);
  let end=index+1;while(end<doc.particulars.length&&doc.particulars[end].type!=='section')end++;
  const count=doc.particulars.slice(index+1,end).filter(x=>x.type==='field').length;
- if(!confirm('Remove the entire section "'+displayParticularLabel(item)+'" and its '+count+
-  ' field(s) from this Annual Return and PDF? This deletes their values too. Make a separate backup first if needed.'))return;
- const result=removeParticularSection(doc,index);
- renderSections();queueDraftSave();status('Removed section: '+result.name+'. '+result.fields+' fields deleted.');
+ const target=item;
+ confirmRemoval('Remove section "'+displayParticularLabel(item)+'" and all '+count+
+  ' associated fields and values? You can use Undo to restore them during this session.',()=>{
+   const current=doc.particulars.indexOf(target);
+   if(current<0)throw Error('Section changed. Retry.');
+   const result=removeParticularSection(doc,current);
+   renderSections();queueDraftSave();status('Removed section: '+result.name+'. Use Undo to restore.');
+  });
 }
 function removeReviewHeading(index){
- const item=doc.particulars[index];if(item?.type!=='heading')return;
- if(ADDONS.some(x=>x.heading.test(item.en||''))){removeWholeRecord(index);return;}
- if(!confirm('Remove heading "'+displayParticularLabel(item)+'" and its associated fields?'))return;
- const result=removeParticularHeading(doc,index);
- renderSections();queueDraftSave();status('Removed heading: '+result.name+'. '+result.fields+' fields deleted.');
+ const entry=doc.particulars[index];if(entry?.type!=='heading')return status('Heading no longer exists.',true);
+ if(ADDONS.some(x=>x.heading.test(entry.en||''))){removeWholeRecord(index);return;}
+ confirmRemoval('Remove "'+displayParticularLabel(entry)+'" and all its associated fields and values? Undo will restore them.',()=>{
+  const current=doc.particulars.indexOf(entry);
+  if(current<0)throw Error('Heading changed. Retry.');
+  const result=removeParticularHeading(doc,current);
+  renderSections();queueDraftSave();status('Removed heading: '+result.name+'. Use Undo to restore.');
+ });
 }
 function saveCustomField(dialog){
  const error=dialog.querySelector('#ar-custom-field-error');
@@ -496,22 +548,25 @@ function saveCustomField(dialog){
  status('Added "'+en+'" to '+(headingIndex!==null?'the selected member record':sectionIndex!==null?'the selected section':'the end of the form')+'. It will appear in the PDF.');
 }
 function removeReviewField(index){
- const item=doc.particulars[index];if(!item||item.type!=='field')return;
- const note=['Company Name','Company Registration No.'].includes(item.en)?' The company identity remains necessary for PDF generation.':'';
- if(!confirm('Delete "'+displayParticularLabel(item)+'" and its value from this Annual Return form and PDF?'+note))return;
- try {deleteParticularField(doc,index);}catch(err){status(err.message,true);return;}
- renderSections();queueDraftSave();status('Removed field: '+displayParticularLabel(item)+'. Change autosaved.');
+ const item=doc.particulars[index];
+ if(item?.type!=='field')return status('Field no longer exists.',true);
+ confirmRemoval('Remove field "'+displayParticularLabel(item)+'" and its value from the Annual Return and PDF? Undo can restore it.',()=>{
+  const current=doc.particulars.indexOf(item);
+  if(current<0)throw Error('Field changed. Retry.');
+  const result=deleteParticularField(doc,current);
+  renderSections();queueDraftSave();status('Removed field: '+displayParticularLabel(result)+'. Use Undo to restore.');
+ });
 }
-
 function removeWholeRecord(index){
- const entry=doc.particulars[index];
- if(!entry||entry.type!=='heading')return;
- if(!confirm('Remove entire '+entry.en+' record and all of its fields?'))return;
- try{
-  const result=removeAnnualReturnRecord(doc,index);
+ const heading=doc.particulars[index];
+ if(heading?.type!=='heading')return status('Heading no longer exists.',true);
+ confirmRemoval('Remove heading "'+displayParticularLabel(heading)+'" and its record fields and values? You can Undo this removal.',()=>{
+  const current=doc.particulars.indexOf(heading);
+  if(current<0)throw Error('Heading changed. Retry.');
+  const result=removeAnnualReturnRecord(doc,current);
   renderSections();queueDraftSave();
-  status('Removed '+result.removedHeading+'. '+result.remaining+' '+result.kind+' record(s) remain.');
- }catch(err){status('Cannot remove record: '+err.message,true);}
+  status('Removed '+result.removedHeading+'. '+result.remaining+' record(s) remain. Use Undo to restore.');
+ });
 }
 function controlsFor(item,index){
  const value=String(item.value||''),common=' data-item="'+index+'"';
@@ -540,23 +595,21 @@ function groups(){
 }
 function renderSections({openSection=null}={}){
  const onlyBlank=$('incomplete').checked;
- const openNames=new Set([...$('particulars').querySelectorAll('details.ar-section[open]')].map(x=>x.dataset.sectionName));
+ // The key is based on canonical section title, so label edits do not collapse it.
  $('particulars').innerHTML=groups().map((group,i)=>{
   const section=doc.particulars[group.index];
   const title=section?displayParticularLabel(section):group.title;
   const chinese=section?displayParticularLabel(section,'cn'):group.cn;
-  const rows=group.items.filter(({item,index})=>{
-   if(!showMemberField(doc.particulars,index))return false;
-   return !onlyBlank||(item.type==='field'&&!String(item.value||'').trim());
-  });
+  const rows=group.items.filter(({item})=>
+   !onlyBlank||item.type!=='field'||!String(item.value||'').trim()
+  ); // Keep all officer headings visible, including when only-blank filter is on.
   const body=rows.map(({index,item})=>{
    if(item.type==='heading'){
      const matched=ADDONS.find(x=>x.id!=='charge'&&x.heading.test(item.en||''));
-     const canRemove=matched&&(matched.id==='bo'||doc.particulars.filter(x=>x.type==='heading'&&matched.heading.test(x.en||'')).length>1);
      return '<div class="heading-entry" data-heading-index="'+index+'"><strong>'+esc(displayParticularLabel(item))+'</strong> <small>'+esc(displayParticularLabel(item,'cn'))+'</small>'+
        '<button type="button" class="button mini" data-edit-heading="'+index+'">Edit heading</button>'+
        '<button type="button" class="button mini ar-add-member-field" data-add-to-record="'+index+'">+ Add field to '+esc(item.en||'record')+'</button>'+
-       (matched?(canRemove?'<button type="button" class="button mini ar-remove-record" data-remove-record="'+index+'">Remove '+esc(matched.label)+'</button>':''):
+       (matched?'<button type="button" class="button mini ar-remove-record" data-remove-record="'+index+'">Remove heading &amp; fields</button>':
        '<button type="button" class="button mini ar-remove-record" data-delete-heading="'+index+'">Remove heading &amp; fields</button>')+'</div>';
    }
    return '<div class="field-entry '+(item.value?'':'blank')+'" data-field-index="'+index+'"><div class="title">'+
@@ -570,7 +623,9 @@ function renderSections({openSection=null}={}){
   }).join('')||(onlyBlank?'<p class="status">No blank fields in this section. Turn off the filter to edit filled fields.</p>':
     '<p class="status">No fields in this section. Use Add field to this section.</p>');
   const key=group.title+':'+i;
-  const shouldOpen=i===0||onlyBlank||openNames.has(key)||openSection===group.index;
+  const startsExpanded=i===0||/DIRECTORS, COMPANY SECRETARY|PARTICULARS OF MEMBERS|CURRENT BENEFICIAL OWNERS/i.test(group.title);
+  const shouldOpen=openSection===group.index||onlyBlank||
+   (sectionOpenState.has(key)?sectionOpenState.get(key):startsExpanded);
   return '<details class="ar-section" data-section-index="'+group.index+'" data-section-name="'+esc(key)+'" '+(shouldOpen?'open':'')+'><summary class="section-header"><span>'+
    esc(title)+'<small>'+esc(chinese)+'</small></span><span class="pill">'+
    rows.filter(x=>x.item.type==='field').length+' fields</span></summary><div class="section-fields">'+
@@ -581,7 +636,7 @@ function renderSections({openSection=null}={}){
    '<button class="button mini" type="button" data-add-record="'+x.id+'">+ Add '+x.label+'</button>').join('')+
    '<button class="button mini" type="button" data-add-to-section="'+group.index+'">+ Add field to this section</button></div>':'')+'</div></details>';
  }).join('')||'<p class="status">No sections remain. Choose Add new section to start again.</p>';
- fieldStatus();
+ fieldStatus();historyControls();
 }
 /** Fields can be reordered using a drag handle (mouse/touch) or ↑/↓ buttons.
  * Original labels, identifiers and field values move together.
@@ -650,7 +705,10 @@ function finishFieldDrag(event){
 }
 $('particulars').addEventListener('pointerup',finishFieldDrag);
 $('particulars').addEventListener('pointercancel',finishFieldDrag);
-function resetView(){signingInputs();$('incomplete').checked=false;renderSections();}
+function resetView({preserveHistory=false}={}){
+ if(!preserveHistory)history.reset(doc);
+ sectionOpenState.clear();signingInputs();$('incomplete').checked=false;renderSections();historyControls();
+}
 function setBusy(flag){busy=flag;$('generate-pdf').disabled=flag;$('save-draft').disabled=flag;}
 async function generate(){
  if(busy)return;
@@ -700,7 +758,22 @@ $('blank').addEventListener('click',()=>{
  doc=cloneBlank();resetView();generated=null;$('download-box').hidden=true;
  draftOptions();draftStatus('New blank form. Changes will autosave on this device.');
 });
-$('incomplete').addEventListener('change',renderSections);
+$('incomplete').addEventListener('change',()=>renderSections());
+$('particulars').addEventListener('toggle',event=>{
+ const target=event.target;
+ if(!target?.matches?.('details.ar-section')||!target.isConnected)return;
+ sectionOpenState.set(target.dataset.sectionName,target.open);
+},true);
+$('undo-ar').addEventListener('click',()=>applyHistoryChange('undo'));
+$('redo-ar').addEventListener('click',()=>applyHistoryChange('redo'));
+document.addEventListener('keydown',event=>{
+ if(!(event.ctrlKey||event.metaKey)||event.altKey)return;
+ // Preserve native textarea Ctrl+Z. Toolbar actions undo field values as well.
+ if(event.target?.closest?.('input,textarea,[contenteditable="true"]'))return;
+ const key=event.key.toLowerCase();
+ if(key==='z'&&!event.shiftKey){event.preventDefault();applyHistoryChange('undo');}
+ else if(key==='y'||(key==='z'&&event.shiftKey)){event.preventDefault();applyHistoryChange('redo');}
+});
 $('signature-fields').addEventListener('input',e=>{const k=e.target.dataset.sign;if(k){doc.signatureDirector[k]=e.target.value;queueDraftSave();}});
 $('particulars').addEventListener('input',e=>{
  if(e.target.dataset.msicSearch!==undefined){refreshMSICResults(e.target);return;}
@@ -765,7 +838,7 @@ $('clear-values').addEventListener('click',()=>{
  doc.particulars.forEach(x=>{if(x.type==='field')x.value='';});
  for(const k of Object.keys(doc.company))doc.company[k]='';
  for(const k of Object.keys(doc.signatureDirector))doc.signatureDirector[k]='';
- resetView();status('All values cleared; bilingual labels preserved.');
+ resetView({preserveHistory:true});queueDraftSave();status('All values cleared; bilingual labels preserved.');
 });
 $('generate-pdf').addEventListener('click',generate);
 $('share-pdf').addEventListener('click',async()=>{
