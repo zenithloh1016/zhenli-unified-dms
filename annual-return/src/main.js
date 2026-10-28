@@ -3,7 +3,7 @@ import {createAnnualReturnHistory} from './history.js';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord,displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading,moveParticularField} from './core.js';
+import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord,displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading,moveParticularField,insertParticularHeading,restoreRsshAuditorHeading} from './core.js';
 import {importCombinedRegisterSnapshot} from './register-import.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
@@ -374,6 +374,8 @@ function customFieldDialog(){
   '<form id="ar-custom-field-form">'+
   '<h2 id="ar-custom-field-title">Add Annual Return field</h2>'+
   '<p id="ar-custom-field-location" class="status"></p>'+
+  '<label id="ar-heading-section-label" for="ar-heading-section" hidden>Place heading under section</label>'+
+  '<select id="ar-heading-section" class="choice-select" hidden></select>'+
   '<label for="ar-custom-field-en">Field name (English) <span aria-hidden="true">*</span></label>'+
   '<input id="ar-custom-field-en" type="text" maxlength="350" required autocomplete="off" placeholder="Enter the English field name">'+
   '<label for="ar-custom-field-cn">Field name (Chinese, optional)</label>'+
@@ -392,6 +394,7 @@ function customFieldDialog(){
   'box-shadow:0 20px 60px #092a4255;}',
   '.ar-custom-field-dialog::backdrop{background:rgba(7,26,43,.65);}',
   '.ar-custom-field-dialog form{display:grid;gap:10px;}',
+  '.ar-custom-field-dialog [hidden]{display:none!important;}',
   '.ar-custom-field-dialog h2{margin:0 0 4px;font-size:21px;}',
   '.ar-custom-field-dialog label{font-weight:700;font-size:14px;}',
   '.ar-custom-field-dialog input{box-sizing:border-box;width:100%;min-height:44px;padding:10px 12px;'+
@@ -427,17 +430,29 @@ function openLabelEditor(target){
   displayParticularLabel(doc.particulars[target.headingIndex]):
   target.sectionIndex!==null&&target.sectionIndex!==undefined?
   displayParticularLabel(doc.particulars[target.sectionIndex]):'the end of the form';
- const title=mode==='edit-label'?'Edit '+entry.type+' labels':mode==='add-section'?'Add Annual Return section':'Add Annual Return field';
+ const title=mode==='edit-label'?'Edit '+entry.type+' labels':mode==='add-section'?'Add Annual Return section':mode==='add-heading'?'Add Annual Return heading':'Add Annual Return field';
  dialog.querySelector('#ar-custom-field-title').textContent=title;
- const fieldType=mode==='add-section'||entry?.type==='section'?'Section':entry?.type==='heading'?'Heading':'Field';
+ const fieldType=mode==='add-section'||entry?.type==='section'?'Section':mode==='add-heading'||entry?.type==='heading'?'Heading':'Field';
  dialog.querySelector('label[for="ar-custom-field-en"]').textContent=fieldType+' name (English) *';
  dialog.querySelector('label[for="ar-custom-field-cn"]').textContent=fieldType+' name (Chinese, optional)';
  dialog.querySelector('#ar-custom-field-location').textContent=mode==='edit-label'?
   'Update the displayed English and Chinese labels; existing values are retained.':
-  mode==='add-section'?'The new section will appear at the end of the form.':'New field will be added to '+context+'.';
+  mode==='add-section'?'The new section will appear at the end of the form.':
+  mode==='add-heading'?'New heading will be added under '+context+'. Add its fields using the heading’s Add Field button.':
+  'New field will be added to '+context+'.';
  dialog.querySelector('#ar-custom-field-en').value=entry?displayParticularLabel(entry):'';
  dialog.querySelector('#ar-custom-field-cn').value=entry?displayParticularLabel(entry,'cn'):'';
- dialog.querySelector('button[type="submit"]').textContent=mode==='edit-label'?'Save labels':mode==='add-section'?'Add section':'Add field';
+ dialog.querySelector('button[type="submit"]').textContent=mode==='edit-label'?'Save labels':mode==='add-section'?'Add section':mode==='add-heading'?'Add heading':'Add field';
+ const pick=dialog.querySelector('#ar-heading-section');
+ const showPicker=mode==='add-heading'&&target.sectionIndex==null;
+ dialog.querySelector('#ar-heading-section-label').hidden=!showPicker;pick.hidden=!showPicker;
+ if(showPicker){
+  const sections=doc.particulars.map((item,index)=>({item,index})).filter(x=>x.item.type==='section');
+  pick.innerHTML='<option value="">— Choose section —</option>'+sections.map(({item,index})=>
+   '<option value="'+index+'">'+esc(displayParticularLabel(item))+'</option>').join('');
+  const preferred=sections.find(x=>/DIRECTORS, COMPANY SECRETARY/i.test(x.item.en||''))||sections[0];
+  pick.value=String(preferred?.index??'');
+ }
  dialog.querySelector('#ar-custom-field-error').hidden=true;
  if(!dialog.open){
   if(typeof dialog.showModal==='function')dialog.showModal();
@@ -453,6 +468,12 @@ function editReviewItem(index){
 function addReviewSection(){
  if(doc.particulars.length>=1200)return status('The Annual Return item limit is reached.',true);
  openLabelEditor({mode:'add-section'});
+}
+function addReviewHeading(sectionIndex=null){
+ if(doc.particulars.length>=1200)return status('The Annual Return item limit is reached.',true);
+ if(sectionIndex!==null&&doc.particulars[sectionIndex]?.type!=='section')return status('Section no longer exists.',true);
+ if(!doc.particulars.some(item=>item.type==='section'))return status('Add a section first, then add a heading inside it.',true);
+ openLabelEditor({mode:'add-heading',sectionIndex});
 }
 /** Browser confirm() is unreliable inside Electron and some Android WebViews.
  * Show an application-owned modal with an explicit destructive action instead.
@@ -524,6 +545,19 @@ function saveCustomField(dialog){
   doc.particulars.push({type:'section',en,cn,value:''});
   dialog.close();renderSections({openSection:doc.particulars.length-1});queueDraftSave();
   status('Added section "'+en+'". Use Add field to this section to insert particulars.');
+  return;
+ }
+ if(target.mode==='add-heading'){
+  const selection=target.sectionIndex==null?dialog.querySelector('#ar-heading-section').value:String(target.sectionIndex);
+  const sectionIndex=selection===''?null:Number(selection);
+  if(sectionIndex===null||doc.particulars[sectionIndex]?.type!=='section'){
+   error.textContent='Select the section for this heading.';error.hidden=false;return;
+  }
+  try{
+   insertParticularHeading(doc,sectionIndex,en,cn);
+   dialog.close();renderSections({openSection:sectionIndex});queueDraftSave();
+   status('Added heading "'+en+'". Use its + Add field button to add particulars.');
+  }catch(err){error.textContent=err.message;error.hidden=false;}
   return;
  }
  const {sectionIndex=null,headingIndex=null}=target;
@@ -634,7 +668,11 @@ function renderSections({openSection=null}={}){
     '<button type="button" class="button mini ar-remove-record" data-delete-section="'+group.index+'">Remove section &amp; fields</button></div>':'')+
    body+(group.index>=0?'<div class="addon-bar">'+ADDONS.filter(x=>x.section.test(group.title)).map(x=>
    '<button class="button mini" type="button" data-add-record="'+x.id+'">+ Add '+x.label+'</button>').join('')+
-   '<button class="button mini" type="button" data-add-to-section="'+group.index+'">+ Add field to this section</button></div>':'')+'</div></details>';
+   '<button class="button mini" type="button" data-add-heading-to-section="'+group.index+'">+ Add heading</button>'+
+   '<button class="button mini" type="button" data-add-to-section="'+group.index+'">+ Add field to this section</button>'+
+   (/DIRECTORS, COMPANY SECRETARY/i.test(group.title)&&doc.company.name.trim().replace(/\s+/g,' ').toUpperCase()==='RSSH SERVICES SDN BHD'&&!doc.particulars.some(x=>x.type==='heading'&&x.en==='AUDITOR')?
+   '<button class="button mini" type="button" data-restore-rssh-auditor>↺ Restore Auditor heading (RSSH)</button>':'')+
+   '</div>':'')+'</div></details>';
  }).join('')||'<p class="status">No sections remain. Choose Add new section to start again.</p>';
  fieldStatus();historyControls();
 }
@@ -826,12 +864,15 @@ $('particulars').addEventListener('click',e=>{
   if(!desc)return;
   changeMSIC(Number(manual.dataset.msicManual),code,false,desc.slice(0,250));return;
  }
+ const restoreAuditor=e.target.closest('[data-restore-rssh-auditor]');if(restoreAuditor){restoreRsshAuditorNow();return;}
+ const addHeading=e.target.closest('[data-add-heading-to-section]');if(addHeading){addReviewHeading(Number(addHeading.dataset.addHeadingToSection));return;}
  const recordField=e.target.closest('[data-add-to-record]');if(recordField){addCustomField({headingIndex:Number(recordField.dataset.addToRecord)});return;}
  const sectionField=e.target.closest('[data-add-to-section]');if(sectionField){addCustomField({sectionIndex:Number(sectionField.dataset.addToSection)});return;}
  const add=e.target.closest('[data-add-record]');if(add)addRecord(add.dataset.addRecord);
 });
 $('add-field').addEventListener('click',()=>addCustomField());
 $('add-section').addEventListener('click',addReviewSection);
+$('add-heading').addEventListener('click',()=>addReviewHeading());
 $('clear-values').addEventListener('click',()=>{
  if(!confirm('Clear every field and signatory value? Your last saved draft remains until new information is entered.'))return;
  if(!flushDraft())return;
