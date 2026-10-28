@@ -45,14 +45,40 @@ test('selected, imported and restored BO criteria A-E retain the chosen descript
   [BO_CRITERIA_DESCRIPTIONS.B,BO_CRITERIA_DESCRIPTIONS.D]);
 });
 
-test('PDF prints original BO selection followed by each selected full explanation in a table row',()=>{
+test('PDF puts each BO criterion immediately beside its full description, matching the editor',()=>{
  assert.match(pdfSource,/if\(\/\^Criteria of Beneficial Ownership\$\/i\.test\(item\.en\|\|''\)\)/);
  assert.match(pdfSource,/const criteria=selectedBoCriteria\(item\.value\)/);
- assert.match(pdfSource,/appendRow\(tableRow\('field',displayParticularLabel\(item\),displayParticularLabel\(item,'cn'\),blank\(item\.value\)\)\)/);
  assert.match(pdfSource,/for\(const \{label,description\} of criteria\)/);
- assert.match(pdfSource,/tableRow\('field',label,'实益拥有标准 '\+label\.slice\(-1\),description\)/);
- assert.match(pdfSource,/row\.classList\.add\('pdf-criteria-row'\)/);
- assert.match(pdfSource,/appendRow\(row\)/);
- assert.match(styles,/\.pdf-criteria-row td\{background:#fbfdff/);
+ assert.match(pdfSource,/tableRow\('criterion',displayParticularLabel\(item\),/);
+ assert.match(pdfSource,/displayParticularLabel\(item,'cn'\),description,label\)/);
+ assert.match(pdfSource,/else if\(kind==='criterion'\)/);
+ const cellStart=pdfSource.indexOf("'<strong class=\"pdf-criterion-label\">'");
+ const cellEnd=pdfSource.indexOf("</span></span></td>'",cellStart);
+ assert.ok(cellStart>=0&&cellEnd>cellStart,'criteria inline cell must be present');
+ const cell=pdfSource.slice(cellStart,cellEnd);
+ assert.match(cell,/pageEsc\(continuation\)/);
+ assert.match(cell,/pdf-criterion-separator/);
+ assert.match(cell,/ — /);
+ assert.match(cell,/pageEsc\(value\)/);
+ assert.ok(cell.indexOf('pageEsc(continuation)')<cell.indexOf('pageEsc(value)'),'label precedes description');
+ assert.doesNotMatch(pdfSource,/tableRow\('field',label,'实益拥有标准 '/);
+ assert.match(styles,/\.pdf-criterion-label\{display:inline/);
+ assert.match(styles,/\.pdf-criterion-separator,\.pdf-criterion-description\{display:inline\}/);
+ assert.match(styles,/\.pdf-criterion-row \.pdf-criterion-cell\{/);
  assert.match(pdfSource,/for\(const \[index,item\] of \(doc\.particulars\|\|\[\]\)\.entries\(\)\)/);
+});
+
+test('exported A–E options preserve editor descriptions and render selected values only',()=>{
+ const selection=selectedBoCriteria('Criteria A, Criteria C, Criteria E');
+ const rows=selection.map(({label,description})=>label+' — '+description);
+ assert.equal(rows.length,3);
+ assert.deepEqual(selection.map(x=>x.code),['A','C','E']);
+ for(const row of rows){
+  assert.match(row,/^Criteria [ACE] — /);
+  assert.ok(row.length>75);
+ }
+ assert.equal(rows.some(x=>x.startsWith('Criteria B')),false);
+ assert.equal(rows.some(x=>x.startsWith('Criteria D')),false);
+ assert.match(pdfSource,/appendRow\(tableRow\('criterion'/);
+ assert.match(pdfSource,/if\(criteria\.length\)/);
 });
