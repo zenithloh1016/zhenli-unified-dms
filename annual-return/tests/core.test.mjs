@@ -254,6 +254,7 @@ test('individual and corporate members retain separate statutory particulars and
  assert.equal(showMemberField(list,person),false);
  assert.equal(showMemberField(list,corp),true);
  const legacy=cloneBlank();
+ legacy.schemaVersion=5; // Historical format is migrated, unlike current user-edited drafts.
  legacy.particulars=legacy.particulars.filter(x=>!MEMBER_PERSONAL_FIELDS.some(([en])=>x.en===en));
  legacy.particulars.find(x=>x.en==='Corporate Name').value='LEGACY MEMBER SDN. BHD.';
  const converted=normalizeDocument(legacy);
