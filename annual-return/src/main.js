@@ -441,7 +441,7 @@ function removeReviewSection(index){
  let end=index+1;while(end<doc.particulars.length&&doc.particulars[end].type!=='section')end++;
  const count=doc.particulars.slice(index+1,end).filter(x=>x.type==='field').length;
  if(!confirm('Remove the entire section "'+displayParticularLabel(item)+'" and its '+count+
-  ' field(s) from this Annual Return and PDF? This cannot be undone except by restoring a saved draft.'))return;
+  ' field(s) from this Annual Return and PDF? This deletes their values too. Make a separate backup first if needed.'))return;
  const result=removeParticularSection(doc,index);
  renderSections();queueDraftSave();status('Removed section: '+result.name+'. '+result.fields+' fields deleted.');
 }
