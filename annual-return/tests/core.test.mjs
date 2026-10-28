@@ -277,7 +277,9 @@ test('complete private company dropdown and Add Field per section/member appear 
  assert.ok(js.includes('data-company-select'));
  assert.ok(js.includes('dmsCompanies.map'));
  assert.ok(js.includes('data-add-to-section'));
- assert.ok(js.includes('data-add-to-member'));
+ assert.ok(js.includes('data-add-to-record'));
+ assert.ok(js.includes('data-shift-field'));
+ assert.ok(js.includes('data-drag-field'));
  assert.ok(js.includes('data-add-record'));
  assert.ok(pdf.includes('showMemberField'));
 });
@@ -403,4 +405,57 @@ test('all sections can be removed and a fresh section added without invalidating
  assert.equal(normalizeDocument(draft).particulars.length,0);
  draft.particulars.push({type:'section',en:'RESTORED SECTION',cn:'恢复部分',value:''});
  assert.equal(displayParticularLabel(normalizeDocument(draft).particulars[0]),'RESTORED SECTION');
+});
+
+
+test('drag reordering moves whole fields without changing their values, labels or statutory identifiers',async()=>{
+ const {moveParticularField}=await import('../src/core.js');
+ const doc=cloneBlank(),fields=doc.particulars;
+ const names=['Company Name','Company Registration No.','Annual Return Year'];
+ const positions=names.map(en=>fields.findIndex(x=>x.en===en));
+ assert.ok(positions.every(i=>i>=0));
+ const [first,second]=positions;
+ const item=fields[first];
+ item.value='EXAMPLE COMPANY SDN BHD';
+ item.displayEn='Display Name';
+ const moved=moveParticularField(doc,first,second,{after:true});
+ assert.equal(moved.moved,true);
+ assert.equal(doc.particulars.find(x=>x.en==='Company Name'),item);
+ assert.equal(item.displayEn,'Display Name');
+ assert.equal(item.value,'EXAMPLE COMPANY SDN BHD');
+ assert.equal(doc.particulars[second].en,'Company Name');
+ const secondMove=moveParticularField(doc,second,second-1);
+ assert.equal(secondMove.moved,true);
+ assert.equal(doc.particulars[first],item);
+ assert.throws(()=>moveParticularField(doc,first,-1),/Drop onto/);
+ assert.throws(()=>moveParticularField(doc,0,first),/Drag an individual/);
+ const restored=normalizeDocument(JSON.parse(JSON.stringify(doc)));
+ assert.equal(restored.particulars[first].value,item.value);
+ assert.equal(restored.particulars[first].displayEn,item.displayEn);
+});
+test('all director, member, secretary, auditor and beneficial owner headings accept custom field insertion',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const src=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ const doc=cloneBlank().particulars;
+ for(const pattern of [/^DIRECTOR 1$/,/^MEMBER 1$/,/^COMPANY SECRETARY$/,/^AUDITOR$/,/^BENEFICIAL OWNER 1$/]){
+  const h=doc.find(x=>x.type==='heading'&&pattern.test(x.en));
+  assert.ok(h,'missing template heading '+pattern);
+ }
+ assert.ok(src.includes('data-add-to-record'));
+ assert.ok(src.includes("addCustomField({headingIndex:Number(recordField.dataset.addToRecord)})"));
+ assert.ok(src.includes('data-delete-field'));
+ assert.ok(src.includes('pointerdown'));
+ assert.ok(src.includes('pointermove'));
+});
+test('the Windows and website PDF download bridge has an implementation and an iframe fallback',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const parent=readFileSync(new URL('../../src/main.js',import.meta.url),'utf8');
+ const pdf=readFileSync(new URL('../src/pdf.js',import.meta.url),'utf8');
+ const windows=readFileSync(new URL('../../windows/main.cjs',import.meta.url),'utf8');
+ assert.ok(parent.includes('function browserDownload(blob,filename)'));
+ assert.ok(parent.includes('const saved=browserDownload(blob,name)'));
+ assert.ok(parent.includes('setTimeout(()=>globalThis.URL.revokeObjectURL(objectUrl),120000)'));
+ assert.ok(pdf.includes('link.hidden=Capacitor.isNativePlatform()'));
+ assert.ok(pdf.includes('await savePdfToAndroidFiles(blob,name)'));
+ assert.ok(windows.includes("session.defaultSession.on('will-download'"));
 });
