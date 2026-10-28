@@ -9,6 +9,7 @@ import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
 import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,removeAnnualReturnDraft,draftIdOfKey} from './drafts.js';
 import {BO_CRITERIA_DESCRIPTIONS,selectedBoCriteria} from './bo-criteria.js';
+import {createCloudDraftClient} from './cloud-draft-client.js';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
@@ -59,6 +60,19 @@ document.addEventListener('keydown',event=>{
 let draftScope=window.parent===window?'standalone':'dms:pending',newDraftId='new-'+Date.now().toString(36),draftTimer=null;
 let selectedDmsCompanyId=null,dmsCompanies=[];
 let pendingRegisterImport='';
+const cloudDraft=createCloudDraftClient({
+ getCompanyId:()=>selectedDmsCompanyId,
+ getScope:()=>draftScope,
+ getDocument:()=>doc,
+ applyDocument:document=>{
+  doc=document;generated=null;$('download-box').hidden=true;
+  resetView();draftOptions();
+ },
+ onStatus:(message,error=false)=>{
+  const el=$('cloud-sync-status');
+  if(el){el.textContent=message;el.style.color=error?'#b23b44':'#327284';}
+ }
+});
 function currentDraftId(){return selectedDmsCompanyId||newDraftId;}
 function hasDraftData(){return JSON.stringify(doc.particulars)!==DEFAULT_PARTICULARS||
  Boolean(doc.company?.name||doc.company?.no||doc.signatureDirector?.name||doc.signatureDirector?.nric);}
@@ -78,6 +92,7 @@ function saveDraftNow({quiet=false}={}){
   const result=saveAnnualReturnDraft(localStorage,draftScope,currentDraftId(),doc);
   draftOptions(result.key);
   draftStatus((quiet?'Autosaved':'Saved draft')+' on this device · '+new Date(result.updatedAt).toLocaleTimeString());
+  cloudDraft.markEdited();
   return true;
  }catch(err){draftStatus('Draft NOT saved: '+err.message+'. Keep this page open.',true);return false;}
 }
@@ -102,6 +117,7 @@ function resumeLocalDraft(key){
   const restored=restoreRsshSavedDraftOnce();
   const chargeRemoved=removeRsshChargeTwoOnce();
   draftStatus('Resumed '+draft.name+' · '+new Date(draft.updatedAt).toLocaleString()+'. '+restored+chargeRemoved);
+  if(match)void cloudDraft.open();
   return true;
  }catch(err){draftStatus('Could not resume draft: '+err.message,true);return false;}
 }
@@ -191,6 +207,7 @@ function applyDmsCompany(company){
  if(!isValidCompanyRecord(company))return {ok:false,reason:'Invalid company record from DMS.'};
  const name=company.name.trim(),registrationNo=company.registrationNo.trim();
  if(selectedDmsCompanyId===company.id&&doc.company.name===name&&doc.company.no===registrationNo){
+  void cloudDraft.open();
   const fixed=removeRsshChargeTwoOnce();
   if(fixed)status(fixed);
   return {ok:true};
@@ -218,12 +235,14 @@ function applyDmsCompany(company){
  resetView();draftOptions();
  const restored=restoreRsshSavedDraftOnce();
  const chargeRemoved=removeRsshChargeTwoOnce();
+ void cloudDraft.open({force:true});
  status('Company loaded from DMS Documents: '+name+(registrationNo?' ('+registrationNo+')':' — registration number missing; please enter it before PDF generation')+'. '+restored+chargeRemoved+'Complete and verify all remaining statutory particulars.');
  return {ok:true};
 }
 if(window.parent!==window){
  window.addEventListener('message',event=>{
   if(event.source!==window.parent||event.origin!==window.location.origin)return;
+  if(cloudDraft.receive(event.data))return;
   if(event.data?.type==='ZHENLI_DMS_AR_FULLSCREEN_STATE'){setFullscreenUi(Boolean(event.data.open));return;}
   if(event.data?.type==='ZHENLI_DMS_AR_COMPANY_LIST'){
    const records=Array.isArray(event.data.companies)?event.data.companies:[];
@@ -243,6 +262,7 @@ if(window.parent!==window){
      }catch(error){console.warn('Annual Return deleted-company draft cleanup:',error);}
     }
     draftOptions();
+    if(selectedDmsCompanyId)void cloudDraft.open();
    }
    renderSections();return;
   }
@@ -933,17 +953,21 @@ $('import-combined-register').addEventListener('click',()=>{
  },window.location.origin);
 });
 $('save-draft').addEventListener('click',()=>{if(!hasDraftData())return draftStatus('Enter some particulars before saving.',true);saveDraftNow();});
+$('cloud-sync-now').addEventListener('click',()=>cloudDraft.syncNow());
 $('resume-draft').addEventListener('click',()=>{if(flushDraft())resumeLocalDraft($('draft-picker').value);});
 $('delete-draft').addEventListener('click',()=>{
  const key=$('draft-picker').value;if(!key)return;
  if(!confirm('Permanently delete this locally saved Annual Return draft? The currently open form remains unchanged.'))return;
- try{removeAnnualReturnDraft(localStorage,key,draftScope);draftOptions();draftStatus('Selected local draft deleted.');}
+ try{const companyId=draftIdOfKey(key,draftScope);
+  removeAnnualReturnDraft(localStorage,key,draftScope);draftOptions();draftStatus('Selected local draft deleted.');
+  if(companyId===selectedDmsCompanyId)void cloudDraft.remove(companyId);
+ }
  catch(err){draftStatus('Delete failed: '+err.message,true);}
 });
 $('blank').addEventListener('click',()=>{
  if(!confirm('Start a blank Annual Return? The current unfinished form will be saved on this device.'))return;
  if(!flushDraft())return;
- selectedDmsCompanyId=null;newDraftId='new-'+Date.now().toString(36);
+ cloudDraft.reset();selectedDmsCompanyId=null;newDraftId='new-'+Date.now().toString(36);
  doc=cloneBlank();resetView();generated=null;$('download-box').hidden=true;
  draftOptions();draftStatus('New blank form. Changes will autosave on this device.');
 });
