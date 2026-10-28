@@ -45,29 +45,28 @@ test('selected, imported and restored BO criteria A-E retain the chosen descript
   [BO_CRITERIA_DESCRIPTIONS.B,BO_CRITERIA_DESCRIPTIONS.D]);
 });
 
-test('PDF puts each BO criterion immediately beside its full description, matching the editor',()=>{
+test('PDF uses ONE left-hand criteria label with selected options on the right',()=>{
  assert.match(pdfSource,/if\(\/\^Criteria of Beneficial Ownership\$\/i\.test\(item\.en\|\|''\)\)/);
  assert.match(pdfSource,/const criteria=selectedBoCriteria\(item\.value\)/);
- assert.match(pdfSource,/for\(const \{label,description\} of criteria\)/);
- assert.match(pdfSource,/tableRow\('criterion',displayParticularLabel\(item\),/);
- assert.match(pdfSource,/displayParticularLabel\(item,'cn'\),description,label\)/);
+ assert.match(pdfSource,/appendRow\(tableRow\('criterion',displayParticularLabel\(item\),/);
+ assert.match(pdfSource,/displayParticularLabel\(item,'cn'\),criteria\)/);
  assert.match(pdfSource,/else if\(kind==='criterion'\)/);
- const cellStart=pdfSource.indexOf("'<strong class=\"pdf-criterion-label\">'");
- const cellEnd=pdfSource.indexOf("</span></span></td>'",cellStart);
- assert.ok(cellStart>=0&&cellEnd>cellStart,'criteria inline cell must be present');
- const cell=pdfSource.slice(cellStart,cellEnd);
- assert.match(cell,/pageEsc\(continuation\)/);
- assert.match(cell,/pdf-criterion-separator/);
- assert.match(cell,/ — /);
- assert.match(cell,/pageEsc\(value\)/);
- assert.ok(cell.indexOf('pageEsc(continuation)')<cell.indexOf('pageEsc(value)'),'label precedes description');
+ assert.match(pdfSource,/const selected=Array\.isArray\(value\)\?value:\[\]/);
+ assert.match(pdfSource,/const criteriaHtml=selected\.map\(\(\{label,description\}\)=>/);
+ assert.match(pdfSource,/pdf-criterion-item/);
+ assert.match(pdfSource,/pageEsc\(label\)/);
+ assert.match(pdfSource,/pageEsc\(description\)/);
+ assert.match(pdfSource,/pdf-criterion-separator/);
+ assert.match(pdfSource,/ — /);
+ assert.match(pdfSource,/row\.innerHTML='<th scope="row">/);
+ assert.match(pdfSource,/pdf-criterion-cell/);
  assert.doesNotMatch(pdfSource,/tableRow\('field',label,'实益拥有标准 '/);
+ assert.match(styles,/\.pdf-criterion-item\{display:block/);
+ assert.match(styles,/\.pdf-criterion-item\+\.pdf-criterion-item\{margin-top:/);
  assert.match(styles,/\.pdf-criterion-label\{display:inline/);
- assert.match(styles,/\.pdf-criterion-separator,\.pdf-criterion-description\{display:inline\}/);
+ assert.match(styles,/\.pdf-criterion-separator,\.pdf-criterion-description\{display:inline/);
  assert.match(styles,/\.pdf-criterion-row \.pdf-criterion-cell\{/);
- assert.match(pdfSource,/for\(const \[index,item\] of \(doc\.particulars\|\|\[\]\)\.entries\(\)\)/);
 });
-
 test('exported A–E options preserve editor descriptions and render selected values only',()=>{
  const selection=selectedBoCriteria('Criteria A, Criteria C, Criteria E');
  const rows=selection.map(({label,description})=>label+' — '+description);
