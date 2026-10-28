@@ -105,14 +105,17 @@ function tableRow(kind,english,chinese,value='',continuation=''){
  }else if(kind==='note'){
   row.innerHTML='<td colspan="2">'+value+'</td>';
  }else if(kind==='criterion'){
-  // Match the UNICOSEC editor: "Criteria A — full description" runs inline
-  // within the same value cell, not in separate label/description columns.
+  // One BO criteria field = ONE table row. The label appears once on the left,
+  // while every checked criterion sits directly beside its description on the
+  // right, exactly like UNICOSEC's checkbox layout.
+  const selected=Array.isArray(value)?value:[];
+  const criteriaHtml=selected.map(({label,description})=>
+   '<div class="pdf-criterion-item"><strong class="pdf-criterion-label">'+pageEsc(label)+'</strong>'+
+   '<span class="pdf-criterion-separator"> — </span>'+
+   '<span class="pdf-criterion-description">'+pageEsc(description)+'</span></div>').join('');
   row.innerHTML='<th scope="row"><span class="pdf-row-name">'+pageEsc(english||'Criteria of Beneficial Ownership')+'</span>'+
    (chinese?'<span class="pdf-row-translation">'+pageEsc(chinese)+'</span>':'')+
-   '</th><td class="pdf-criterion-cell"><span class="pdf-criterion-inline">'+
-   '<strong class="pdf-criterion-label">'+pageEsc(continuation)+'</strong>'+
-   '<span class="pdf-criterion-separator"> — </span>'+
-   '<span class="pdf-criterion-description">'+pageEsc(value)+'</span></span></td>';
+   '</th><td class="pdf-criterion-cell">'+criteriaHtml+'</td>';
  }else{
   const isBlank=value==='NOT PROVIDED / 未提供资料';
   row.innerHTML='<th scope="row"><span class="pdf-row-name">'+pageEsc(english||'Unnamed field')+'</span>'+
@@ -194,13 +197,8 @@ export function renderPages(doc){
   if(/^Criteria of Beneficial Ownership$/i.test(item.en||'')){
    const criteria=selectedBoCriteria(item.value);
    if(criteria.length){
-    // Show each selected criterion directly beside its description, exactly
-    // like the editor. Each is an independent paginated row so long lists
-    // cannot disappear beyond the bottom of an A4 page.
-    for(const {label,description} of criteria){
-     appendRow(tableRow('criterion',displayParticularLabel(item),
-      displayParticularLabel(item,'cn'),description,label));
-    }
+    appendRow(tableRow('criterion',displayParticularLabel(item),
+     displayParticularLabel(item,'cn'),criteria));
     continue;
    }
   }
