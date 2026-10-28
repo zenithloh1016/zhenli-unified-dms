@@ -79,89 +79,130 @@ export async function savePdf(blob,name,{share=false}={}){
  link.click();
  return 'Download requested. Open Brave Downloads or Files → Downloads. The direct PDF link remains available below.';
 }
-function divideValue(value,max=360){
-  const str=blank(value);
-  if(str.length<=max)return [str];
-  const pieces=[];let remaining=str;
-  while(remaining.length){
-    if(remaining.length<=max){pieces.push(remaining);break;}
-    let cut=remaining.lastIndexOf('\n',max);
-    if(cut<max/3)cut=remaining.lastIndexOf(' ',max);
-    if(cut<max/3)cut=max;
-    pieces.push(remaining.slice(0,cut).trim());
-    remaining=remaining.slice(cut).trim();
-  }
-  return pieces.length?pieces:[str];
+// Keep long text inside bounded table rows instead of allowing a tall
+// textarea value to spill below the footer or disappear at a page boundary.
+function divideValue(value,max=230){
+ const raw=blank(value),pieces=[];
+ let remaining=raw;
+ while(remaining.length>max){
+  let cut=remaining.lastIndexOf('\n',max);
+  if(cut<max/3)cut=remaining.lastIndexOf(' ',max);
+  if(cut<max/3)cut=max;
+  pieces.push(remaining.slice(0,cut).trim());
+  remaining=remaining.slice(cut).trim();
+ }
+ if(remaining)pieces.push(remaining);
+ return pieces.length?pieces:[raw];
 }
-function block(cls,html){
-  const div=document.createElement('div');div.className=cls;div.innerHTML=html;return div;
+const pageEsc=escapeHtml;
+function tableRow(kind,english,chinese,value='',continuation=''){
+ const row=document.createElement('tr');
+ row.className='pdf-'+kind+'-row';
+ if(kind==='section'||kind==='heading'){
+  row.innerHTML='<th colspan="2" scope="colgroup"><span class="pdf-row-name">'+pageEsc(english||'Untitled')+'</span>'+
+   (chinese?'<span class="pdf-row-translation">'+pageEsc(chinese)+'</span>':'')+'</th>';
+ }else if(kind==='note'){
+  row.innerHTML='<td colspan="2">'+value+'</td>';
+ }else{
+  const isBlank=value==='NOT PROVIDED / 未提供资料';
+  row.innerHTML='<th scope="row"><span class="pdf-row-name">'+pageEsc(english||'Unnamed field')+'</span>'+
+   (chinese?'<span class="pdf-row-translation">'+pageEsc(chinese)+'</span>':'')+
+   (continuation?'<span class="pdf-row-continuation">'+pageEsc(continuation)+'</span>':'')+
+   '</th><td class="pdf-cell-value'+(isBlank?' pdf-empty':'')+'">'+pageEsc(value)+'</td>';
+ }
+ return row;
 }
 export function renderPages(doc){
-  const stage=document.getElementById('pdf-stage');stage.textContent='';
-  const pages=[];
-  function makePage(continuation=false){
-    const page=document.createElement('article');page.className='pdf-sheet';
-    page.innerHTML='<div class="pdf-topline"></div><div class="pdf-flow"></div><div class="pdf-bottom"><span>UNICOSEC · ANNUAL RETURN PARTICULARS · REVIEW ONLY / 仅供审核</span><span class="page-number"></span></div>';
-    stage.append(page);pages.push(page);
-    const flow=page.querySelector('.pdf-flow');
-    if(continuation)flow.append(block('pdf-kicker',escapeHtml(doc.company.name||'COMPANY')+' — '+escapeHtml(doc.company.arYear||'')+' / CONTINUED 续页'));
-    return flow;
+ const stage=document.getElementById('pdf-stage');
+ if(!stage)throw Error('Annual Return PDF preview surface is missing.');
+ stage.textContent='';
+ const pages=[];
+ let page=null,tableBody=null;
+ const company=doc.company||{};
+ const HEADER_EN='PARTICULARS / ITEM';
+ const HEADER_CN='项目';
+ const VALUE_EN='CURRENT INFORMATION / DETAILS';
+ const VALUE_CN='现有资料';
+ // Pixel dimensions correspond to an A4 sheet at 96 CSS pixels per inch.
+ // Keep a gap above the footer; the bottommost table border is never clipped.
+ const TABLE_BOTTOM=1033;
+ function createPage(continuation=false){
+  page=document.createElement('article');
+  page.className='pdf-sheet';
+  const companyName=pageEsc(company.name||'COMPANY NAME TO CONFIRM');
+  const year=pageEsc(company.arYear||'YEAR TO CONFIRM');
+  const reg=pageEsc(company.no||'REGISTRATION NO. TO CONFIRM');
+  page.innerHTML=
+   '<header class="pdf-page-head">'+
+    '<div class="pdf-brandline"><span class="pdf-brand-mark">U</span><span class="pdf-brand-name">UNICOSEC</span>'+
+     '<span class="pdf-brand-note">ANNUAL RETURN REVIEW / 周年申报资料审核</span></div>'+
+    '<div class="pdf-company-line"><strong>'+companyName+'</strong></div>'+
+    '<div class="pdf-document-subline"><span>Registration No. / 注册号码: '+reg+'</span>'+
+     '<span>Annual Return Year / 年份: '+year+'</span>'+
+     (continuation?'<span class="pdf-continued">CONTINUED / 续页</span>':'')+'</div>'+
+   '</header>'+
+   '<div class="pdf-flow"><table class="pdf-particulars-table">'+
+    '<colgroup><col class="pdf-label-column"/><col class="pdf-value-column"/></colgroup>'+
+    '<thead><tr><th scope="col"><span>'+HEADER_EN+'</span><small>'+HEADER_CN+'</small></th>'+
+    '<th scope="col"><span>'+VALUE_EN+'</span><small>'+VALUE_CN+'</small></th></tr></thead>'+
+    '<tbody></tbody></table></div>'+
+   '<footer class="pdf-bottom"><span>UNICOSEC · CLIENT REVIEW ONLY / 仅供客户审核</span>'+
+    '<span class="page-number"></span></footer>';
+  stage.appendChild(page);
+  pages.push(page);
+  tableBody=page.querySelector('tbody');
+  return page;
+ }
+ function fitsRow(row,headroom=0){
+  // Measure real HTML table geometry, not estimated character counts.
+  const pageBox=page.getBoundingClientRect(),rowBox=row.getBoundingClientRect();
+  return rowBox.bottom-pageBox.top+headroom<=TABLE_BOTTOM;
+ }
+ function appendRow(row,reserveNext=0){
+  tableBody.appendChild(row);
+  if(fitsRow(row,reserveNext))return;
+  row.remove();
+  // Always repeat the table's full column header at a page break.
+  createPage(true);
+  tableBody.appendChild(row);
+  if(!fitsRow(row))throw Error('One Annual Return table row is too large for an A4 page. Shorten the value and retry.');
+ }
+ createPage(false);
+ // Retain the precise field order the user arranged in UNICOSEC, including
+ // custom bilingual headings and individually added or removed fields.
+ for(const [index,item] of (doc.particulars||[]).entries()){
+  if(!showMemberField(doc.particulars,index))continue;
+  if(item.type==='section'||item.type==='heading'){
+   appendRow(tableRow(item.type,displayParticularLabel(item),displayParticularLabel(item,'cn')),
+    item.type==='section'?72:50);
+   continue;
   }
-  let flow=makePage();
-  let inTable=false;
-  function push(node){
-    flow.append(node);
-    if(flow.scrollHeight>938 && flow.childElementCount>1){
-      node.remove();flow=makePage(true);flow.append(node);inTable=false;
-    }
-  }
-  function header(){
-    const el=block('pdf-tablehead','<div>PARTICULARS / 项目</div><div>CURRENT INFORMATION / 现有资料</div>');
-    push(el);inTable=true;
-  }
-  function section(title,cn,type){
-    inTable=false;
-    push(block(type==='section'?'pdf-section':'pdf-heading',escapeHtml(title)+' / '+escapeHtml(cn)));
-  }
-  push(block('pdf-title','<h1>'+escapeHtml(doc.company.name||'COMPANY NAME TO CONFIRM')+
-    ' — ANNUAL RETURN '+escapeHtml(doc.company.arYear||'')+'</h1><div class="pdf-kicker">ANNUAL RETURN PARTICULARS REVIEW / 周年申报资料审核</div>'));
-  // Company Details is the first particulars section below; avoid a duplicate profile table.
-  for(const [itemIndex,item] of doc.particulars.entries()){
-    if(!showMemberField(doc.particulars,itemIndex))continue;
-    if(item.type==='section'||item.type==='heading'){
-      section(displayParticularLabel(item),displayParticularLabel(item,'cn'),item.type);continue;
-    }
-    if(item.type!=='field')continue;
-    if(!inTable)header();
-    const parts=divideValue(item.value);
-    for(const [index,value] of parts.entries()){
-      const label=(displayParticularLabel(item)||'Unnamed item')+(parts.length>1?' ('+(index+1)+'/'+parts.length+')':'');
-      const node=block('pdf-row','<div class="pdf-left">'+escapeHtml(label)+' / '+escapeHtml(displayParticularLabel(item,'cn'))+'</div>'+
-        '<div class="'+(value==='NOT PROVIDED / 未提供资料'?'pdf-empty':'')+'">'+escapeHtml(value)+'</div>');
-      const prior=flow;
-      push(node);
-      if(prior!==flow){
-        // Provide table headers whenever a continued field spills onto the next page.
-        const h=block('pdf-tablehead','<div>PARTICULARS / 项目</div><div>CURRENT INFORMATION / 现有资料</div>');
-        flow.insertBefore(h,node);
-        inTable=true;
-      }
-    }
-  }
-  inTable=false;
-  const sign=doc.signatureDirector||{};
-  const confirmation=block('pdf-confirm',
-    '<h2>DIRECTOR CONFIRMATION / 董事确认</h2>'+
-    '<p>I hereby confirm that the particulars in this document are true and correct to the best of my knowledge, subject to verification of any noted or missing information.</p>'+
-    '<p>本人谨此确认，据本人所知，本文件所载资料属真实及正确；待核实或未提供资料须另行确认。</p>'+
-    '<div class="pdf-signature">Signature of Director / 董事签名</div>'+
-    '<p><b>Capacity / 职务:</b> '+escapeHtml(sign.designation||'Director')+'</p>'+
-    '<p><b>Name / 姓名:</b> '+escapeHtml(blank(sign.name))+'</p>'+
-    '<p><b>NRIC / Passport No. / 身份证或护照号码:</b> '+escapeHtml(blank(sign.nric))+'</p>'+
-    '<p class="pdf-note">For review and confirmation only. This document does not replace the prescribed Annual Return lodged with SSM. / 本文件仅供审核及确认，不能代替向马来西亚公司委员会提交的法定周年申报。</p>');
-  push(confirmation);
-  pages.forEach((p,i)=>p.querySelector('.page-number').textContent='PAGE '+(i+1)+' / '+pages.length);
-  return pages;
+  if(item.type!=='field')continue;
+  const parts=divideValue(item.value);
+  parts.forEach((part,i)=>{
+   const continued=parts.length>1?'Part '+(i+1)+' of '+parts.length:'';
+   appendRow(tableRow('field',displayParticularLabel(item),displayParticularLabel(item,'cn'),part,continued));
+  });
+ }
+ // Director confirmation uses the same table, borders, fonts and spacing as
+ // every other section. This also keeps it within the same pagination rules.
+ appendRow(tableRow('section','DIRECTOR CONFIRMATION','董事确认'),75);
+ appendRow(tableRow('note','','',
+  '<p class="pdf-declaration-en">I hereby confirm that the particulars stated above are true and correct to the best of my knowledge, subject to verification of any missing or noted information.</p>'+
+  '<p class="pdf-declaration-cn">本人谨此确认，据本人所知，上述资料属真实及正确；未提供或待核实之资料仍须另行确认。</p>'));
+ const signer=doc.signatureDirector||{};
+ appendRow(tableRow('field','Name of Director','董事姓名',blank(signer.name)));
+ appendRow(tableRow('field','NRIC / Passport No.','身份证／护照号码',blank(signer.nric)));
+ appendRow(tableRow('field','Capacity','职务',blank(signer.designation||'Director')));
+ appendRow(tableRow('note','','',
+  '<div class="pdf-signature-line"><span>Signature of Director / 董事签名:</span><span class="pdf-signature-space"></span></div>'));
+ appendRow(tableRow('note','','',
+  '<p class="pdf-legal-note">This document is for client review and confirmation only. It does not replace the prescribed Annual Return lodged with SSM. / 本文件仅供客户审核与确认，不能代替向马来西亚公司委员会提交的法定周年申报。</p>'));
+ pages.forEach((p,i)=>{
+  const number=p.querySelector('.page-number');
+  if(number)number.textContent='PAGE '+(i+1)+' / '+pages.length;
+ });
+ return pages;
 }
 export async function buildPdf(doc,onProgress=()=>{}){
   const pages=renderPages(doc);
