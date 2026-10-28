@@ -6,10 +6,11 @@ import {normalizeDocument} from './core.js';
 const PREFIX='zhenli:annual-return:local-draft:v1:';
 const MAX_JSON=3_500_000;
 const k=(scope,id)=>PREFIX+encodeURIComponent(String(scope||'standalone'))+':'+encodeURIComponent(String(id||'blank'));
-export function saveAnnualReturnDraft(storage,scope,id,doc){
+export function saveAnnualReturnDraft(storage,scope,id,doc,{updatedAt=null}={}){
   const normalized=normalizeDocument(doc);
+  const date=updatedAt&&Number.isFinite(Date.parse(updatedAt))?new Date(updatedAt).toISOString():new Date().toISOString();
   const item={companyId:String(id||'blank'),name:normalized.company.name||'Untitled Annual Return',
-    registrationNo:normalized.company.no||'',updatedAt:new Date().toISOString(),data:normalized};
+    registrationNo:normalized.company.no||'',updatedAt:date,data:normalized};
   const body=JSON.stringify(item);
   if(body.length>MAX_JSON)throw Error('This draft is too large for local storage. Remove oversized text entries first.');
   storage.setItem(k(scope,id),body);
