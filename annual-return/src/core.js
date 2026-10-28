@@ -45,6 +45,27 @@ export function updateParticularLabel(doc,index,en,cn=''){
  item.displayCn=safe(chinese,350);
  return item;
 }
+/** Reorder one field, either before/after a field or directly below a section.
+ * Does not alter its canonical field key, value, or labels; move is persisted
+ * because particulars array order is saved in the existing per-company draft.
+ */
+export function moveParticularField(doc,fromIndex,targetIndex,{after=false}={}){
+ const items=doc?.particulars;
+ if(!Array.isArray(items))throw Error('Annual Return particulars are unavailable.');
+ if(!Number.isInteger(fromIndex)||items[fromIndex]?.type!=='field')
+  throw Error('Drag an individual field.');
+ if(!Number.isInteger(targetIndex)||!['field','section','heading'].includes(items[targetIndex]?.type))
+  throw Error('Drop onto a field, heading, or section.');
+ if(fromIndex===targetIndex)return {moved:false,from:fromIndex,to:fromIndex};
+ const target=items[targetIndex];
+ // A drop on a section/heading always places the field immediately below its heading.
+ const desired=target.type==='field'?(targetIndex+(after?1:0)):targetIndex+1;
+ const destination=desired>fromIndex?desired-1:desired;
+ if(destination===fromIndex)return {moved:false,from:fromIndex,to:fromIndex};
+ const [field]=items.splice(fromIndex,1);
+ items.splice(destination,0,field);
+ return {moved:true,from:fromIndex,to:destination};
+}
 export function removeParticularSection(doc,index){
  const items=doc?.particulars;
  if(!Array.isArray(items)||!Number.isInteger(index)||items[index]?.type!=='section')
