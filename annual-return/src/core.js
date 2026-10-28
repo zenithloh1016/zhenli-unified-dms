@@ -97,8 +97,8 @@ export function deleteParticularField(doc,index){
  * Renumber remaining entries so + Add creates sequential labels.
  */
 export const REMOVABLE_RECORDS={
- director:{pattern:/^DIRECTOR (\d+)$/i,min:1},
- member:{pattern:/^MEMBER (\d+)$/i,min:1},
+ director:{pattern:/^DIRECTOR (\d+)$/i,min:0},
+ member:{pattern:/^MEMBER (\d+)$/i,min:0},
  bo:{pattern:/^BENEFICIAL OWNER (\d+)$/i,min:0}
 };
 export function removeAnnualReturnRecord(doc,headingIndex){
@@ -115,7 +115,7 @@ export function removeAnnualReturnRecord(doc,headingIndex){
  for(let i=headingIndex+1;i<items.length;i++)if(items[i].type==='section'){sectionEnd=i;break;}
  const headings=[];
  for(let i=sectionStart+1;i<sectionEnd;i++)if(items[i].type==='heading'&&def.pattern.test(items[i].en||''))headings.push(i);
- if(headings.length<=def.min)throw Error(kind==='bo'?'No beneficial owners remain.':'At least one '+(kind==='member'?'member':'director')+' record must remain.');
+ if(headings.length<=def.min)throw Error('No '+kind+' records remain.');
  const nextHeading=items.findIndex((item,i)=>i>headingIndex&&i<sectionEnd&&item.type==='heading');
  const end=nextHeading<0?sectionEnd:nextHeading;
  if(end<=headingIndex)throw Error('Record boundaries are invalid.');
@@ -255,7 +255,9 @@ export function normalizeDocument(raw){
     const i=doc.particulars.findIndex(x=>x.type==='section'&&/SHARE CAPITAL/i.test(x.en));
     if(i>=0)doc.particulars.splice(i+1,0,{type:'field',en:'Type of Shares Issued',cn:'股份发行方式（现金／非现金）',value:''});
   }
-  ensureMemberPersonalFields(doc.particulars);
+  // Only legacy data needs member-field migration. Do not recreate fields
+  // deliberately removed from a current saved Annual Return draft.
+  if((Number(raw.schemaVersion)||0)<SCHEMA_VERSION)ensureMemberPersonalFields(doc.particulars);
   if(!doc.particulars.length&&Number(raw.schemaVersion||0)<SCHEMA_VERSION)
     throw Error('No valid Annual Return particulars found.');
   // Old Google Apps Script files called this first group "COMPANY INFORMATION".
