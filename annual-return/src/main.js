@@ -8,6 +8,7 @@ import {importCombinedRegisterSnapshot} from './register-import.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
 import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,removeAnnualReturnDraft,draftIdOfKey} from './drafts.js';
+import {BO_CRITERIA_DESCRIPTIONS,selectedBoCriteria} from './bo-criteria.js';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
@@ -313,13 +314,7 @@ const OPTIONS=[
  {test:/^(?:Type of Shares(?: Issued)?|Consideration for Shares|Shares Issued for Cash or Otherwise)$/i,values:['Cash','Otherwise than cash','Cash & Otherwise than cash']},
  {test:/^Type of Beneficial Ownership$/i,values:['Direct','Indirect','Direct & Indirect']}
 ];
-const CRITERIA={
- A:'Holds directly or indirectly not less than 20% of the company shares',
- B:'Holds directly or indirectly not less than 20% of the voting shares',
- C:'Has ultimate effective control (formal or informal) over the company, directors or management',
- D:'Can directly or indirectly appoint or remove directors who hold a majority of directors’ meeting voting rights',
- E:'Is a member of the company and, under an agreement with another member, controls alone a majority of the voting rights in the company'
-};
+const CRITERIA=BO_CRITERIA_DESCRIPTIONS;
 const ADDONS=[
  {id:'charge',section:/REGISTERED CHARGES/i,heading:/^REGISTERED CHARGE \d+$/i,label:'Registered Charge'},
  {id:'director',section:/DIRECTORS, COMPANY SECRETARY/i,heading:/^DIRECTOR \d+$/i,label:'Director'},
@@ -639,7 +634,7 @@ function controlsFor(item,index){
  if(item.en==='Company Name')return companyNameControl(item,index);
  if(MSIC_FIELD.test(item.en))return msicControl(item,index);
  if(/^Criteria of Beneficial Ownership$/i.test(item.en)){
-  const selected=[...value.matchAll(/(?:criteria\s*)?([ABCDE])(?=\b|[,;/\s])/gi)].map(m=>m[1].toUpperCase()); 
+  const selected=selectedBoCriteria(value).map(item=>item.code); 
   return '<div class="criteria-options">'+Object.entries(CRITERIA).map(([key,desc])=>'<label class="criteria-option"><input type="checkbox" data-criteria="'+index+'" value="'+key+'" '+(selected.includes(key)?'checked':'')+'><span><b>Criteria '+key+'</b> — '+esc(desc)+'</span></label>').join('')+'</div>';
  }
  const option=OPTIONS.find(o=>o.test.test(item.en));
