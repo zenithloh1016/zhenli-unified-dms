@@ -2,7 +2,7 @@ import './style.css';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord} from './core.js';
+import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord,displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading} from './core.js';
 import {importCombinedRegisterSnapshot} from './register-import.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
@@ -10,6 +10,7 @@ import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,remov
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
+const DEFAULT_PARTICULARS=JSON.stringify(cloneBlank().particulars);
 
 let arFullscreen=false;
 function setFullscreenUi(open){
@@ -42,7 +43,8 @@ let draftScope=window.parent===window?'standalone':'dms:pending',newDraftId='new
 let selectedDmsCompanyId=null,dmsCompanies=[];
 let pendingRegisterImport='';
 function currentDraftId(){return selectedDmsCompanyId||newDraftId;}
-function hasDraftData(){return doc.particulars.some(x=>x.type==='field'&&String(x.value||'').trim())||Boolean(doc.signatureDirector?.name||doc.signatureDirector?.nric);}
+function hasDraftData(){return JSON.stringify(doc.particulars)!==DEFAULT_PARTICULARS||
+ Boolean(doc.company?.name||doc.company?.no||doc.signatureDirector?.name||doc.signatureDirector?.nric);}
 function draftStatus(message,error=false){const el=$('draft-status');if(el){el.textContent=message;el.style.color=error?'#b23b44':'#327284';}}
 function draftOptions(preferred=''){
  const select=$('draft-picker');if(!select)return;
@@ -309,6 +311,7 @@ function addRecord(kind){
   if(summary>=0)templateEnd=summary;
  }
  const next=doc.particulars.slice(start,templateEnd).map(x=>({...x,value:''}));
+ if(next[0]){delete next[0].displayEn;delete next[0].displayCn;}
  // New entry is cloned from the first record's field structure, not the last (which may differ).
  const nextNumber=headings.reduce((n,i)=>Math.max(n,Number((doc.particulars[i].en||'').match(/\d+$/)?.[0]||0)),0)+1;
  next[0].en=rule.label.toUpperCase()+' '+nextNumber;
@@ -395,13 +398,25 @@ function addCustomField({sectionIndex=null,headingIndex=null}={}){
   return status('The selected member record no longer exists.',true);
  if(sectionIndex!==null&&doc.particulars[sectionIndex]?.type!=='section')
   return status('Section no longer exists.',true);
- pendingCustomFieldTarget={sectionIndex,headingIndex};
+ openLabelEditor({mode:'add-field',sectionIndex,headingIndex});
+}
+function openLabelEditor(target){
+ pendingCustomFieldTarget=target;
  const dialog=customFieldDialog();
- const target=headingIndex!==null?doc.particulars[headingIndex]?.en:
-  sectionIndex!==null?doc.particulars[sectionIndex]?.en:'the end of the form';
- dialog.querySelector('#ar-custom-field-location').textContent='New field will be added to '+target+'.';
- dialog.querySelector('#ar-custom-field-en').value='';
- dialog.querySelector('#ar-custom-field-cn').value='';
+ const entry=target.index!==undefined?doc.particulars[target.index]:null;
+ const mode=target.mode;
+ const context=target.headingIndex!==null&&target.headingIndex!==undefined?
+  displayParticularLabel(doc.particulars[target.headingIndex]):
+  target.sectionIndex!==null&&target.sectionIndex!==undefined?
+  displayParticularLabel(doc.particulars[target.sectionIndex]):'the end of the form';
+ const title=mode==='edit-label'?'Edit '+entry.type+' labels':mode==='add-section'?'Add Annual Return section':'Add Annual Return field';
+ dialog.querySelector('#ar-custom-field-title').textContent=title;
+ dialog.querySelector('#ar-custom-field-location').textContent=mode==='edit-label'?
+  'Update the displayed English and Chinese labels; existing values are retained.':
+  mode==='add-section'?'The new section will appear at the end of the form.':'New field will be added to '+context+'.';
+ dialog.querySelector('#ar-custom-field-en').value=entry?displayParticularLabel(entry):'';
+ dialog.querySelector('#ar-custom-field-cn').value=entry?displayParticularLabel(entry,'cn'):'';
+ dialog.querySelector('button[type="submit"]').textContent=mode==='edit-label'?'Save labels':mode==='add-section'?'Add section':'Add field';
  dialog.querySelector('#ar-custom-field-error').hidden=true;
  if(!dialog.open){
   if(typeof dialog.showModal==='function')dialog.showModal();
@@ -410,6 +425,30 @@ function addCustomField({sectionIndex=null,headingIndex=null}={}){
  }
  dialog.querySelector('#ar-custom-field-en').focus();
 }
+function editReviewItem(index){
+ if(!doc.particulars[index])return status('Item no longer exists.',true);
+ openLabelEditor({mode:'edit-label',index});
+}
+function addReviewSection(){
+ if(doc.particulars.length>=1200)return status('The Annual Return item limit is reached.',true);
+ openLabelEditor({mode:'add-section'});
+}
+function removeReviewSection(index){
+ const item=doc.particulars[index];if(item?.type!=='section')return;
+ let end=index+1;while(end<doc.particulars.length&&doc.particulars[end].type!=='section')end++;
+ const count=doc.particulars.slice(index+1,end).filter(x=>x.type==='field').length;
+ if(!confirm('Remove the entire section "'+displayParticularLabel(item)+'" and its '+count+
+  ' field(s) from this Annual Return and PDF? This cannot be undone except by restoring a saved draft.'))return;
+ const result=removeParticularSection(doc,index);
+ renderSections();queueDraftSave();status('Removed section: '+result.name+'. '+result.fields+' fields deleted.');
+}
+function removeReviewHeading(index){
+ const item=doc.particulars[index];if(item?.type!=='heading')return;
+ if(ADDONS.some(x=>x.heading.test(item.en||''))){removeWholeRecord(index);return;}
+ if(!confirm('Remove heading "'+displayParticularLabel(item)+'" and its associated fields?'))return;
+ const result=removeParticularHeading(doc,index);
+ renderSections();queueDraftSave();status('Removed heading: '+result.name+'. '+result.fields+' fields deleted.');
+}
 function saveCustomField(dialog){
  const error=dialog.querySelector('#ar-custom-field-error');
  const english=dialog.querySelector('#ar-custom-field-en');
@@ -417,7 +456,22 @@ function saveCustomField(dialog){
  if(!en){error.textContent='Enter an English field name.';error.hidden=false;english.focus();return;}
  if(doc.particulars.length>=1200){error.textContent='The Annual Return field limit is reached.';error.hidden=false;return;}
  const cn=dialog.querySelector('#ar-custom-field-cn').value.trim().slice(0,350);
- const {sectionIndex=null,headingIndex=null}=pendingCustomFieldTarget||{};
+ const target=pendingCustomFieldTarget||{};
+ if(target.mode==='edit-label'){
+  try{
+   const result=updateParticularLabel(doc,target.index,en,cn);
+   dialog.close();renderSections();queueDraftSave();
+   status('Updated '+result.type+' labels. The new labels will appear in the PDF.');
+  }catch(err){error.textContent=err.message;error.hidden=false;}
+  return;
+ }
+ if(target.mode==='add-section'){
+  doc.particulars.push({type:'section',en,cn,value:''});
+  dialog.close();renderSections({openSection:doc.particulars.length-1});queueDraftSave();
+  status('Added section "'+en+'". Use Add field to this section to insert particulars.');
+  return;
+ }
+ const {sectionIndex=null,headingIndex=null}=target;
  let pos=doc.particulars.length;
  if(headingIndex!==null){
   if(doc.particulars[headingIndex]?.type!=='heading'){
@@ -434,17 +488,15 @@ function saveCustomField(dialog){
  }
  doc.particulars.splice(pos,0,{type:'field',en,cn,value:''});
  dialog.close();
- renderSections();queueDraftSave();
+ renderSections({openSection:sectionIndex!==null?sectionIndex:null});queueDraftSave();
  status('Added "'+en+'" to '+(headingIndex!==null?'the selected member record':sectionIndex!==null?'the selected section':'the end of the form')+'. It will appear in the PDF.');
 }
 function removeReviewField(index){
  const item=doc.particulars[index];if(!item||item.type!=='field')return;
- if(['Company Name','Company Registration No.'].includes(item.en)){
-  status(item.en+' is required for PDF generation and cannot be deleted.',true);return;
- }
- if(!confirm('Delete "'+item.en+'" and its value from this Annual Return form and generated PDF?'))return;
+ const note=['Company Name','Company Registration No.'].includes(item.en)?' The company identity remains necessary for PDF generation.':'';
+ if(!confirm('Delete "'+displayParticularLabel(item)+'" and its value from this Annual Return form and PDF?'+note))return;
  try {deleteParticularField(doc,index);}catch(err){status(err.message,true);return;}
- renderSections();queueDraftSave();status('Removed field: '+item.en+'. Change autosaved.');
+ renderSections();queueDraftSave();status('Removed field: '+displayParticularLabel(item)+'. Change autosaved.');
 }
 
 function removeWholeRecord(index){
@@ -482,30 +534,46 @@ function groups(){
  });
  return all;
 }
-function renderSections(){
+function renderSections({openSection=null}={}){
  const onlyBlank=$('incomplete').checked;
+ const openNames=new Set([...$('particulars').querySelectorAll('details.ar-section[open]')].map(x=>x.dataset.sectionName));
  $('particulars').innerHTML=groups().map((group,i)=>{
+  const section=doc.particulars[group.index];
+  const title=section?displayParticularLabel(section):group.title;
+  const chinese=section?displayParticularLabel(section,'cn'):group.cn;
   const rows=group.items.filter(({item,index})=>{
    if(!showMemberField(doc.particulars,index))return false;
    return !onlyBlank||(item.type==='field'&&!String(item.value||'').trim());
   });
-  if(!rows.length&&onlyBlank)return '';
   const body=rows.map(({index,item})=>{
    if(item.type==='heading'){
      const matched=ADDONS.find(x=>x.id!=='charge'&&x.heading.test(item.en||''));
      const canRemove=matched&&(matched.id==='bo'||doc.particulars.filter(x=>x.type==='heading'&&matched.heading.test(x.en||'')).length>1);
-     return '<div class="heading-entry">'+esc(item.en)+' <small>'+esc(item.cn)+'</small>'+
+     return '<div class="heading-entry"><strong>'+esc(displayParticularLabel(item))+'</strong> <small>'+esc(displayParticularLabel(item,'cn'))+'</small>'+
+       '<button type="button" class="button mini" data-edit-heading="'+index+'">Edit heading</button>'+
        (/^MEMBER \d+$/i.test(item.en)?'<button type="button" class="button mini ar-add-member-field" data-add-to-member="'+index+'">+ Add member field</button>':'')+
-       (canRemove?'<button type="button" class="button mini ar-remove-record" data-remove-record="'+index+'">Remove '+esc(matched.label)+'</button>':'')+'</div>';
-    }
-   return '<div class="field-entry '+(item.value?'':'blank')+'"><div class="title">'+esc(item.en||'Untitled')+
-    '<small>'+esc(item.cn||'')+'</small>'+(!['Company Name','Company Registration No.'].includes(item.en)?'<button type="button" class="ar-delete-field" data-delete-field="'+index+'">Delete field</button>':'')+'</div>'+controlsFor(item,index)+'</div>';
-  }).join('');
-  return '<details class="ar-section" '+(i===0||onlyBlank?'open':'')+'><summary class="section-header"><span>'+
-   esc(group.title)+'<small>'+esc(group.cn)+'</small></span><span class="pill">'+
-   rows.filter(x=>x.item.type==='field').length+' fields</span></summary><div class="section-fields">'+body+
-   (group.index>=0?'<div class="addon-bar">'+ADDONS.filter(x=>x.section.test(group.title)).map(x=>'<button class="button mini" type="button" data-add-record="'+x.id+'">+ Add '+x.label+'</button>').join('')+'<button class="button mini" type="button" data-add-to-section="'+group.index+'">+ Add field to this section</button></div>':'')+'</div></details>';
- }).join('')||'<p class="status">No blank fields remain. Disable the Blank fields only filter.</p>';
+       (matched?(canRemove?'<button type="button" class="button mini ar-remove-record" data-remove-record="'+index+'">Remove '+esc(matched.label)+'</button>':''):
+       '<button type="button" class="button mini ar-remove-record" data-delete-heading="'+index+'">Remove heading &amp; fields</button>')+'</div>';
+   }
+   return '<div class="field-entry '+(item.value?'':'blank')+'"><div class="title">'+esc(displayParticularLabel(item)||'Untitled')+
+    '<small>'+esc(displayParticularLabel(item,'cn'))+'</small>'+
+    '<div class="ar-label-actions"><button type="button" class="button mini" data-edit-field="'+index+'">Edit field</button>'+
+    '<button type="button" class="ar-delete-field" data-delete-field="'+index+'">Remove field</button></div></div>'+
+    controlsFor(item,index)+'</div>';
+  }).join('')||(onlyBlank?'<p class="status">No blank fields in this section. Turn off the filter to edit filled fields.</p>':
+    '<p class="status">No fields in this section. Use Add field to this section.</p>');
+  const key=group.title+':'+i;
+  const shouldOpen=i===0||onlyBlank||openNames.has(key)||openSection===group.index;
+  return '<details class="ar-section" data-section-name="'+esc(key)+'" '+(shouldOpen?'open':'')+'><summary class="section-header"><span>'+
+   esc(title)+'<small>'+esc(chinese)+'</small></span><span class="pill">'+
+   rows.filter(x=>x.item.type==='field').length+' fields</span></summary><div class="section-fields">'+
+   (group.index>=0?'<div class="addon-bar ar-section-actions">'+
+    '<button type="button" class="button mini" data-edit-section="'+group.index+'">Edit section</button>'+
+    '<button type="button" class="button mini ar-remove-record" data-delete-section="'+group.index+'">Remove section &amp; fields</button></div>':'')+
+   body+(group.index>=0?'<div class="addon-bar">'+ADDONS.filter(x=>x.section.test(group.title)).map(x=>
+   '<button class="button mini" type="button" data-add-record="'+x.id+'">+ Add '+x.label+'</button>').join('')+
+   '<button class="button mini" type="button" data-add-to-section="'+group.index+'">+ Add field to this section</button></div>':'')+'</div></details>';
+ }).join('')||'<p class="status">No sections remain. Choose Add new section to start again.</p>';
  fieldStatus();
 }
 function resetView(){signingInputs();$('incomplete').checked=false;renderSections();}
@@ -587,6 +655,11 @@ $('particulars').addEventListener('change',e=>{
  }
 });
 $('particulars').addEventListener('click',e=>{
+ const editSection=e.target.closest('[data-edit-section]');if(editSection){editReviewItem(Number(editSection.dataset.editSection));return;}
+ const delSection=e.target.closest('[data-delete-section]');if(delSection){removeReviewSection(Number(delSection.dataset.deleteSection));return;}
+ const editField=e.target.closest('[data-edit-field]');if(editField){editReviewItem(Number(editField.dataset.editField));return;}
+ const editHeading=e.target.closest('[data-edit-heading]');if(editHeading){editReviewItem(Number(editHeading.dataset.editHeading));return;}
+ const delHeading=e.target.closest('[data-delete-heading]');if(delHeading){removeReviewHeading(Number(delHeading.dataset.deleteHeading));return;}
  const removeRecord=e.target.closest('[data-remove-record]');
  if(removeRecord){removeWholeRecord(Number(removeRecord.dataset.removeRecord));return;}
  const del=e.target.closest('[data-delete-field]');
@@ -610,6 +683,7 @@ $('particulars').addEventListener('click',e=>{
  const add=e.target.closest('[data-add-record]');if(add)addRecord(add.dataset.addRecord);
 });
 $('add-field').addEventListener('click',()=>addCustomField());
+$('add-section').addEventListener('click',addReviewSection);
 $('clear-values').addEventListener('click',()=>{
  if(!confirm('Clear every field and signatory value? Your last saved draft remains until new information is entered.'))return;
  if(!flushDraft())return;
