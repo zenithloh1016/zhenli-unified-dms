@@ -3,7 +3,7 @@ import {jsPDF} from 'jspdf';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {outputFilename,showMemberField} from './core.js';
+import {outputFilename,showMemberField,displayParticularLabel} from './core.js';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
@@ -129,14 +129,14 @@ export function renderPages(doc){
   for(const [itemIndex,item] of doc.particulars.entries()){
     if(!showMemberField(doc.particulars,itemIndex))continue;
     if(item.type==='section'||item.type==='heading'){
-      section(item.en,item.cn,item.type);continue;
+      section(displayParticularLabel(item),displayParticularLabel(item,'cn'),item.type);continue;
     }
     if(item.type!=='field')continue;
     if(!inTable)header();
     const parts=divideValue(item.value);
     for(const [index,value] of parts.entries()){
-      const label=(item.en||'Unnamed item')+(parts.length>1?' ('+(index+1)+'/'+parts.length+')':'');
-      const node=block('pdf-row','<div class="pdf-left">'+escapeHtml(label)+' / '+escapeHtml(item.cn||'')+'</div>'+
+      const label=(displayParticularLabel(item)||'Unnamed item')+(parts.length>1?' ('+(index+1)+'/'+parts.length+')':'');
+      const node=block('pdf-row','<div class="pdf-left">'+escapeHtml(label)+' / '+escapeHtml(displayParticularLabel(item,'cn'))+'</div>'+
         '<div class="'+(value==='NOT PROVIDED / 未提供资料'?'pdf-empty':'')+'">'+escapeHtml(value)+'</div>');
       const prior=flow;
       push(node);
