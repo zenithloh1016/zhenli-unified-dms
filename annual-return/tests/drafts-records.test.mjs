@@ -27,7 +27,8 @@ test('removing extra directors keeps secretary and auditor untouched and renumbe
  removeAnnualReturnRecord(doc,headers(doc,/^DIRECTOR \d+$/)[2].i);
  removeAnnualReturnRecord(doc,headers(doc,/^DIRECTOR \d+$/)[1].i);
  assert.equal(headers(doc,/^DIRECTOR \d+$/).length,1);
- assert.throws(()=>removeAnnualReturnRecord(doc,headers(doc,/^DIRECTOR \d+$/)[0].i),/At least one director/);
+ assert.equal(removeAnnualReturnRecord(doc,headers(doc,/^DIRECTOR \d+$/)[0].i).remaining,0);
+ assert.equal(headers(doc,/^DIRECTOR \d+$/).length,0);
 });
 test('removing excess Members retains other member and BO blocks',()=>{
  const doc=cloneBlank();
@@ -37,7 +38,8 @@ test('removing excess Members retains other member and BO blocks',()=>{
  assert.equal(remaining.remaining,1);
  assert.deepEqual(headers(doc,/^MEMBER \d+$/).map(x=>x.x.en),['MEMBER 1']);
  assert.equal(headers(doc,/^BENEFICIAL OWNER \d+$/).length,1);
- assert.throws(()=>removeAnnualReturnRecord(doc,headers(doc,/^MEMBER \d+$/)[0].i),/At least one member/);
+ assert.equal(removeAnnualReturnRecord(doc,headers(doc,/^MEMBER \d+$/)[0].i).remaining,0);
+ assert.equal(headers(doc,/^MEMBER \d+$/).length,0);
 });
 test('zero BO entries is supported in saved draft without recreating a removed record',()=>{
  const doc=cloneBlank();const first=headers(doc,/^BENEFICIAL OWNER \d+$/)[0];
