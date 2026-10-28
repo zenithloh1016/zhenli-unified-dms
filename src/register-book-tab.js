@@ -570,8 +570,9 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
      const header=sheet.rows[description.headerRow];
      const width=Math.max(0,...sheet.rows.map(row=>row.length));
      if(width>=250)throw Error('Maximum 250 fields.');
+     // Extend shorter rows sequentially instead of creating sparse gaps.
+     for(const row of sheet.rows)while(row.length<width+1)row.push('');
      header[width]=normValue(label);
-     for(const row of sheet.rows)if(row.length<width+1)row[width]='';
     }else{
      if(sheet.rows.length>=12000)throw Error('Maximum 12,000 entries.');
      sheet.rows.push([label.trim().replace(/:$/,'')+':','']);
