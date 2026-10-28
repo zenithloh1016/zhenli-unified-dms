@@ -98,9 +98,40 @@ function resumeLocalDraft(key){
     window.parent.postMessage({type:'ZHENLI_AR_SELECT_COMPANY_REQUEST',id},window.location.origin);
   generated=null;$('download-box').hidden=true;
   resetView();draftOptions(key);
-  draftStatus('Resumed '+draft.name+' · '+new Date(draft.updatedAt).toLocaleString());
+  const restored=restoreRsshSavedDraftOnce();
+  draftStatus('Resumed '+draft.name+' · '+new Date(draft.updatedAt).toLocaleString()+'. '+restored);
   return true;
  }catch(err){draftStatus('Could not resume draft: '+err.message,true);return false;}
+}
+
+/** RSSH Annual Return drafts are on the user's device, never in Supabase.
+ * Repair the first opened copy once. Do not resurrect an intentionally deleted
+ * Auditor heading on every subsequent form reload.
+ */
+function restoreRsshSavedDraftOnce(){
+ if(doc.company.name.trim().replace(/\s+/g,' ').toUpperCase()!=='RSSH SERVICES SDN BHD')return '';
+ if(window.parent!==window&&(!selectedDmsCompanyId||draftScope==='dms:pending'))return '';
+ const key='unicosec:ar:rssh-auditor-restored:v1:'+encodeURIComponent(draftScope)+':'+encodeURIComponent(currentDraftId());
+ try{if(localStorage.getItem(key)==='1')return '';}catch{return '';}
+ let result;
+ try{result=restoreRsshAuditorHeading(doc);}
+ catch(error){draftStatus('Auditor restoration could not run: '+error.message,true);return '';}
+ if(result.restored){
+  renderSections();history.capture(doc);historyControls();
+  if(!saveDraftNow({quiet:true}))return 'Auditor heading restored in this session, but draft saving failed. ';
+ }
+ // Mark already-complete drafts as checked too, preserving future user removals.
+ try{localStorage.setItem(key,'1');}
+ catch(error){draftStatus('Auditor heading restored but the one-time marker could not be stored: '+error.message,true);}
+ return result.restored?'Restored Auditor heading with '+result.addedFields+' blank template fields. Verify actual auditor particulars. ':'';
+}
+function restoreRsshAuditorNow(){
+ try{
+  const result=restoreRsshAuditorHeading(doc);
+  if(!result.restored)return status('Auditor was not restored: '+result.reason+'.',true);
+  renderSections();queueDraftSave();
+  status('RSSH SERVICES SDN BHD: Auditor heading and '+result.addedFields+' blank fields restored. Enter or verify the actual auditor information.');
+ }catch(error){status('Cannot restore RSSH Auditor: '+error.message,true);}
 }
 
 function isValidCompanyRecord(value){
@@ -139,7 +170,8 @@ function applyDmsCompany(company){
  catch(err){draftStatus('Saved draft could not be loaded: '+err.message,true);}
  if(previous&&previous.data.company.name===name&&previous.data.company.no===registrationNo)doc=previous.data;
  resetView();draftOptions();
- status('Company loaded from DMS Documents: '+name+(registrationNo?' ('+registrationNo+')':' — registration number missing; please enter it before PDF generation')+'. Complete and verify all remaining statutory particulars.');
+ const restored=restoreRsshSavedDraftOnce();
+ status('Company loaded from DMS Documents: '+name+(registrationNo?' ('+registrationNo+')':' — registration number missing; please enter it before PDF generation')+'. '+restored+'Complete and verify all remaining statutory particulars.');
  return {ok:true};
 }
 if(window.parent!==window){
