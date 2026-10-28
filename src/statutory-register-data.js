@@ -36,10 +36,22 @@ export function validateRegisterBook(value){
  for(const s of value.sheets){
   if(typeof s.name!=='string'||s.name.length>120||!Array.isArray(s.rows)||s.rows.length>MAX_ROWS)
    throw Error('Invalid worksheet name or rows.');
-  for(const r of s.rows){
+  // Sparse Excel arrays and previously stored JSON may contain empty gaps.
+  // Recover only blank cells and safe scalar values; keep valid data intact.
+  for(let rowIndex=0;rowIndex<s.rows.length;rowIndex++){
+   if(s.rows[rowIndex]==null)s.rows[rowIndex]=[];
+   const r=s.rows[rowIndex];
    if(!Array.isArray(r)||r.length>MAX_COLS)throw Error('Invalid worksheet columns.');
-   for(let i=0;i<r.length;i++)if(typeof r[i]!=='string'||r[i].length>15000)
-    throw Error('Invalid worksheet cell in '+s.name+' at row '+(s.rows.indexOf(r)+1)+', column '+(i+1)+'.');
+   for(let i=0;i<r.length;i++){
+    const cell=r[i];
+    if(cell==null){r[i]='';continue;}
+    if((typeof cell==='number'&&Number.isFinite(cell))||typeof cell==='boolean'){
+     r[i]=String(cell);
+     continue;
+    }
+    if(typeof cell!=='string'||cell.length>15000)
+     throw Error('Invalid worksheet cell in '+s.name+' at row '+(rowIndex+1)+', column '+(i+1)+'.');
+   }
    cells+=r.length;
   }
  }
