@@ -20,7 +20,7 @@ export function exposeDownload(blob,name){
   document.getElementById('download-name').textContent=name;
   link.href=currentLink;link.download=name;
   // Native Android WebViews cannot reliably download blob: links.
-  link.hidden=Capacitor.isNativePlatform()||window.parent!==window;
+  link.hidden=Capacitor.isNativePlatform(); // Keep browser/desktop fallback visible inside UNICOSEC iframe.
   box.hidden=false;
   return currentLink;
 }
@@ -49,8 +49,8 @@ function requestDmsSave(blob,filename){
 }
 export async function savePdf(blob,name,{share=false}={}){
  if(window.parent!==window){
-  // Same-origin DMS iframe: only its parent has the native Capacitor bridge.
-  // Never open a blob: URL inside the Android WebView as a "download".
+  // The parent owns Android's native picker and the desktop browser download.
+  // Keep the direct-download link visible for a manual fallback on website/Windows.
   return await requestDmsSave(blob,name);
  }
  if(Capacitor.isNativePlatform()){
@@ -167,13 +167,19 @@ export async function buildPdf(doc,onProgress=()=>{}){
   const pages=renderPages(doc);
   if(!pages.length)throw Error('No pages to export.');
   const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
-  const scale=Capacitor.isNativePlatform()?1.15:1.5;
+  const scale=Capacitor.isNativePlatform()?1.15:1.35;
   try{
     for(let i=0;i<pages.length;i++){
       onProgress('Rendering PDF page '+(i+1)+' of '+pages.length+'…');
       await new Promise(r=>setTimeout(r,0));
       const canvas=await html2canvas(pages[i],{scale,backgroundColor:'#ffffff',logging:false,
-        useCORS:false,windowWidth:794,scrollX:0,scrollY:0});
+        useCORS:false,windowWidth:794,scrollX:0,scrollY:0,
+        onclone:cloned=>{
+          // Render the PDF page in the html2canvas clone's normal viewport.
+          // Avoid an offscreen left:-12000px surface being clipped to a blank PDF.
+          const stage=cloned.getElementById('pdf-stage');
+          if(stage){stage.style.left='0';stage.style.top='0';stage.style.position='absolute';}
+        }});
       if(i)pdf.addPage();
       pdf.addImage(canvas.toDataURL('image/jpeg',0.87),'JPEG',0,0,210,297,undefined,'FAST');
       canvas.width=1;canvas.height=1;
