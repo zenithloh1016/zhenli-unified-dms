@@ -220,7 +220,8 @@ test('individual field deletion is retained after exporting and importing JSON',
  assert.ok(!draft.particulars.some(x=>x.en==='Type of Shares Issued'));
  const roundTrip=importAnnualReturnText(JSON.stringify(normalizeDocument(draft)),'test.json');
  assert.ok(!roundTrip.particulars.some(x=>x.en==='Type of Shares Issued'));
- assert.throws(()=>deleteParticularField(roundTrip,roundTrip.particulars.findIndex(x=>x.en==='Company Name')),/required/);
+ assert.equal(deleteParticularField(roundTrip,roundTrip.particulars.findIndex(x=>x.en==='Company Name')).en,'Company Name');
+ assert.ok(!roundTrip.particulars.some(x=>x.en==='Company Name'));
 });
 test('obsolete charge amount and discharge date excluded from old GS drafts and final PDF particulars',()=>{
  const excluded=['Recorded Amount of Indebtedness (not outstanding balance)','Discharge Date'];
@@ -350,4 +351,56 @@ test('Annual Return fullscreen and removal of field search and new section',asyn
  assert.ok(child.includes('ZHENLI_DMS_AR_FULLSCREEN_STATE'));
  assert.ok(child.includes('ar-immersive'));
  assert.ok(parent.includes('Do not call render()'), 'full screen toggles must not reload the form');
+});
+
+
+test('bilingual edit and removal of every section and field survive JSON save and PDF label lookup',async()=>{
+ const {displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading,deleteParticularField,syncCompanyDetails,setCompanyDetail}=await import('../src/core.js');
+ const doc=cloneBlank();
+ const firstSection=doc.particulars.findIndex(x=>x.type==='section');
+ const identity=doc.particulars.findIndex(x=>x.en==='Company Name');
+ const regNo=doc.particulars.findIndex(x=>x.en==='Company Registration No.');
+ doc.particulars[identity].value='EXAMPLE TEST SDN. BHD.';
+ doc.particulars[regNo].value='202601001234';
+ syncCompanyDetails(doc);
+ updateParticularLabel(doc,firstSection,'MY COMPANY DETAILS','更新公司资料');
+ updateParticularLabel(doc,identity,'Legal Entity Name','公司法定名称');
+ assert.equal(doc.particulars[firstSection].en,'COMPANY DETAILS','internal schema key is preserved');
+ assert.equal(doc.particulars[identity].en,'Company Name','identity mapping is preserved');
+ assert.equal(displayParticularLabel(doc.particulars[identity]),'Legal Entity Name');
+ assert.equal(doc.company.name,'EXAMPLE TEST SDN. BHD.');
+ const restored=normalizeDocument(JSON.parse(JSON.stringify(doc)));
+ assert.equal(displayParticularLabel(restored.particulars[firstSection]),'MY COMPANY DETAILS');
+ assert.equal(displayParticularLabel(restored.particulars[identity],'cn'),'公司法定名称');
+ assert.equal(restored.particulars[identity].value,'EXAMPLE TEST SDN. BHD.');
+ setCompanyDetail(restored,identity,'NEW COMPANY NAME');
+ assert.equal(restored.company.name,'NEW COMPANY NAME');
+ const sectionIndex=restored.particulars.findIndex(x=>x.type==='section'&&/CURRENT BENEFICIAL OWNERS/i.test(x.en));
+ assert.ok(sectionIndex>=0);
+ const sectionName=displayParticularLabel(restored.particulars[sectionIndex]);
+ const removed=removeParticularSection(restored,sectionIndex);
+ assert.equal(removed.name,sectionName);
+ assert.ok(!restored.particulars.some(x=>x.type==='section'&&x.en===sectionName));
+ const fieldIndex=restored.particulars.findIndex(x=>x.en==='Company Registration No.');
+ assert.equal(deleteParticularField(restored,fieldIndex).en,'Company Registration No.');
+ assert.ok(!restored.particulars.some(x=>x.en==='Company Registration No.'));
+ const heading=restored.particulars.findIndex(x=>x.type==='heading'&&!/^(?:DIRECTOR|MEMBER|BENEFICIAL OWNER) \d+$/i.test(x.en));
+ if(heading>=0){
+  const result=removeParticularHeading(restored,heading);
+  assert.ok(result.name);
+ }
+ restored.particulars.push({type:'section',en:'CUSTOM DETAILS',cn:'自定义字段',value:''});
+ assert.equal(normalizeDocument(restored).particulars.at(-1).en,'CUSTOM DETAILS');
+});
+test('all sections can be removed and a fresh section added without invalidating the local draft',async()=>{
+ const {removeParticularSection,normalizeDocument,displayParticularLabel}=await import('../src/core.js');
+ const draft=cloneBlank();
+ while(draft.particulars.some(x=>x.type==='section')){
+  const i=draft.particulars.findIndex(x=>x.type==='section');
+  removeParticularSection(draft,i);
+ }
+ assert.equal(draft.particulars.length,0);
+ assert.equal(normalizeDocument(draft).particulars.length,0);
+ draft.particulars.push({type:'section',en:'RESTORED SECTION',cn:'恢复部分',value:''});
+ assert.equal(displayParticularLabel(normalizeDocument(draft).particulars[0]),'RESTORED SECTION');
 });
