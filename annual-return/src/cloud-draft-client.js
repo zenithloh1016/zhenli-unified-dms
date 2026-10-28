@@ -44,6 +44,7 @@ export function createCloudDraftClient({getCompanyId,getScope,getDocument,applyD
   const snapshot=structuredClone(getDocument()),previous=revision,token=session;
   dirty=false;saving=true;
   message('Syncing Annual Return draft to your private UNICOSEC account…');
+  let failed=false;
   try{
    const response=await call('save',id,{revision:previous,document:snapshot});
    if(token!==session||getCompanyId()!==id)return;
@@ -56,10 +57,10 @@ export function createCloudDraftClient({getCompanyId,getScope,getDocument,applyD
    message('Cloud synced · Available on website, Windows and Android · '+new Date(response.record?.updatedAt||Date.now()).toLocaleString());
   }catch(error){
    if(token!==session)return;
-   dirty=true;
+   failed=true;dirty=true;
    message('Saved locally; cloud sync failed: '+error.message+' Press Sync Draft Now to retry.',true);
   }finally{
-   if(token===session){saving=false;if(ready&&dirty&&!conflict)queueSave();}
+   if(token===session){saving=false;if(ready&&dirty&&!conflict&&!failed)queueSave();}
   }
  }
  async function open({force=false,preferRemote=false}={}){
@@ -87,7 +88,7 @@ export function createCloudDraftClient({getCompanyId,getScope,getDocument,applyD
     if(preferRemote||!local||cloudAt>=localAt){
      applyDocument(document);
      // Cache locally without incorrectly triggering a new cloud revision.
-     saveAnnualReturnDraft(localStorage,scope,id,document);
+     saveAnnualReturnDraft(localStorage,scope,id,document,{updatedAt:cloud.updatedAt});
      message('Loaded cloud draft revision '+revision+' · Same draft available on web, Windows and Android.');
     }else{
      dirty=true;
