@@ -108,42 +108,58 @@ export function restoreRsshAuditorHeading(doc){
  items.splice(position,0,...replacement);
  return {restored:true,headingIndex:position,addedFields:replacement.length-1};
 }
-/** One-time, strictly company-scoped removal of RSSH's REGISTERED CHARGE 2.
- * Do not touch unrelated companies, other charge records or section totals.
- * The total/indebtedness fields are not owned by the last charge heading.
+/** Remove a charge block without deleting shared summary fields that follow it.
+ * Works for all companies, including charge 1 and subsequent charge headings.
+ */
+export function removeRegisteredChargeRecord(doc,headingIndex){
+ const items=doc?.particulars;
+ if(!Array.isArray(items)||!Number.isInteger(headingIndex)||
+    items[headingIndex]?.type!=='heading'||!/^\s*REGISTERED\s+CHARGE\s*\d+\s*$/i.test(items[headingIndex].en||''))
+  throw Error('Choose a Registered Charge heading to remove.');
+ let section=-1,sectionEnd=items.length;
+ for(let i=headingIndex;i>=0;i--){
+  if(items[i].type==='section'){section=i;break;}
+ }
+ if(section<0||!/REGISTERED CHARGES/i.test(items[section].en||''))
+  throw Error('Registered Charge heading must be inside the Registered Charges section.');
+ for(let i=headingIndex+1;i<items.length;i++){
+  if(items[i].type==='section'){sectionEnd=i;break;}
+ }
+ const headingsBefore=items.slice(section+1,sectionEnd)
+  .filter(item=>item.type==='heading'&&/^\s*REGISTERED\s+CHARGE\s*\d+\s*$/i.test(item.en||'')).length;
+ const totals=/^(?:Number of Registered Charges|Current Outstanding Indebtedness)$/i;
+ let end=headingIndex+1;
+ while(end<sectionEnd&&items[end].type==='field'&&!totals.test(String(items[end].en||'').trim()))end++;
+ const removed=items.splice(headingIndex,end-headingIndex);
+ const remaining=headingsBefore-1;
+ const newSectionEnd=sectionEnd-removed.length;
+ const countField=items.slice(section+1,newSectionEnd)
+  .find(item=>item.type==='field'&&item.en==='Number of Registered Charges');
+ const updatedCount=Boolean(countField&&String(countField.value??'').trim()===String(headingsBefore));
+ if(updatedCount)countField.value=String(remaining);
+ return {name:displayParticularLabel(removed[0]),fields:removed.length-1,
+  removedFields:removed.length-1,remaining,updatedCount};
+}
+/** Company-scoped correction for RSSH's existing Annual Return draft.
+ * Never changes a different company's form or any underlying statutory register.
  */
 export function removeRsshRegisteredCharge2(doc){
  const name=String(doc?.company?.name??'').trim().replace(/\s+/g,' ').toUpperCase();
  if(name!=='RSSH SERVICES SDN BHD')return {removed:false,reason:'different-company'};
  const items=doc?.particulars;
  if(!Array.isArray(items))return {removed:false,reason:'no-particulars'};
- const section=items.findIndex(x=>x.type==='section'&&/REGISTERED CHARGES AND INDEBTEDNESS/i.test(x.en||''));
+ const section=items.findIndex(x=>x.type==='section'&&/REGISTERED CHARGES/i.test(x.en||''));
  if(section<0)return {removed:false,reason:'section-missing'};
  let sectionEnd=section+1;
  while(sectionEnd<items.length&&items[sectionEnd].type!=='section')sectionEnd++;
  const matches=[];
  for(let i=section+1;i<sectionEnd;i++){
-  if(items[i].type==='heading'&&/^REGISTERED CHARGE 2$/i.test(String(items[i].en||'').trim()))matches.push(i);
+  if(items[i].type==='heading'&&/^\s*REGISTERED\s+CHARGE\s*0*2\s*$/i.test(String(items[i].en||'')))matches.push(i);
  }
- if(!matches.length)return {removed:false,reason:'already-absent'};
- if(matches.length>1)throw Error('Multiple Registered Charge 2 headings exist; remove them manually to avoid ambiguity.');
- const headingIndex=matches[0];
- let end=headingIndex+1;
- const totals=/^(?:Number of Registered Charges|Current Outstanding Indebtedness)$/i;
- // The tail of Section C includes charge summary fields; retain these even
- // when the second charge is the final charge block.
- while(end<sectionEnd&&items[end].type==='field'&&!totals.test(String(items[end].en||'')))end++;
- const removed=items.splice(headingIndex,end-headingIndex);
- // A record count of 2 is now stale if precisely 2 records were present.
- // Do not guess values that differ from the explicit pre-removal count.
- const previousCount=items.slice(section+1,sectionEnd-removed.length)
-  .filter(x=>x.type==='heading'&&/^REGISTERED CHARGE \d+$/i.test(x.en||'')).length+1;
- const remaining=previousCount-1;
- const tally=items.slice(section+1,sectionEnd-removed.length)
-  .find(x=>x.type==='field'&&x.en==='Number of Registered Charges');
- const updatedCount=Boolean(tally&&String(tally.value||'').trim()===String(previousCount));
- if(updatedCount)tally.value=String(remaining);
- return {removed:true,removedFields:removed.length-1,remaining,updatedCount};
+ if(matches.length===0)return {removed:false,reason:'already-absent'};
+ if(matches.length!==1)throw Error('Multiple Registered Charge 2 headings exist; remove them individually.');
+ const result=removeRegisteredChargeRecord(doc,matches[0]);
+ return {removed:true,removedFields:result.fields,remaining:result.remaining,updatedCount:result.updatedCount};
 }
 export function removeParticularSection(doc,index){
  const items=doc?.particulars;
@@ -158,6 +174,9 @@ export function removeParticularHeading(doc,index){
  const items=doc?.particulars;
  if(!Array.isArray(items)||!Number.isInteger(index)||items[index]?.type!=='heading')
   throw Error('Heading does not exist.');
+ // Registered Charges are records, not director/member entries. Preserve totals.
+ if(/^\s*REGISTERED\s+CHARGE\s*\d+\s*$/i.test(items[index].en||''))
+  return removeRegisteredChargeRecord(doc,index);
  let end=index+1;
  while(end<items.length&&!['heading','section'].includes(items[end].type))end++;
  const removed=items.splice(index,end-index);
