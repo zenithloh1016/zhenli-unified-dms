@@ -1,4 +1,5 @@
 import {createSupabaseSigning} from './signing-supabase.js';
+import {annualReturnCloudAction} from './annual-return-cloud.js';
 import { createClient } from '@supabase/supabase-js';
 import readExcelFile from 'read-excel-file/browser';
 import {openMasterListingWorkbook} from './master-listing-reader.js';
@@ -595,7 +596,7 @@ function renderAnnualReturn(){
  '<h1>Annual Return PDF Generator</h1>'+
  '<p class="muted">Choose any existing company from the complete Documents company dropdown inside Company Details; registration number fills automatically. Complete the statutory particulars and save your bilingual PDF.</p></div>'+
  '<div class="header-buttons"><button type="button" class="btn secondary" data-action="open-ar-fullscreen">Full-screen view ⛶</button></div></div>'+
- '<div class="integration-info">Drafts save locally on this device under the current DMS user and company. Resume Draft reopens your work. No cloud draft synchronisation. The full-screen button will not reload this form.</div>'+
+ '<div class="integration-info">Annual Return drafts sync privately through your signed-in UNICOSEC account across web, Windows and Android. Local copies remain available offline; a newer cloud draft is never silently overwritten. The full-screen button will not reload this form.</div>'+
  '<div class="ar-frame-shell"><iframe id="zh-annual-return-frame" title="UNICOSEC Annual Return PDF Generator" src="'+esc(ANNUAL_RETURN_BUNDLED)+'" class="ar-integration-frame" loading="eager" allow="web-share; fullscreen" allowfullscreen></iframe></div>'+
  '</div></section>';
 }
@@ -1114,6 +1115,32 @@ window.addEventListener('message',event=>{
  if(event.origin!==window.location.origin||!state.user||state.tab!=='annual-return')return;
  const frame=ROOT.querySelector('#zh-annual-return-frame');
  if(!frame||event.source!==frame.contentWindow||!event.data||typeof event.data!=='object')return;
+ if(event.data.type==='ZHENLI_DMS_AR_DRAFT_REQUEST'){
+  const id=event.data.id,requested=event.data.companyId;
+  const operation=event.data.operation;
+  if(typeof id!=='string'||!/^ar_cloud_[\w-]{1,75}$/.test(id)||
+   !['load','save','delete'].includes(operation))return;
+  const source=frame.contentWindow,user=state.user;
+  const company=state.companies.find(c=>c.id===requested);
+  const reply=(payload)=>source?.postMessage({
+   type:'ZHENLI_DMS_AR_DRAFT_RESPONSE',id,companyId:requested,...payload
+  },window.location.origin);
+  if(!user||!company||company.user_id!==user.id||
+     state.arSelectedCompanyId!==requested){
+   reply({ok:false,error:'Select the matching DMS company before syncing its draft.'});return;
+  }
+  void (async()=>{
+   try{
+    const result=await annualReturnCloudAction(db,{
+     user,company,operation,document:event.data.document,revision:event.data.revision
+    });
+    if(state.user?.id!==user.id||state.arSelectedCompanyId!==requested||
+       state.tab!=='annual-return')return;
+    reply({ok:true,...result});
+   }catch(error){reply({ok:false,error:String(error.message||error).slice(0,300)});}
+  })();
+  return;
+ }
  if(event.data.type==='ZHENLI_DMS_AR_IMPORT_COMBINED_REQUEST'){
    const requestId=event.data.id,requested=event.data.companyId;
    if(typeof requestId!=='string'||!/^ar_register_[\w-]{1,70}$/.test(requestId))return;
