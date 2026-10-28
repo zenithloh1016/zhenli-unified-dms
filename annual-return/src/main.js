@@ -3,7 +3,7 @@ import {createAnnualReturnHistory} from './history.js';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord,displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading,moveParticularField,insertParticularHeading,restoreRsshAuditorHeading,removeRsshRegisteredCharge2} from './core.js';
+import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord,displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading,moveParticularField,moveParticularSection,insertParticularHeading,restoreRsshAuditorHeading,removeRsshRegisteredCharge2} from './core.js';
 import {importCombinedRegisterSnapshot} from './register-import.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
@@ -704,7 +704,9 @@ function groups(){
 function renderSections({openSection=null}={}){
  const onlyBlank=$('incomplete').checked;
  // The key is based on canonical section title, so label edits do not collapse it.
- $('particulars').innerHTML=groups().map((group,i)=>{
+ const sections=groups();
+ const sectionIndices=sections.filter(g=>g.index>=0).map(g=>g.index);
+ $('particulars').innerHTML=sections.map((group,i)=>{
   const section=doc.particulars[group.index];
   const title=section?displayParticularLabel(section):group.title;
   const chinese=section?displayParticularLabel(section,'cn'):group.cn;
@@ -730,12 +732,18 @@ function renderSections({openSection=null}={}){
     controlsFor(item,index)+'</div>';
   }).join('')||(onlyBlank?'<p class="status">No blank fields in this section. Turn off the filter to edit filled fields.</p>':
     '<p class="status">No fields in this section. Use Add field to this section.</p>');
-  const key=group.title+':'+i;
+  const key=group.title+':'+sections.slice(0,i).filter(x=>x.title===group.title).length;
   const startsExpanded=i===0||/DIRECTORS, COMPANY SECRETARY|PARTICULARS OF MEMBERS|CURRENT BENEFICIAL OWNERS/i.test(group.title);
   const shouldOpen=openSection===group.index||onlyBlank||
    (sectionOpenState.has(key)?sectionOpenState.get(key):startsExpanded);
-  return '<details class="ar-section" data-section-index="'+group.index+'" data-section-name="'+esc(key)+'" '+(shouldOpen?'open':'')+'><summary class="section-header"><span>'+
-   esc(title)+'<small>'+esc(chinese)+'</small></span><span class="pill">'+
+  const position=sectionIndices.indexOf(group.index);
+  const reorder=position<0?'':'<span class="ar-section-order-tools">'+
+   '<button type="button" class="ar-section-drag-handle" data-drag-section="'+group.index+'" aria-label="Drag section '+esc(title)+'" title="Drag section to reorder">⠿</button>'+
+   '<button type="button" class="button mini ar-section-shift" data-shift-section="'+group.index+'" data-section-direction="up" title="Move section up" aria-label="Move '+esc(title)+' up" '+(position===0?'disabled':'')+'>↑</button>'+
+   '<button type="button" class="button mini ar-section-shift" data-shift-section="'+group.index+'" data-section-direction="down" title="Move section down" aria-label="Move '+esc(title)+' down" '+(position===sectionIndices.length-1?'disabled':'')+'>↓</button>'+
+   '</span>';
+  return '<details class="ar-section" data-section-index="'+group.index+'" data-section-name="'+esc(key)+'" '+(shouldOpen?'open':'')+'><summary class="section-header"><span class="ar-section-title">'+
+   esc(title)+'<small>'+esc(chinese)+'</small></span>'+reorder+'<span class="pill">'+
    rows.filter(x=>x.item.type==='field').length+' fields</span></summary><div class="section-fields">'+
    (group.index>=0?'<div class="addon-bar ar-section-actions">'+
     '<button type="button" class="button mini" data-edit-section="'+group.index+'">Edit section</button>'+
@@ -752,6 +760,71 @@ function renderSections({openSection=null}={}){
  }).join('')||'<p class="status">No sections remain. Choose Add new section to start again.</p>';
  fieldStatus();historyControls();
 }
+/** Move entire review sections without splitting their headings or fields. */
+function commitSectionMove(from,target,after){
+ try{
+  const moved=moveParticularSection(doc,from,target,{after});
+  if(!moved.moved)return;
+  generated=null;$('download-box').hidden=true;
+  renderSections();queueDraftSave();
+  status('Section reordered with all headings and fields. Saved order is used in the PDF; Undo can restore it.');
+ }catch(err){status('Cannot move section: '+err.message,true);}
+}
+function moveSectionByButton(index,direction){
+ const positions=doc.particulars.map((x,i)=>x.type==='section'?i:-1).filter(i=>i>=0);
+ const current=positions.indexOf(index),next=current+(direction==='up'?-1:1);
+ if(current<0||next<0||next>=positions.length)return;
+ commitSectionMove(index,positions[next],direction==='down');
+}
+let activeSectionDrag=null;
+function clearSectionDrop(){
+ $('particulars').querySelectorAll('.ar-section-drop-before,.ar-section-drop-after').forEach(el=>
+  el.classList.remove('ar-section-drop-before','ar-section-drop-after'));
+}
+$('particulars').addEventListener('pointerdown',event=>{
+ const handle=event.target.closest('[data-drag-section]');
+ if(!handle||event.button>0)return;
+ const from=Number(handle.dataset.dragSection);
+ if(doc.particulars[from]?.type!=='section')return;
+ activeSectionDrag={pointerId:event.pointerId,from,startX:event.clientX,startY:event.clientY,started:false,target:null,after:false};
+ try{handle.setPointerCapture(event.pointerId);}catch{}
+});
+$('particulars').addEventListener('pointermove',event=>{
+ const drag=activeSectionDrag;
+ if(!drag||drag.pointerId!==event.pointerId)return;
+ if(!drag.started){
+  if(Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY)<8)return;
+  drag.started=true;
+ }
+ if(event.cancelable)event.preventDefault();
+ clearSectionDrop();
+ const hovered=document.elementFromPoint(event.clientX,event.clientY);
+ const section=hovered?.closest('details.ar-section[data-section-index]');
+ drag.target=null;
+ if(section){
+  const target=Number(section.dataset.sectionIndex);
+  if(target!==drag.from&&doc.particulars[target]?.type==='section'){
+   const summary=section.querySelector('summary.section-header')||section;
+   const bounds=summary.getBoundingClientRect();
+   const after=event.clientY>bounds.top+bounds.height/2;
+   section.classList.add(after?'ar-section-drop-after':'ar-section-drop-before');
+   drag.target=target;drag.after=after;
+  }
+ }
+ if(event.clientY<64)window.scrollBy(0,-20);
+ else if(event.clientY>(document.documentElement.clientHeight||window.innerHeight)-64)window.scrollBy(0,20);
+});
+function finishSectionDrag(event){
+ const drag=activeSectionDrag;
+ if(!drag||drag.pointerId!==event.pointerId)return;
+ activeSectionDrag=null;
+ clearSectionDrop();
+ if(event.type==='pointercancel'||!drag.started||drag.target===null)return;
+ commitSectionMove(drag.from,drag.target,drag.after);
+}
+$('particulars').addEventListener('pointerup',finishSectionDrag);
+$('particulars').addEventListener('pointercancel',finishSectionDrag);
+
 /** Fields can be reordered using a drag handle (mouse/touch) or ↑/↓ buttons.
  * Original labels, identifiers and field values move together.
  */
@@ -918,6 +991,10 @@ $('particulars').addEventListener('change',e=>{
  }
 });
 $('particulars').addEventListener('click',e=>{
+ const grip=e.target.closest('[data-drag-section]');
+ if(grip){e.preventDefault();e.stopPropagation();return;}
+ const sh=e.target.closest('[data-shift-section]');
+ if(sh){e.preventDefault();e.stopPropagation();moveSectionByButton(Number(sh.dataset.shiftSection),sh.dataset.sectionDirection);return;}
  const shift=e.target.closest('[data-shift-field]');if(shift){moveFieldByButton(Number(shift.dataset.shiftField),shift.dataset.shift);return;}
  const editSection=e.target.closest('[data-edit-section]');if(editSection){editReviewItem(Number(editSection.dataset.editSection));return;}
  const delSection=e.target.closest('[data-delete-section]');if(delSection){removeReviewSection(Number(delSection.dataset.deleteSection));return;}
