@@ -2,7 +2,7 @@ import './style.css';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord,displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading} from './core.js';
+import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord,displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading,moveParticularField} from './core.js';
 import {importCombinedRegisterSnapshot} from './register-import.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
@@ -553,22 +553,25 @@ function renderSections({openSection=null}={}){
    if(item.type==='heading'){
      const matched=ADDONS.find(x=>x.id!=='charge'&&x.heading.test(item.en||''));
      const canRemove=matched&&(matched.id==='bo'||doc.particulars.filter(x=>x.type==='heading'&&matched.heading.test(x.en||'')).length>1);
-     return '<div class="heading-entry"><strong>'+esc(displayParticularLabel(item))+'</strong> <small>'+esc(displayParticularLabel(item,'cn'))+'</small>'+
+     return '<div class="heading-entry" data-heading-index="'+index+'"><strong>'+esc(displayParticularLabel(item))+'</strong> <small>'+esc(displayParticularLabel(item,'cn'))+'</small>'+
        '<button type="button" class="button mini" data-edit-heading="'+index+'">Edit heading</button>'+
-       (/^MEMBER \d+$/i.test(item.en)?'<button type="button" class="button mini ar-add-member-field" data-add-to-member="'+index+'">+ Add member field</button>':'')+
+       '<button type="button" class="button mini ar-add-member-field" data-add-to-record="'+index+'">+ Add field to '+esc(item.en||'record')+'</button>'+
        (matched?(canRemove?'<button type="button" class="button mini ar-remove-record" data-remove-record="'+index+'">Remove '+esc(matched.label)+'</button>':''):
        '<button type="button" class="button mini ar-remove-record" data-delete-heading="'+index+'">Remove heading &amp; fields</button>')+'</div>';
    }
-   return '<div class="field-entry '+(item.value?'':'blank')+'"><div class="title">'+esc(displayParticularLabel(item)||'Untitled')+
+   return '<div class="field-entry '+(item.value?'':'blank')+'" data-field-index="'+index+'"><div class="title">'+
+    '<button type="button" class="ar-drag-handle" data-drag-field="'+index+'" title="Drag field to reorder" aria-label="Drag '+esc(displayParticularLabel(item))+' to reorder">⠿</button>'+esc(displayParticularLabel(item)||'Untitled')+
     '<small>'+esc(displayParticularLabel(item,'cn'))+'</small>'+
-    '<div class="ar-label-actions"><button type="button" class="button mini" data-edit-field="'+index+'">Edit field</button>'+
+    '<div class="ar-label-actions"><button type="button" class="button mini" data-shift-field="'+index+'" data-shift="up" aria-label="Move field up">↑</button>'+ 
+    '<button type="button" class="button mini" data-shift-field="'+index+'" data-shift="down" aria-label="Move field down">↓</button>'+ 
+    '<button type="button" class="button mini" data-edit-field="'+index+'">Edit field</button>'+
     '<button type="button" class="ar-delete-field" data-delete-field="'+index+'">Remove field</button></div></div>'+
     controlsFor(item,index)+'</div>';
   }).join('')||(onlyBlank?'<p class="status">No blank fields in this section. Turn off the filter to edit filled fields.</p>':
     '<p class="status">No fields in this section. Use Add field to this section.</p>');
   const key=group.title+':'+i;
   const shouldOpen=i===0||onlyBlank||openNames.has(key)||openSection===group.index;
-  return '<details class="ar-section" data-section-name="'+esc(key)+'" '+(shouldOpen?'open':'')+'><summary class="section-header"><span>'+
+  return '<details class="ar-section" data-section-index="'+group.index+'" data-section-name="'+esc(key)+'" '+(shouldOpen?'open':'')+'><summary class="section-header"><span>'+
    esc(title)+'<small>'+esc(chinese)+'</small></span><span class="pill">'+
    rows.filter(x=>x.item.type==='field').length+' fields</span></summary><div class="section-fields">'+
    (group.index>=0?'<div class="addon-bar ar-section-actions">'+
@@ -580,6 +583,73 @@ function renderSections({openSection=null}={}){
  }).join('')||'<p class="status">No sections remain. Choose Add new section to start again.</p>';
  fieldStatus();
 }
+/** Fields can be reordered using a drag handle (mouse/touch) or ↑/↓ buttons.
+ * Original labels, identifiers and field values move together.
+ */
+function moveFieldByButton(from,direction){
+ if(doc.particulars[from]?.type!=='field')return;
+ const target=direction==='up'?from-1:from+1;
+ if(doc.particulars[target]?.type!=='field')return status('Drag the field handle to move into another section or record.');
+ try{
+  const result=moveParticularField(doc,from,target,{after:direction==='down'});
+  if(result.moved){renderSections();queueDraftSave();status('Field moved. PDF sequence updated.');}
+ }catch(err){status('Cannot move field: '+err.message,true);}
+}
+let activeFieldDrag=null;
+function clearFieldDrop(){
+ $('particulars').querySelectorAll('.ar-drop-before,.ar-drop-after,.ar-drop-section').forEach(el=>
+  el.classList.remove('ar-drop-before','ar-drop-after','ar-drop-section'));
+}
+$('particulars').addEventListener('pointerdown',event=>{
+ const handle=event.target.closest('[data-drag-field]');
+ if(!handle||event.button>0)return;
+ const from=Number(handle.dataset.dragField);
+ if(doc.particulars[from]?.type!=='field')return;
+ activeFieldDrag={pointerId:event.pointerId,from,startX:event.clientX,startY:event.clientY,started:false,target:null,after:false};
+ try{handle.setPointerCapture(event.pointerId);}catch{}
+});
+$('particulars').addEventListener('pointermove',event=>{
+ const drag=activeFieldDrag;
+ if(!drag||drag.pointerId!==event.pointerId)return;
+ if(!drag.started){
+  if(Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY)<8)return;
+  drag.started=true;
+ }
+ if(event.cancelable)event.preventDefault();
+ clearFieldDrop();
+ const hovered=document.elementFromPoint(event.clientX,event.clientY);
+ const field=hovered?.closest('.field-entry[data-field-index]');
+ const section=hovered?.closest('details.ar-section[data-section-index]');
+ const heading=hovered?.closest('.heading-entry[data-heading-index]');
+ let target=null,after=false;
+ if(field){
+  target=Number(field.dataset.fieldIndex);
+  after=event.clientY>field.getBoundingClientRect().top+field.getBoundingClientRect().height/2;
+  field.classList.add(after?'ar-drop-after':'ar-drop-before');
+ }else if(heading){
+  target=Number(heading.dataset.headingIndex);
+  heading.classList.add('ar-drop-section');
+ }else if(section){
+  target=Number(section.dataset.sectionIndex);
+  section.classList.add('ar-drop-section');
+ }
+ drag.target=target;drag.after=after;
+ if(event.clientY<60)window.scrollBy(0,-18);
+ else if(event.clientY>window.innerHeight-60)window.scrollBy(0,18);
+});
+function finishFieldDrag(event){
+ const drag=activeFieldDrag;
+ if(!drag||drag.pointerId!==event.pointerId)return;
+ activeFieldDrag=null;
+ clearFieldDrop();
+ if(event.type==='pointercancel'||!drag.started||drag.target===null||drag.target===drag.from)return;
+ try{
+  const result=moveParticularField(doc,drag.from,drag.target,{after:drag.after});
+  if(result.moved){renderSections();queueDraftSave();status('Field reordered successfully. This sequence will be used in the PDF.');}
+ }catch(err){status('Cannot move field: '+err.message,true);}
+}
+$('particulars').addEventListener('pointerup',finishFieldDrag);
+$('particulars').addEventListener('pointercancel',finishFieldDrag);
 function resetView(){signingInputs();$('incomplete').checked=false;renderSections();}
 function setBusy(flag){busy=flag;$('generate-pdf').disabled=flag;$('save-draft').disabled=flag;}
 async function generate(){
@@ -659,6 +729,7 @@ $('particulars').addEventListener('change',e=>{
  }
 });
 $('particulars').addEventListener('click',e=>{
+ const shift=e.target.closest('[data-shift-field]');if(shift){moveFieldByButton(Number(shift.dataset.shiftField),shift.dataset.shift);return;}
  const editSection=e.target.closest('[data-edit-section]');if(editSection){editReviewItem(Number(editSection.dataset.editSection));return;}
  const delSection=e.target.closest('[data-delete-section]');if(delSection){removeReviewSection(Number(delSection.dataset.deleteSection));return;}
  const editField=e.target.closest('[data-edit-field]');if(editField){editReviewItem(Number(editField.dataset.editField));return;}
@@ -682,7 +753,7 @@ $('particulars').addEventListener('click',e=>{
   if(!desc)return;
   changeMSIC(Number(manual.dataset.msicManual),code,false,desc.slice(0,250));return;
  }
- const memberField=e.target.closest('[data-add-to-member]');if(memberField){addCustomField({headingIndex:Number(memberField.dataset.addToMember)});return;}
+ const recordField=e.target.closest('[data-add-to-record]');if(recordField){addCustomField({headingIndex:Number(recordField.dataset.addToRecord)});return;}
  const sectionField=e.target.closest('[data-add-to-section]');if(sectionField){addCustomField({sectionIndex:Number(sectionField.dataset.addToSection)});return;}
  const add=e.target.closest('[data-add-record]');if(add)addRecord(add.dataset.addRecord);
 });
