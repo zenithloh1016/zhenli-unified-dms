@@ -54,6 +54,9 @@
  font-size:10.7px;line-height:1.47;color:#1f3746
 }
 .pdf-particulars-table .pdf-row-continuation{display:block;margin-top:3px;font-size:9px;color:#677f8d;font-weight:500}
+/* Full BO criterion explanations remain in the same two-column table. */
+.pdf-particulars-table tbody .pdf-criteria-row th{background:#edf5f9;color:#146078;font-weight:800}
+.pdf-particulars-table tbody .pdf-criteria-row td{background:#fbfdff;line-height:1.57;padding-top:10px;padding-bottom:10px}
 .pdf-particulars-table .pdf-empty{color:#8999a7!important;font-style:italic}
 .pdf-particulars-table tbody .pdf-note-row td{
  padding:11px 13px;border:1px solid #c9d8e2;
