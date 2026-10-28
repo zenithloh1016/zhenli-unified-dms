@@ -143,7 +143,7 @@ function restoreRsshAuditorNow(){
 function removeRsshChargeTwoOnce(){
  if(String(doc.company?.name||'').trim().replace(/\s+/g,' ').toUpperCase()!=='RSSH SERVICES SDN BHD')return '';
  if(window.parent!==window&&(!selectedDmsCompanyId||draftScope==='dms:pending'))return '';
- const key='unicosec:ar:rssh-charge-2-removed:v1:'+encodeURIComponent(draftScope)+':'+encodeURIComponent(currentDraftId());
+ const key='unicosec:ar:rssh-charge-2-removed:v2:'+encodeURIComponent(draftScope)+':'+encodeURIComponent(currentDraftId());
  try{if(localStorage.getItem(key)==='1')return '';}catch{return '';}
  let result;
  try{result=removeRsshRegisteredCharge2(doc);}
@@ -169,6 +169,8 @@ function removeRsshChargeTwoNow(){
   if(!result.removed)return status('Registered Charge 2 was not found: '+result.reason+'.',true);
   generated=null;$('download-box').hidden=true;
   renderSections();queueDraftSave();
+  // Mark this device/company as corrected, so later intentional additions survive.
+  try{localStorage.setItem('unicosec:ar:rssh-charge-2-removed:v2:'+encodeURIComponent(draftScope)+':'+encodeURIComponent(currentDraftId()),'1');}catch{}
   status('RSSH SERVICES: Removed Registered Charge 2 and '+result.removedFields+' fields. '+
    (result.updatedCount?'Adjusted the displayed charge count to '+result.remaining+'. ':'Verify the displayed charge count. ')+
    'Undo is available this session.');
@@ -188,8 +190,11 @@ function hasUnsavedAnnualReturnData(){
 function applyDmsCompany(company){
  if(!isValidCompanyRecord(company))return {ok:false,reason:'Invalid company record from DMS.'};
  const name=company.name.trim(),registrationNo=company.registrationNo.trim();
- if(selectedDmsCompanyId===company.id&&doc.company.name===name&&doc.company.no===registrationNo)
-   return {ok:true};
+ if(selectedDmsCompanyId===company.id&&doc.company.name===name&&doc.company.no===registrationNo){
+  const fixed=removeRsshChargeTwoOnce();
+  if(fixed)status(fixed);
+  return {ok:true};
+ }
  const changedCompany=Boolean(selectedDmsCompanyId&&selectedDmsCompanyId!==company.id);
  if((changedCompany||hasUnsavedAnnualReturnData())&&!confirm(
    'Switch to '+name+' from DMS Documents? This starts a new Annual Return form and discards unsaved particulars. Your unfinished form will be saved locally before switching.'
@@ -212,7 +217,7 @@ function applyDmsCompany(company){
  if(previous&&previous.data.company.name===name&&previous.data.company.no===registrationNo)doc=previous.data;
  resetView();draftOptions();
  const restored=restoreRsshSavedDraftOnce();
- const chargeRemoved=previous?removeRsshChargeTwoOnce():'';
+ const chargeRemoved=removeRsshChargeTwoOnce();
  status('Company loaded from DMS Documents: '+name+(registrationNo?' ('+registrationNo+')':' — registration number missing; please enter it before PDF generation')+'. '+restored+chargeRemoved+'Complete and verify all remaining statutory particulars.');
  return {ok:true};
 }
@@ -585,12 +590,13 @@ function removeReviewSection(index){
 }
 function removeReviewHeading(index){
  const entry=doc.particulars[index];if(entry?.type!=='heading')return status('Heading no longer exists.',true);
- if(ADDONS.some(x=>x.heading.test(entry.en||''))){removeWholeRecord(index);return;}
+ if(ADDONS.some(x=>x.id!=='charge'&&x.heading.test(entry.en||''))){removeWholeRecord(index);return;}
  confirmRemoval('Remove "'+displayParticularLabel(entry)+'" and all its associated fields and values? Undo will restore them.',()=>{
   const current=doc.particulars.indexOf(entry);
   if(current<0)throw Error('Heading changed. Retry.');
   const result=removeParticularHeading(doc,current);
-  renderSections();queueDraftSave();status('Removed heading: '+result.name+'. Use Undo to restore.');
+  generated=null;$('download-box').hidden=true;
+  renderSections();queueDraftSave();status('Removed heading: '+result.name+'. '+(result.updatedCount?'Registered Charge count adjusted. ':'')+'Use Undo to restore.');
  });
 }
 function saveCustomField(dialog){
@@ -820,6 +826,8 @@ function resetView({preserveHistory=false}={}){
 function setBusy(flag){busy=flag;$('generate-pdf').disabled=flag;$('save-draft').disabled=flag;}
 async function generate(){
  if(busy)return;
+ const rsshCorrection=removeRsshChargeTwoOnce();
+ if(rsshCorrection)status(rsshCorrection);
  if(!String(doc.company.name).trim()||!String(doc.company.no).trim())
   return status('Enter company name and registration number first.',true);
  if(!confirm('Generate a CLIENT REVIEW PDF? Verify company details and statutory particulars before sending.'))return;
@@ -959,6 +967,8 @@ $('share-pdf').addEventListener('click',async()=>{
  catch(error){status('PDF has not been saved: '+error.message+'. Tap Save PDF to Files to retry.',true);}
 });
 $('print').addEventListener('click',()=>{
+ const rsshCorrection=removeRsshChargeTwoOnce();
+ if(rsshCorrection)status(rsshCorrection);
  if(!doc.company.name.trim())return status('Enter company name first.',true);
  renderPages(doc);window.print();setTimeout(()=>{$('pdf-stage').textContent='';},5000);
 });
