@@ -109,3 +109,17 @@ html.ar-immersive .footer{display:none}
 .heading-entry.ar-drop-section,details.ar-section.ar-drop-section{outline:2px solid #187ab1;outline-offset:2px}
 .heading-entry .ar-add-member-field{margin-left:6px}
 @media (pointer:coarse){.ar-drag-handle{width:44px;height:44px;min-width:44px}}
+
+/* Annual Return Undo/Redo and platform-owned removal confirmation. */
+.ar-undo-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-left:auto}
+.ar-undo-tools .button{min-width:96px;min-height:42px}
+.ar-undo-tools .button:disabled{opacity:.45;cursor:not-allowed}
+.ar-remove-dialog{box-sizing:border-box;width:min(92vw,490px);max-height:85vh;overflow:auto;
+ margin:auto;padding:22px;border:1px solid #bdcedb;border-radius:16px;
+ color:#15364c;background:#fff;box-shadow:0 20px 60px #092a4255}
+.ar-remove-dialog::backdrop{background:rgba(7,26,43,.65)}
+.ar-remove-content{display:grid;gap:16px}
+.ar-remove-content h2{margin:0;font-size:20px}
+.ar-remove-content p{margin:0;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
+.ar-confirm-remove{background:#a92b3a!important;border-color:#a92b3a!important;color:#fff!important}
+@media(max-width:600px){.ar-undo-tools{width:100%;margin:0}.ar-undo-tools .button{flex:1}}
