@@ -184,6 +184,30 @@ export function moveParticularSection(doc,fromIndex,targetIndex,{after=false}={}
  items.splice(destination,0,...moved);
  return {moved:true,from:fromIndex,to:destination,items:length};
 }
+/** Move a complete section as one contiguous block, keeping all its headings,
+ * fields, values, and bilingual labels together. Destination is another section,
+ * before or after. The exported PDF reads this same order from particulars.
+ */
+export function moveParticularSection(doc,fromIndex,targetIndex,{after=false}={}){
+ const items=doc?.particulars;
+ if(!Array.isArray(items))throw Error('Annual Return particulars are unavailable.');
+ if(!Number.isInteger(fromIndex)||items[fromIndex]?.type!=='section')
+  throw Error('Select a section to move.');
+ if(!Number.isInteger(targetIndex)||items[targetIndex]?.type!=='section')
+  throw Error('Drop onto another section.');
+ if(fromIndex===targetIndex)return {moved:false,from:fromIndex,to:fromIndex};
+ let fromEnd=fromIndex+1,targetEnd=targetIndex+1;
+ while(fromEnd<items.length&&items[fromEnd].type!=='section')fromEnd++;
+ while(targetEnd<items.length&&items[targetEnd].type!=='section')targetEnd++;
+ const count=fromEnd-fromIndex;
+ const insertion=after?targetEnd:targetIndex;
+ if(insertion===fromIndex||insertion===fromEnd)
+  return {moved:false,from:fromIndex,to:fromIndex};
+ const block=items.splice(fromIndex,count);
+ const destination=insertion>fromIndex?insertion-count:insertion;
+ items.splice(destination,0,...block);
+ return {moved:true,from:fromIndex,to:destination,count};
+}
 export function removeParticularSection(doc,index){
  const items=doc?.particulars;
  if(!Array.isArray(items)||!Number.isInteger(index)||items[index]?.type!=='section')
