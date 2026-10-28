@@ -161,29 +161,6 @@ export function removeRsshRegisteredCharge2(doc){
  const result=removeRegisteredChargeRecord(doc,matches[0]);
  return {removed:true,removedFields:result.fields,remaining:result.remaining,updatedCount:result.updatedCount};
 }
-/** Reorder a complete section as one contiguous block of headings and fields.
- * Both indexes identify section headers in the ORIGINAL array. This preserves
- * all field values, bilingual labels, added/removed records and PDF order.
- */
-export function moveParticularSection(doc,fromIndex,targetIndex,{after=false}={}){
- const items=doc?.particulars;
- if(!Array.isArray(items))throw Error('Annual Return particulars are unavailable.');
- if(!Number.isInteger(fromIndex)||items[fromIndex]?.type!=='section')
-  throw Error('Select a section to move.');
- if(!Number.isInteger(targetIndex)||items[targetIndex]?.type!=='section')
-  throw Error('Drop onto another section.');
- if(fromIndex===targetIndex)return {moved:false,from:fromIndex,to:fromIndex};
- let fromEnd=fromIndex+1,targetEnd=targetIndex+1;
- while(fromEnd<items.length&&items[fromEnd].type!=='section')fromEnd++;
- while(targetEnd<items.length&&items[targetEnd].type!=='section')targetEnd++;
- const length=fromEnd-fromIndex;
- const desired=after?targetEnd:targetIndex;
- const destination=desired>fromIndex?desired-length:desired;
- if(destination===fromIndex)return {moved:false,from:fromIndex,to:fromIndex};
- const moved=items.splice(fromIndex,length);
- items.splice(destination,0,...moved);
- return {moved:true,from:fromIndex,to:destination,items:length};
-}
 /** Move a complete section as one contiguous block, keeping all its headings,
  * fields, values, and bilingual labels together. Destination is another section,
  * before or after. The exported PDF reads this same order from particulars.
