@@ -411,6 +411,9 @@ function openLabelEditor(target){
   displayParticularLabel(doc.particulars[target.sectionIndex]):'the end of the form';
  const title=mode==='edit-label'?'Edit '+entry.type+' labels':mode==='add-section'?'Add Annual Return section':'Add Annual Return field';
  dialog.querySelector('#ar-custom-field-title').textContent=title;
+ const fieldType=mode==='add-section'||entry?.type==='section'?'Section':entry?.type==='heading'?'Heading':'Field';
+ dialog.querySelector('label[for="ar-custom-field-en"]').textContent=fieldType+' name (English) *';
+ dialog.querySelector('label[for="ar-custom-field-cn"]').textContent=fieldType+' name (Chinese, optional)';
  dialog.querySelector('#ar-custom-field-location').textContent=mode==='edit-label'?
   'Update the displayed English and Chinese labels; existing values are retained.':
   mode==='add-section'?'The new section will appear at the end of the form.':'New field will be added to '+context+'.';
@@ -483,8 +486,9 @@ function saveCustomField(dialog){
   if(doc.particulars[sectionIndex]?.type!=='section'){
    error.textContent='Section no longer exists. Reopen Add field.';error.hidden=false;return;
   }
+  // Section fields belong before any Director/Member/BO subheadings, not under the last record.
   pos=sectionIndex+1;
-  while(pos<doc.particulars.length&&doc.particulars[pos].type!=='section')pos++;
+  while(pos<doc.particulars.length&&doc.particulars[pos].type==='field')pos++;
  }
  doc.particulars.splice(pos,0,{type:'field',en,cn,value:''});
  dialog.close();
