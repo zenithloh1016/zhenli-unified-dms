@@ -204,8 +204,8 @@ export function renderPages(doc){
  // every other section. This also keeps it within the same pagination rules.
  appendRow(tableRow('section','DIRECTOR CONFIRMATION','董事确认'),75);
  appendRow(tableRow('note','','',
-  '<p class="pdf-declaration-en">I hereby confirm that the particulars stated above are true and correct to the best of my knowledge, subject to verification of any missing or noted information.</p>'+
-  '<p class="pdf-declaration-cn">本人谨此确认，据本人所知，上述资料属真实及正确；未提供或待核实之资料仍须另行确认。</p>'));
+  '<p class="pdf-declaration-en">I hereby confirm that the particulars stated above are true and correct to the best of my knowledge.</p>'+
+  '<p class="pdf-declaration-cn">本人谨此确认，据本人所知，上述资料属真实及正确。</p>'));
  const signer=doc.signatureDirector||{};
  appendRow(tableRow('field','Name of Director','董事姓名',blank(signer.name)));
  appendRow(tableRow('field','NRIC / Passport No.','身份证／护照号码',blank(signer.nric)));
