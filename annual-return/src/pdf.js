@@ -205,6 +205,8 @@ export function renderPages(doc){
  return pages;
 }
 export async function buildPdf(doc,onProgress=()=>{}){
+  // Wait for available fonts before measuring table rows or rasterising pages.
+  if(document.fonts?.ready)await document.fonts.ready;
   const pages=renderPages(doc);
   if(!pages.length)throw Error('No pages to export.');
   const stage=document.getElementById('pdf-stage');
