@@ -424,7 +424,7 @@ test('drag reordering moves whole fields without changing their values, labels o
  assert.equal(item.displayEn,'Display Name');
  assert.equal(item.value,'EXAMPLE COMPANY SDN BHD');
  assert.equal(doc.particulars[second].en,'Company Name');
- const secondMove=moveParticularField(doc,second,second-1);
+ const secondMove=moveParticularField(doc,second,first);
  assert.equal(secondMove.moved,true);
  assert.equal(doc.particulars[first],item);
  assert.throws(()=>moveParticularField(doc,first,-1),/Drop onto/);
