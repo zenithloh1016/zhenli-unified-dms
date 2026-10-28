@@ -3,7 +3,7 @@ import {createAnnualReturnHistory} from './history.js';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord,displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading,moveParticularField,insertParticularHeading,restoreRsshAuditorHeading} from './core.js';
+import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord,displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading,moveParticularField,insertParticularHeading,restoreRsshAuditorHeading,removeRsshRegisteredCharge2} from './core.js';
 import {importCombinedRegisterSnapshot} from './register-import.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC} from './msic.js';
@@ -100,7 +100,8 @@ function resumeLocalDraft(key){
   generated=null;$('download-box').hidden=true;
   resetView();draftOptions(key);
   const restored=restoreRsshSavedDraftOnce();
-  draftStatus('Resumed '+draft.name+' · '+new Date(draft.updatedAt).toLocaleString()+'. '+restored);
+  const chargeRemoved=removeRsshChargeTwoOnce();
+  draftStatus('Resumed '+draft.name+' · '+new Date(draft.updatedAt).toLocaleString()+'. '+restored+chargeRemoved);
   return true;
  }catch(err){draftStatus('Could not resume draft: '+err.message,true);return false;}
 }
@@ -133,6 +134,45 @@ function restoreRsshAuditorNow(){
   renderSections();queueDraftSave();
   status('RSSH SERVICES SDN BHD: Auditor heading and '+result.addedFields+' blank fields restored. Enter or verify the actual auditor information.');
  }catch(error){status('Cannot restore RSSH Auditor: '+error.message,true);}
+}
+
+/** One-time RSSH correction against a previously saved local draft.
+ * A separate device/account draft must be opened on that device to be edited.
+ * Avoid repeating a destructive change if the user later adds charge 2 again.
+ */
+function removeRsshChargeTwoOnce(){
+ if(String(doc.company?.name||'').trim().replace(/\s+/g,' ').toUpperCase()!=='RSSH SERVICES SDN BHD')return '';
+ if(window.parent!==window&&(!selectedDmsCompanyId||draftScope==='dms:pending'))return '';
+ const key='unicosec:ar:rssh-charge-2-removed:v1:'+encodeURIComponent(draftScope)+':'+encodeURIComponent(currentDraftId());
+ try{if(localStorage.getItem(key)==='1')return '';}catch{return '';}
+ let result;
+ try{result=removeRsshRegisteredCharge2(doc);}
+ catch(error){draftStatus('RSSH charge correction failed: '+error.message,true);return '';}
+ if(result.removed){
+  generated=null;$('download-box').hidden=true;
+  renderSections();history.capture(doc);historyControls();
+  if(!saveDraftNow({quiet:true}))return 'Registered Charge 2 was removed from the open form but could not be saved. ';
+ }
+ if(result.removed||result.reason==='already-absent'){
+  try{localStorage.setItem(key,'1');}
+  catch(error){draftStatus('RSSH charge correction marker could not be saved: '+error.message,true);}
+ }
+ return result.removed?'Removed Registered Charge 2 and '+result.removedFields+
+  ' related field(s) from RSSH. '+(result.updatedCount?'Charge count adjusted to '+result.remaining+'. ':
+  'Verify Number of Registered Charges against the statutory records. '):'';
+}
+function removeRsshChargeTwoNow(){
+ if(String(doc.company?.name||'').trim().replace(/\s+/g,' ').toUpperCase()!=='RSSH SERVICES SDN BHD')
+  return status('Select RSSH SERVICES SDN BHD first.',true);
+ confirmRemoval('Remove Registered Charge 2 and all of its associated fields from the RSSH Annual Return? This does not delete the statutory register, and Undo can restore the Annual Return entry.',()=>{
+  const result=removeRsshRegisteredCharge2(doc);
+  if(!result.removed)return status('Registered Charge 2 was not found: '+result.reason+'.',true);
+  generated=null;$('download-box').hidden=true;
+  renderSections();queueDraftSave();
+  status('RSSH SERVICES: Removed Registered Charge 2 and '+result.removedFields+' fields. '+
+   (result.updatedCount?'Adjusted the displayed charge count to '+result.remaining+'. ':'Verify the displayed charge count. ')+
+   'Undo is available this session.');
+ });
 }
 
 function isValidCompanyRecord(value){
@@ -172,7 +212,8 @@ function applyDmsCompany(company){
  if(previous&&previous.data.company.name===name&&previous.data.company.no===registrationNo)doc=previous.data;
  resetView();draftOptions();
  const restored=restoreRsshSavedDraftOnce();
- status('Company loaded from DMS Documents: '+name+(registrationNo?' ('+registrationNo+')':' — registration number missing; please enter it before PDF generation')+'. '+restored+'Complete and verify all remaining statutory particulars.');
+ const chargeRemoved=previous?removeRsshChargeTwoOnce():'';
+ status('Company loaded from DMS Documents: '+name+(registrationNo?' ('+registrationNo+')':' — registration number missing; please enter it before PDF generation')+'. '+restored+chargeRemoved+'Complete and verify all remaining statutory particulars.');
  return {ok:true};
 }
 if(window.parent!==window){
@@ -699,6 +740,8 @@ function renderSections({openSection=null}={}){
    '<button class="button mini" type="button" data-add-to-section="'+group.index+'">+ Add field to this section</button>'+
    (/DIRECTORS, COMPANY SECRETARY/i.test(group.title)&&doc.company.name.trim().replace(/\s+/g,' ').toUpperCase()==='RSSH SERVICES SDN BHD'&&!doc.particulars.some(x=>x.type==='heading'&&x.en==='AUDITOR')?
    '<button class="button mini" type="button" data-restore-rssh-auditor>↺ Restore Auditor heading (RSSH)</button>':'')+
+   (/REGISTERED CHARGES/i.test(group.title)&&doc.company.name.trim().replace(/\s+/g,' ').toUpperCase()==='RSSH SERVICES SDN BHD'&&doc.particulars.some(x=>x.type==='heading'&&/^REGISTERED CHARGE 2$/i.test(x.en||''))?
+   '<button class="button mini ar-remove-record" type="button" data-remove-rssh-charge-2>Remove Registered Charge 2 (RSSH)</button>':'')+
    '</div>':'')+'</div></details>';
  }).join('')||'<p class="status">No sections remain. Choose Add new section to start again.</p>';
  fieldStatus();historyControls();
@@ -891,6 +934,7 @@ $('particulars').addEventListener('click',e=>{
   if(!desc)return;
   changeMSIC(Number(manual.dataset.msicManual),code,false,desc.slice(0,250));return;
  }
+ const removeRsshCharge=e.target.closest('[data-remove-rssh-charge-2]');if(removeRsshCharge){removeRsshChargeTwoNow();return;}
  const restoreAuditor=e.target.closest('[data-restore-rssh-auditor]');if(restoreAuditor){restoreRsshAuditorNow();return;}
  const addHeading=e.target.closest('[data-add-heading-to-section]');if(addHeading){addReviewHeading(Number(addHeading.dataset.addHeadingToSection));return;}
  const recordField=e.target.closest('[data-add-to-record]');if(recordField){addCustomField({headingIndex:Number(recordField.dataset.addToRecord)});return;}
