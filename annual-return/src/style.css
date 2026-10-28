@@ -61,9 +61,10 @@
  background:#fbfdff;line-height:1.57;padding:10px 12px;white-space:normal;
  font-size:10.7px;overflow-wrap:anywhere
 }
-.pdf-criterion-inline{display:inline;line-height:1.57}
+.pdf-criterion-item{display:block;line-height:1.57;font-size:10.7px;color:#283d4c}
+.pdf-criterion-item+.pdf-criterion-item{margin-top:7px}
 .pdf-criterion-label{display:inline;font-weight:800;color:#146078;white-space:nowrap}
-.pdf-criterion-separator,.pdf-criterion-description{display:inline}
+.pdf-criterion-separator,.pdf-criterion-description{display:inline;font-size:inherit;font-weight:400;color:#283d4c}
 .pdf-particulars-table .pdf-empty{color:#8999a7!important;font-style:italic}
 .pdf-particulars-table tbody .pdf-note-row td{
  padding:11px 13px;border:1px solid #c9d8e2;
