@@ -66,6 +66,48 @@ export function moveParticularField(doc,fromIndex,targetIndex,{after=false}={}){
  items.splice(destination,0,field);
  return {moved:true,from:fromIndex,to:destination};
 }
+/** Add a bilingual heading to the chosen section without changing existing fields.
+ * A new heading is placed at the section's end, before its next section.
+ */
+export function insertParticularHeading(doc,sectionIndex,en,cn=''){
+ const items=doc?.particulars;
+ if(!Array.isArray(items)||!Number.isInteger(sectionIndex)||items[sectionIndex]?.type!=='section')
+  throw Error('Select a valid section before adding a heading.');
+ if(items.length>=1200)throw Error('The Annual Return item limit is reached.');
+ const label=String(en??'').trim();
+ if(!label)throw Error('Enter an English heading name.');
+ let position=sectionIndex+1;
+ while(position<items.length&&items[position].type!=='section')position++;
+ const item={type:'heading',en:safe(label,350),cn:safe(String(cn??'').trim(),350),value:''};
+ items.splice(position,0,item);
+ return {index:position,heading:item};
+}
+
+/** Opt-in migration for a company-specific lost heading on the device's draft.
+ * Recreate the AUDITOR heading and its template field names, with blank values.
+ * Never overwrite an existing heading or modify any unrelated company.
+ */
+export function restoreRsshAuditorHeading(doc){
+ const companyName=String(doc?.company?.name??'').trim().replace(/\s+/g,' ').toUpperCase();
+ if(companyName!=='RSSH SERVICES SDN BHD')return {restored:false,reason:'different-company'};
+ const items=doc?.particulars;
+ if(!Array.isArray(items))return {restored:false,reason:'no-particulars'};
+ if(items.some(x=>x.type==='heading'&&String(x.en||'').trim().toUpperCase()==='AUDITOR'))
+  return {restored:false,reason:'already-present'};
+ const companySection=items.findIndex(x=>x.type==='section'&&/DIRECTORS, COMPANY SECRETARY/i.test(x.en||''));
+ if(companySection<0)return {restored:false,reason:'section-missing'};
+ const source=cloneBlank().particulars;
+ const auditorIndex=source.findIndex(x=>x.type==='heading'&&x.en==='AUDITOR');
+ if(auditorIndex<0)throw Error('Auditor template is missing.');
+ let end=auditorIndex+1;
+ while(end<source.length&&source[end].type==='field')end++;
+ const replacement=source.slice(auditorIndex,end).map(x=>({...x,value:''}));
+ if(items.length+replacement.length>1200)throw Error('Too many items to restore Auditor.');
+ let position=companySection+1;
+ while(position<items.length&&items[position].type!=='section')position++;
+ items.splice(position,0,...replacement);
+ return {restored:true,headingIndex:position,addedFields:replacement.length-1};
+}
 export function removeParticularSection(doc,index){
  const items=doc?.particulars;
  if(!Array.isArray(items)||!Number.isInteger(index)||items[index]?.type!=='section')
