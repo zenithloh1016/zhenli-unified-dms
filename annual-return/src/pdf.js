@@ -166,20 +166,29 @@ export function renderPages(doc){
 export async function buildPdf(doc,onProgress=()=>{}){
   const pages=renderPages(doc);
   if(!pages.length)throw Error('No pages to export.');
+  const stage=document.getElementById('pdf-stage');
+  const originalStyle=stage.getAttribute('style');
+  // Place real page bounds inside the viewport for html2canvas. Keep the
+  // original stage invisible while html2canvas makes its own visible clone.
+  stage.style.left='0px';
+  stage.style.top='0px';
+  stage.style.opacity='0';
+  stage.style.zIndex='-1';
   const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
   const scale=Capacitor.isNativePlatform()?1.15:1.35;
   try{
     for(let i=0;i<pages.length;i++){
       onProgress('Rendering PDF page '+(i+1)+' of '+pages.length+'…');
       await new Promise(r=>setTimeout(r,0));
-      const canvas=await html2canvas(pages[i],{scale,backgroundColor:'#ffffff',logging:false,
+      const canvas=await html2canvas(pages[i],{
+        scale,backgroundColor:'#ffffff',logging:false,
         useCORS:false,windowWidth:794,scrollX:0,scrollY:0,
         onclone:cloned=>{
-          // Render the PDF page in the html2canvas clone's normal viewport.
-          // Avoid an offscreen left:-12000px surface being clipped to a blank PDF.
-          const stage=cloned.getElementById('pdf-stage');
-          if(stage){stage.style.left='0';stage.style.top='0';stage.style.position='absolute';}
-        }});
+          const cloneStage=cloned.getElementById('pdf-stage');
+          if(cloneStage){cloneStage.style.opacity='1';cloneStage.style.zIndex='auto';}
+        }
+      });
+      if(canvas.width<10||canvas.height<10)throw Error('PDF page could not be rendered. Try again or use Print.');
       if(i)pdf.addPage();
       pdf.addImage(canvas.toDataURL('image/jpeg',0.87),'JPEG',0,0,210,297,undefined,'FAST');
       canvas.width=1;canvas.height=1;
@@ -187,6 +196,8 @@ export async function buildPdf(doc,onProgress=()=>{}){
     onProgress('Preparing downloadable PDF…');
     return {blob:pdf.output('blob'),filename:outputFilename(doc),pages:pages.length};
   }finally{
-    document.getElementById('pdf-stage').textContent='';
+    if(originalStyle===null)stage.removeAttribute('style');
+    else stage.setAttribute('style',originalStyle);
+    stage.textContent='';
   }
 }
