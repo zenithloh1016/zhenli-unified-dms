@@ -146,7 +146,7 @@ export function renderPages(doc){
     '<thead><tr><th scope="col"><span>'+HEADER_EN+'</span><small>'+HEADER_CN+'</small></th>'+
     '<th scope="col"><span>'+VALUE_EN+'</span><small>'+VALUE_CN+'</small></th></tr></thead>'+
     '<tbody></tbody></table></div>'+
-   '<footer class="pdf-bottom"><span>UNICOSEC · CLIENT REVIEW ONLY / 仅供客户审核</span>'+
+   '<footer class="pdf-bottom"><span>UNICOSEC · ANNUAL RETURN PARTICULARS · CLIENT REVIEW ONLY / 仅供客户审核</span>'+
     '<span class="page-number"></span></footer>';
   stage.appendChild(page);
   pages.push(page);
