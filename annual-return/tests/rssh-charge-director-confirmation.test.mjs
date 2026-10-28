@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {cloneBlank,normalizeDocument,removeRsshRegisteredCharge2} from '../src/core.js';
+import {cloneBlank,normalizeDocument,removeRsshRegisteredCharge2,removeParticularHeading,removeRegisteredChargeRecord} from '../src/core.js';
 import {createAnnualReturnHistory} from '../src/history.js';
 import {saveAnnualReturnDraft,readAnnualReturnDraft} from '../src/drafts.js';
 
@@ -68,9 +68,12 @@ test('Non-matching statutory charge counts are not silently overwritten',()=>{
 test('RSSH saved draft performs one-time correction, with an explicit manual option',()=>{
  const editor=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  assert.match(editor,/function removeRsshChargeTwoOnce\(\)/);
- assert.match(editor,/unicosec:ar:rssh-charge-2-removed:v1:/);
+ assert.match(editor,/unicosec:ar:rssh-charge-2-removed:v2:/);
  assert.match(editor,/const chargeRemoved=removeRsshChargeTwoOnce\(\)/);
- assert.match(editor,/const chargeRemoved=previous\?removeRsshChargeTwoOnce\(\):''/);
+ assert.match(editor,/const chargeRemoved=removeRsshChargeTwoOnce\(\);/);
+ assert.match(editor,/if\(selectedDmsCompanyId===company.id.*?\)\{/);
+ assert.match(editor,/const rsshCorrection=removeRsshChargeTwoOnce\(\)/);
+ assert.match(editor,/x=>x.id!=='charge'&&x.heading.test/);
  assert.match(editor,/data-remove-rssh-charge-2/);
  assert.match(editor,/function removeRsshChargeTwoNow\(\)/);
 });
@@ -81,4 +84,34 @@ test('PDF Director Confirmation omits the verification qualification in both lan
  assert.match(pdf,/本人谨此确认，据本人所知，上述资料属真实及正确。/);
  assert.doesNotMatch(pdf,/未提供或待核实之资料仍须另行确认/);
  assert.match(pdf,/DIRECTOR CONFIRMATION/);
+});
+
+test('Registered Charge 2 Remove heading works in any company and preserves the summary after the last charge',()=>{
+ const doc=withSecondCharge('TOPGEN RESOURCES SDN BHD');
+ const index=doc.particulars.findIndex(x=>x.type==='heading'&&x.en==='REGISTERED CHARGE 2');
+ const result=removeParticularHeading(doc,index);
+ assert.equal(result.name,'REGISTERED CHARGE 2');
+ assert.equal(result.fields,2);
+ assert.equal(result.remaining,1);
+ assert.equal(result.updatedCount,true);
+ assert.equal(doc.particulars.find(x=>x.en==='Number of Registered Charges').value,'1');
+ assert.ok(doc.particulars.some(x=>x.en==='Current Outstanding Indebtedness'));
+ assert.ok(!doc.particulars.some(x=>x.value==='SAVED-CHARGE-TWO'));
+ assert.ok(doc.particulars.some(x=>x.value==='SAVED-CHARGE-ONE'));
+ const first=doc.particulars.findIndex(x=>x.type==='heading'&&x.en==='REGISTERED CHARGE 1');
+ const deleted=removeRegisteredChargeRecord(doc,first);
+ assert.equal(deleted.remaining,0);
+ assert.ok(doc.particulars.some(x=>x.en==='Number of Registered Charges'));
+ assert.equal(doc.particulars.find(x=>x.en==='Number of Registered Charges').value,'0');
+});
+
+test('Removing Registered Charge 1 leaves Registered Charge 2 and retains the section totals',()=>{
+ const doc=withSecondCharge();
+ const first=doc.particulars.findIndex(x=>x.type==='heading'&&x.en==='REGISTERED CHARGE 1');
+ const result=removeParticularHeading(doc,first);
+ assert.equal(result.name,'REGISTERED CHARGE 1');
+ assert.equal(result.remaining,1);
+ assert.ok(doc.particulars.some(x=>x.en==='REGISTERED CHARGE 2'));
+ assert.ok(doc.particulars.some(x=>x.value==='SAVED-CHARGE-TWO'));
+ assert.ok(doc.particulars.some(x=>x.en==='Number of Registered Charges'&&x.value==='1'));
 });
