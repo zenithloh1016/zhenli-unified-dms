@@ -158,8 +158,10 @@ test('V1.6 Criteria E is in the selectable BO criteria list and survives JSON se
  const {readFileSync}=await import('node:fs');
  const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
  const pdf=readFileSync(new URL('../src/pdf.js',import.meta.url),'utf8');
- assert.ok(main.includes(" E:'Is a member of the company"));
- assert.ok(main.includes('([ABCDE])'));
+ const {BO_CRITERIA_DESCRIPTIONS,selectedBoCriteria}=await import('../src/bo-criteria.js');
+ assert.match(BO_CRITERIA_DESCRIPTIONS.E,/under an agreement with another member/);
+ assert.deepEqual(selectedBoCriteria('Criteria A, Criteria C, Criteria E').map(x=>x.code),['A','C','E']);
+ assert.ok(main.includes('selectedBoCriteria(value)'));
  const draft=cloneBlank();
  const criteria=draft.particulars.find(x=>x.en==='Criteria of Beneficial Ownership');
  criteria.value='Criteria A, Criteria C, Criteria E';
