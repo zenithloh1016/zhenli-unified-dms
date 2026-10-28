@@ -24,6 +24,7 @@ const pdfAsDataUrl = file => new Promise((resolve, reject) => {
 export function createSupabaseSigning({db,getCompanies,update}) {
   let view='list',requests=[],detail=null,busy=false,message='',error=false;
   let initialized=false, signerCount=2, placementRows=[],totalRequests=0;
+  let deleteIntent=null;
   let mailStatus={connected:false,senderEmail:'zhenlisecretary@gmail.com'};
   function feedback(text,isError=false){message=String(text||'');error=isError;update();}
 
@@ -94,13 +95,13 @@ export function createSupabaseSigning({db,getCompanies,update}) {
   async function list() {
     const [data,status]=await Promise.all([api('list'),api('mail-status')]);
     requests=data.requests||[];totalRequests=Number(data.total??requests.length);
-    mailStatus=status;view='list';detail=null;preview.reset();update();
+    mailStatus=status;view='list';detail=null;deleteIntent=null;preview.reset();update();
   }
   async function open(id) {
     const data=await api('detail',{requestId:id});
     if(!data?.request)throw Error('Could not retrieve signing request details.');
     if(detail?.id!==data.request.id)preview.reset();
-    detail=data.request;view='detail';
+    detail=data.request;view='detail';deleteIntent=null;
     placementRows=(detail.boxes||[]).map(x=>({
       docId:x.documentId,signerId:x.signerId,page:x.page,
       x:x.x,y:x.y,width:x.width,height:x.height
@@ -246,6 +247,24 @@ export function createSupabaseSigning({db,getCompanies,update}) {
        r.status==='completed'?'Signed PDFs not yet ready':
        'Awaiting completion')+'</small>';
   }
+  function deleteConfirmation(){
+    if(!deleteIntent)return '';
+    const one=deleteIntent.kind==='one';
+    const phrase=one?'DELETE REQUEST':'DELETE ALL';
+    const item=one?'<b>'+e(deleteIntent.company)+'</b> — '+e(deleteIntent.subject)
+      :'<b>'+e(deleteIntent.count)+'</b> signing request(s)';
+    return '<section class="zs-panel" id="ns-delete-confirm-panel" aria-label="Confirm signing request deletion">'+
+      '<h2>Confirm '+(one?'individual':'bulk')+' signing request deletion</h2>'+
+      '<p>You are removing '+item+' from the active UNICOSEC signing list.</p>'+
+      '<p class="fineprint">Outstanding links will be revoked. Signed PDFs, original documents and audit evidence remain securely retained. This cannot be undone from UNICOSEC.</p>'+
+      '<form id="ns-confirm-delete">'+
+      '<label>Type <b>'+phrase+'</b> to confirm'+
+      '<input id="ns-delete-confirm-input" name="confirm" autocomplete="off" spellcheck="false" required'+
+      (busy?' disabled':'')+'></label>'+
+      '<div class="zs-actions"><button class="btn danger" type="submit"'+(busy?' disabled':'')+'>'+
+      (one?'Delete selected request':'Delete all requests')+'</button> '+
+      b('Cancel','cancel-delete')+'</div></form></section>';
+  }
   function listView(){
     return '<div class="zs-toolbar">'+b('+ New signing request','new','','primary')+
       b('Refresh requests','refresh')+
@@ -377,40 +396,21 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     if(!action?.startsWith('ns-'))return false;
     action=action.slice(3);
     if(action==='refresh') {work(list);return true;}
+    if(action==='cancel-delete'){
+      deleteIntent=null;message='';error=false;update();return true;
+    }
     if(action==='delete-one'){
       const selected=(detail?.id===id?detail:requests.find(r=>r.id===id));
       if(!selected)return feedback('Signing request not found. Refresh and retry.',true),true;
       if(selected.status==='finalizing')
         return feedback('Complete PDF finalization before deletion.',true),true;
-      if(!confirm('Remove ONLY '+selected.company+' — '+selected.subject+
-        ' from the signing requests list? Outstanding links will be revoked. '+
-        'Signed PDFs and audit evidence remain preserved.'))return true;
-      const typed=prompt('Type DELETE REQUEST to remove this one signing request:');
-      if(typed!=='DELETE REQUEST'){
-        feedback('Deletion cancelled. Type DELETE REQUEST exactly.',true);return true;
-      }
-      work(async()=>{
-        const result=await api('delete-one',{requestId:id,confirmation:typed});
-        await list();
-        feedback(result.deleted?'Selected signing request removed. Signed documents and audit evidence retained.':
-          'Request no longer active.');
-      });
-      return true;
+      deleteIntent={kind:'one',id:selected.id,company:selected.company,subject:selected.subject};
+      message='';error=false;update();return true;
     }
     if(action==='delete-all'){
       if(totalRequests<1)return true;
-      const count=totalRequests;
-      if(!confirm('Delete ALL '+count+' signing requests from the active list? Outstanding signing links will be revoked. Completed signatures, PDFs and audit evidence will be retained securely. This cannot be undone from the DMS interface.'))return true;
-      const typed=prompt('To confirm deletion of all '+count+' signing requests, type DELETE ALL exactly:');
-      if(typed!=='DELETE ALL'){
-        feedback('Deletion cancelled. Type DELETE ALL exactly to confirm.',true);return true;
-      }
-      work(async()=>{
-        const result=await api('delete-all',{expectedCount:count,confirmation:typed});
-        await list();
-        feedback(result.deleted+' signing request(s) removed from the active list. Outstanding links revoked. Signed records and audit evidence retained.');
-      });
-      return true;
+      deleteIntent={kind:'all',count:totalRequests};
+      message='';error=false;update();return true;
     }
     if(action==='mail-settings'){view='mail';message='';error=false;update();return true;}
     if(action==='mail-generate'){
@@ -564,6 +564,26 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     return true;
   }
   function onSubmit(form) {
+    if(form?.id==='ns-confirm-delete'){
+      const pending=deleteIntent;
+      if(!pending)return feedback('No deletion selected. Choose a request first.',true),true;
+      const expected=pending.kind==='one'?'DELETE REQUEST':'DELETE ALL';
+      const typed=String(new FormData(form).get('confirm')||'');
+      if(typed!==expected){
+        feedback('Deletion cancelled. Type '+expected+' exactly to confirm.',true);
+        return true;
+      }
+      work(async()=>{
+        const result=pending.kind==='one'
+          ?await api('delete-one',{requestId:pending.id,confirmation:typed})
+          :await api('delete-all',{expectedCount:pending.count,confirmation:typed});
+        await list();
+        feedback(pending.kind==='one'
+          ?(result.deleted?'Selected signing request removed. Signed documents and audit evidence retained.':'Request no longer active.')
+          :result.deleted+' signing request(s) removed from the active list. Outstanding links revoked. Signed records and audit evidence retained.');
+      });
+      return true;
+    }
     if(form?.id==='ns-mail-connect'){
       const values=new FormData(form);
       const scriptUrl=String(values.get('scriptUrl')||'').trim();
@@ -651,6 +671,7 @@ export function createSupabaseSigning({db,getCompanies,update}) {
         detail=null;view='list';preview.reset();
       }
       totalRequests=requests.length;
+      if(deleteIntent?.kind==='one'&&String(deleteIntent.company||'').normalize('NFKC').trim().toUpperCase()===key)deleteIntent=null;
       initialized=false; // Force server refresh next time Signing is opened.
       update();
     },
@@ -665,10 +686,15 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       '<span class="zs-version">Supabase Signing · EdgeOne-compatible layout</span></div>'+
       (message?'<div class="zs-message'+(error?' zs-error':'')+'" role="status">'+e(message)+'</div>':'')+
       (busy?'<div class="zs-message">Connecting to private signing service…</div>':'')+
-      (view==='mail'?mailForm():view==='new'?newForm():view==='order'&&detail?orderForm():
+      deleteConfirmation()+
+       (view==='mail'?mailForm():view==='new'?newForm():view==='order'&&detail?orderForm():
         view==='edit'&&detail?editForm():
         view==='detail'&&detail?detailView():listView()),
     mount:()=>{
+      if(deleteIntent&&!busy){
+        const entry=document.getElementById('ns-delete-confirm-input');
+        if(entry&&document.activeElement!==entry)entry.focus();
+      }
       if(!initialized&&!busy){
         initialized=true;
         work(list);

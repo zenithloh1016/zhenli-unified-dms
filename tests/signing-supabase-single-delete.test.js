@@ -46,15 +46,18 @@ test('individual delete is shown for every active nonfinalizing request',async()
  ui.onClick('ns-open',one);await tick();
  assert.match(ui.render(),/Delete this signing request/);
 });
-test('individual delete targets exactly one UUID and leaves others visible',async()=>{
- globalThis.document={getElementById:()=>null,querySelector:()=>null};
- const wasConfirm=globalThis.confirm,wasPrompt=globalThis.prompt;
- let promptValue='DELETE REQUEST';
- globalThis.confirm=()=>true;globalThis.prompt=()=>promptValue;
+test('individual delete uses inline confirmation without Electron prompt',async()=>{
+ globalThis.document={getElementById:()=>null,querySelector:()=>null,activeElement:null};
+ const oldFormData=globalThis.FormData,oldPrompt=globalThis.prompt;
+ let typed='DELETE REQUEST';
+ globalThis.prompt=()=>{throw Error('Native prompt must not be used');};
+ globalThis.FormData=class {get(key){return key==='confirm'?typed:null;}};
  try{
-  const {ui,actions,getRequests}=fixture();
-  ui.mount();await tick();
-  ui.onClick('ns-delete-one',one);await tick();await tick();
+  const {ui,actions,getRequests}=fixture();ui.mount();await tick();
+  ui.onClick('ns-delete-one',one);
+  assert.match(ui.render(),/id="ns-confirm-delete"/);
+  assert.equal(actions.filter(a=>a.action==='admin-delete-one').length,0);
+  ui.onSubmit({id:'ns-confirm-delete'});await tick();await tick();
   const target=actions.find(a=>a.action==='admin-delete-one');
   assert.equal(target.requestId,one);
   assert.equal(target.confirmation,'DELETE REQUEST');
@@ -62,10 +65,14 @@ test('individual delete targets exactly one UUID and leaves others visible',asyn
   assert.equal(getRequests()[0].id,two);
   assert.match(ui.render(),/SECOND SDN BHD/);
   assert(!ui.render().includes('FIRST SDN BHD'));
-  promptValue='DELETE';
-  ui.onClick('ns-delete-one',two);await tick();
+  typed='DELETE';
+  ui.onClick('ns-delete-one',two);
+  ui.onSubmit({id:'ns-confirm-delete'});await tick();
   assert.equal(actions.filter(a=>a.action==='admin-delete-one').length,1);
- }finally{globalThis.confirm=wasConfirm;globalThis.prompt=wasPrompt;}
+  assert.match(ui.render(),/Type DELETE REQUEST exactly/);
+  ui.onClick('ns-cancel-delete');
+  assert.doesNotMatch(ui.render(),/id="ns-confirm-delete"/);
+ }finally{globalThis.FormData=oldFormData;globalThis.prompt=oldPrompt;}
 });
 test('backend validates user, UUID, typed confirmation and calls single hide RPC',()=>{
  assert.match(backend,/if\(action==="delete-one"\)/);

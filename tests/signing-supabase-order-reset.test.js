@@ -88,16 +88,16 @@ test('DMS UI reorders only unsigned signers and resets to a separate preserved d
   assert.equal(original.signers[0].signedAt,'2026-10-20T00:00:00Z');
 });
 
-test('Delete all requires explicit confirmation and removes only active list entries',async()=>{
-  const originalPrompt=globalThis.prompt,originalConfirm=globalThis.confirm;
-  const calls=[];let removed=false;
-  globalThis.confirm=()=>true;globalThis.prompt=()=> 'DELETE ALL';
+test('Delete all uses Windows-compatible in-app typed confirmation',async()=>{
+  const oldFormData=globalThis.FormData,oldPrompt=globalThis.prompt;
+  const calls=[];let removed=false,typed='DELETE ALL';
+  globalThis.prompt=()=>{throw Error('Electron prompt unavailable');};
+  globalThis.FormData=class {get(key){return key==='confirm'?typed:null;}};
   const request={id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',company:'TEST SDN BHD',subject:'DRW',
     status:'pending',created_at:'2026-10-23T00:00:00Z'};
   const db={functions:{invoke:async(_, {body})=>{
     calls.push(body);
-    if(body.action==='admin-list')
-      return {data:removed?{requests:[],total:0}:{requests:[request],total:1}};
+    if(body.action==='admin-list')return {data:removed?{requests:[],total:0}:{requests:[request],total:1}};
     if(body.action==='admin-mail-status')return {data:{connected:false}};
     if(body.action==='admin-delete-all'){
       assert.equal(body.confirmation,'DELETE ALL');
@@ -109,10 +109,17 @@ test('Delete all requires explicit confirmation and removes only active list ent
   const ui=createSupabaseSigning({db,getCompanies:()=>[],update:()=>{}});
   try{
     ui.mount();await tick();
-    assert.match(ui.render(),/Delete all signing requests/);
-    ui.onClick('ns-delete-all');await tick();
+    ui.onClick('ns-delete-all');
+    assert.match(ui.render(),/id="ns-confirm-delete"/);
+    assert.equal(calls.filter(x=>x.action==='admin-delete-all').length,0);
+    typed='incorrect';
+    ui.onSubmit({id:'ns-confirm-delete'});await tick();
+    assert.equal(calls.filter(x=>x.action==='admin-delete-all').length,0);
+    assert.match(ui.render(),/Type DELETE ALL exactly/);
+    typed='DELETE ALL';
+    ui.onSubmit({id:'ns-confirm-delete'});await tick();await tick();
     assert.equal(calls.filter(x=>x.action==='admin-delete-all').length,1);
     assert.match(ui.render(),/audit evidence retained/);
     assert.doesNotMatch(ui.render(),/data-action="ns-delete-all"/);
-  }finally{globalThis.prompt=originalPrompt;globalThis.confirm=originalConfirm;}
+  }finally{globalThis.FormData=oldFormData;globalThis.prompt=oldPrompt;}
 });
