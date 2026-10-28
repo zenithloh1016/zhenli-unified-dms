@@ -331,7 +331,7 @@ test('old .gs and JSON imports drop Constitution while preserving existing non-c
 });
 
 
-test('Annual Return fullscreen and removal of field search and new section',async()=>{
+test('Annual Return fullscreen, no field search, and user-enabled new section support',async()=>{
  const {readFileSync}=await import('node:fs');
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const child=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
@@ -339,9 +339,9 @@ test('Annual Return fullscreen and removal of field search and new section',asyn
  const styles=readFileSync(new URL('../../src/style.css',import.meta.url),'utf8');
  assert.ok(html.includes('id="toggle-fullscreen"'));
  assert.ok(!html.includes('id="search"'));
- assert.ok(!html.includes('id="add-section"'));
+ assert.ok(html.includes('id="add-section"'));
  assert.ok(!child.includes("$('search')"));
- assert.ok(!child.includes("$('add-section')"));
+ assert.ok(child.includes("$('add-section')"));
  assert.ok(child.includes('data-add-to-section'), 'retain the useful add-field control within each section');
  assert.ok(parent.includes('data-action="open-ar-fullscreen"'));
  assert.ok(parent.includes('data-action="exit-ar-fullscreen"'));
