@@ -1,5 +1,5 @@
 import template from './template.json' with {type:'json'};
-export const SCHEMA_VERSION=6;
+export const SCHEMA_VERSION=7;
 export const cloneBlank=()=>structuredClone(template);
 const safe=(s,n=20000)=>String(s??'').slice(0,n);
 
@@ -347,6 +347,45 @@ function ensureMemberPersonalFields(items){
   items.splice(at,0,...entries);
  }
 }
+
+/** Upgrade pre-v7 company-secretary blocks to the same nine ordered particulars
+ * shown in the bilingual Annual Return review. Scope duplicate labels such as
+ * Date of Birth, Gender, and Nationality / Race to COMPANY SECRETARY only.
+ * A current v7 draft remains editable: intentionally deleted fields stay gone.
+ */
+export function ensureSecretaryParticularFields(items){
+ const models=[
+  ['Secretary Name','公司秘书姓名','Full Name','姓名'],
+  ['Secretary NRIC','公司秘书身份证号码','NRIC','身份证号码'],
+  ['Date of Birth','出生日期'],
+  ['Gender','性别'],
+  ['Professional Membership','专业会员资格'],
+  ['Practising Certificate Number','执业证书编号'],
+  ['Nationality / Race','国籍 / 种族'],
+  ['Secretary Residential Address','公司秘书住址','Residential Address','住址'],
+  ['Service / Business Address','通讯或营业地址']
+ ];
+ for(let i=0;i<items.length;i++){
+  if(items[i].type!=='heading'||!/^COMPANY SECRETARY(?:\\s+\\d+)?$/i.test(items[i].en||''))continue;
+  let end=i+1;
+  while(end<items.length&&items[end].type==='field')end++;
+  for(let k=0;k<models.length;k++){
+   const [en,cn,displayEn,displayCn]=models[k];
+   const existing=items.findIndex((x,j)=>j>i&&j<end&&x.type==='field'&&x.en===en);
+   if(existing>=0){
+    if(displayEn&&typeof items[existing].displayEn!=='string')items[existing].displayEn=displayEn;
+    if(displayCn&&typeof items[existing].displayCn!=='string')items[existing].displayCn=displayCn;
+    continue;
+   }
+   const later=new Set(models.slice(k+1).map(x=>x[0]));
+   const next=items.findIndex((x,j)=>j>i&&j<end&&x.type==='field'&&later.has(x.en));
+   const position=next>=0?next:end;
+   items.splice(position,0,{type:'field',en,cn,value:'',...(displayEn?{displayEn,displayCn}:{})});
+   end++;
+  }
+ }
+}
+
 export function normalizeDocument(raw){
   if(!raw||typeof raw!=='object'||!Array.isArray(raw.particulars))throw Error('Expected an Annual Return object with a particulars array.');
   if(raw.particulars.length>1200)throw Error('The imported script has too many fields.');
@@ -379,7 +418,8 @@ export function normalizeDocument(raw){
   }
   // Only legacy data needs member-field migration. Do not recreate fields
   // deliberately removed from a current saved Annual Return draft.
-  if((Number(raw.schemaVersion)||0)<SCHEMA_VERSION)ensureMemberPersonalFields(doc.particulars);
+  if((Number(raw.schemaVersion)||0)<7)ensureSecretaryParticularFields(doc.particulars);
+  if((Number(raw.schemaVersion)||0)<6)ensureMemberPersonalFields(doc.particulars);
   if(!doc.particulars.length&&Number(raw.schemaVersion||0)<SCHEMA_VERSION)
     throw Error('No valid Annual Return particulars found.');
   // Old Google Apps Script files called this first group "COMPANY INFORMATION".
