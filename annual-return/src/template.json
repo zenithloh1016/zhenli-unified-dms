@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "templateSource": "Annual Return Review Form (revised)(1).gs; latest structured example 2026-10-13",
   "company": {
     "name": "",
@@ -443,12 +443,28 @@
       "type": "field",
       "en": "Secretary Name",
       "cn": "公司秘书姓名",
-      "value": ""
+      "value": "",
+      "displayEn": "Full Name",
+      "displayCn": "姓名"
     },
     {
       "type": "field",
       "en": "Secretary NRIC",
       "cn": "公司秘书身份证号码",
+      "value": "",
+      "displayEn": "NRIC",
+      "displayCn": "身份证号码"
+    },
+    {
+      "type": "field",
+      "en": "Date of Birth",
+      "cn": "出生日期",
+      "value": ""
+    },
+    {
+      "type": "field",
+      "en": "Gender",
+      "cn": "性别",
       "value": ""
     },
     {
@@ -473,6 +489,14 @@
       "type": "field",
       "en": "Secretary Residential Address",
       "cn": "公司秘书住址",
+      "value": "",
+      "displayEn": "Residential Address",
+      "displayCn": "住址"
+    },
+    {
+      "type": "field",
+      "en": "Service / Business Address",
+      "cn": "通讯或营业地址",
       "value": ""
     },
     {
