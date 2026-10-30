@@ -366,7 +366,7 @@ export function ensureSecretaryParticularFields(items){
   ['Service / Business Address','通讯或营业地址']
  ];
  for(let i=0;i<items.length;i++){
-  if(items[i].type!=='heading'||!/^COMPANY SECRETARY(?:\\s+\\d+)?$/i.test(items[i].en||''))continue;
+  if(items[i].type!=='heading'||!/^COMPANY SECRETARY(?:\s+\d+)?$/i.test(items[i].en||''))continue;
   let end=i+1;
   while(end<items.length&&items[end].type==='field')end++;
   for(let k=0;k<models.length;k++){
