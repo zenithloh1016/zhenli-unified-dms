@@ -46,7 +46,7 @@ function browserDownload(blob,filename){
 
 const ROOT = document.getElementById('app');
 const BUCKET = 'dms-private';
-const TASK_HUB_BUNDLED = new globalThis.URL('./task-hub/index.html', document.baseURI).href + '?v=20261027-nine-status-v1';
+const TASK_HUB_BUNDLED = new globalThis.URL('./task-hub/index.html', document.baseURI).href + '?v=20261030-ten-status-v1';
 const TASK_HUB_CLOUD = new globalThis.URL('./task-hub-cloud/index.html', document.baseURI).href;
 const ANNUAL_RETURN_BUNDLED = new globalThis.URL('./annual-return/index.html', document.baseURI).href;
 const rawSupabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || '').trim().replace(/^['"]|['"]$/g, '');

@@ -48,3 +48,8 @@ body.dark .chip.tax{background:#3c3255;color:#d0b6f3}
 .chip.banker{background:#e6f5f2;color:#217d73}
 .board-status-line.banker{background:#389b90}
 body.dark .chip.banker{background:#234943;color:#9be3d9}
+
+/* Waiting payment task status */
+.chip.payment{background:#fff2da;color:#936015}
+.board-status-line.payment{background:#d9a142}
+body.dark .chip.payment{background:#4b3d25;color:#ffda94}

@@ -16,7 +16,7 @@ const publishableKey=String(import.meta.env.VITE_SUPABASE_ANON_KEY||'');
 const db=endpoint&&publishableKey?createClient(endpoint,publishableKey,{
   auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}
 }):null;
-const shellUrl=new URL('../task-hub/index.html',window.location.href).href + '?v=20261027-nine-status-v1';
+const shellUrl=new URL('../task-hub/index.html',window.location.href).href + '?v=20261030-ten-status-v1';
 const dmsUrl=new URL('../index.html',window.location.href).href;
 let currentUser=null;
 let companies=[];

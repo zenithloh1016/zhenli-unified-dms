@@ -57,18 +57,19 @@ test('standalone redirect cannot replace embedded Task Hub and same credentials 
   assert.match(cloud,/db\.auth\.signOut/);
 });
 
-test('Task Hub offers nine selectable statuses, preserves completion and progress',()=>{
+test('Task Hub offers ten selectable statuses, preserves completion and progress',()=>{
   const statuses=taskHub.match(/const STATUSES = \[([\s\S]*?)\];/);
   assert.ok(statuses, 'status options should exist');
   const names=[...statuses[1].matchAll(/name:'([^']+)'/g)].map(match=>match[1]);
-  assert.deepEqual(names,['To do','In progress','Waiting CTC','Waiting client','Waiting banker','Waiting SSM','Waiting auditor','Waiting tax agent','Completed']);
+  assert.deepEqual(names,['To do','In progress','Waiting CTC','Waiting client','Waiting banker','Waiting payment','Waiting SSM','Waiting auditor','Waiting tax agent','Completed']);
   assert.match(taskHub,/const isDone = t => t.status==='done'/);
   assert.match(taskHub,/const workflowStatus = id =>/);
   assert.ok(taskHub.includes("status:workflowStatus($('#taskStatus').value)"));
+  assert.match(taskHub,/\['ctc','client','banker','payment','ssm','auditor','tax'\]\.includes\(workflowStatus\(x\.status\)\)/);
 });
 
 test('task hub frame and scripts are cache-busted after status updates',()=>{
-  const version='20261027-nine-status-v1';
+  const version='20261030-ten-status-v1';
   assert.match(dms,new RegExp('task-hub/index\\.html'));
   assert.ok(dms.includes("?'v=")===false); // version is appended after href
   assert.ok(dms.includes("?v="+version));
