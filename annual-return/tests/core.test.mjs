@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {cloneBlank,importAnnualReturnText,normalizeDocument,outputFilename,emptyCount,populatedCount} from '../src/core.js';
 test('blank bilingual template has all current structural fields without real client values',()=>{
   const blank=cloneBlank();
-  assert.equal(blank.particulars.length,129);
-  assert.equal(blank.particulars.filter(x=>x.type==='field').length,112);
+  assert.equal(blank.particulars.length,132);
+  assert.equal(blank.particulars.filter(x=>x.type==='field').length,115);
   assert.equal(populatedCount(blank),0);
-  assert.equal(emptyCount(blank),112);
+  assert.equal(emptyCount(blank),115);
   assert.ok(blank.particulars.some(x=>x.cn.includes('股权')));
   assert.equal(blank.company.name,'');
   assert.equal(blank.signatureDirector.nric,'');
@@ -30,7 +30,7 @@ test('rejects malformed or unsafe scripts and maintains editable draft JSON',()=
   const recovered=importAnnualReturnText(JSON.stringify(draft),'save.json');
   assert.equal(recovered.company.name,'SAMPLE SDN. BHD.');
   assert.equal(recovered.particulars[2].value,'Test');
-  assert.equal(normalizeDocument(draft).particulars.length,129);
+  assert.equal(normalizeDocument(draft).particulars.length,132);
 });
 
 test('preserves multiple BO criteria and director capacity without signing date',()=>{
@@ -103,8 +103,8 @@ test('excluded internal due dates and register update fields never survive .gs o
  draft.company.masterListingDueDate='2026-10-18';
  draft.particulars.push(...forbidden.map(en=>({type:'field',en,cn:'',value:'2026-10-18'})));
  const out=normalizeDocument(draft);
- assert.equal(out.schemaVersion,6);
- assert.equal(out.particulars.length,129);
+ assert.equal(out.schemaVersion,7);
+ assert.equal(out.particulars.length,132);
  assert.equal(out.particulars.some(x=>forbidden.includes(x.en)),false);
  assert.equal(Object.hasOwn(out.company,'lodgementDueDate'),false);
  assert.equal(Object.hasOwn(out.company,'masterListingDueDate'),false);
@@ -123,7 +123,7 @@ test('V1.6 removes TIN and the entire Company Review and Verification section fr
  raw.signatureDirector.date='2026-10-18';
  raw.signatureDirector.acknowledgement='Signed';
  const restored=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(raw)+';', 'legacy.gs');
- assert.equal(restored.particulars.length,129);
+ assert.equal(restored.particulars.length,132);
  assert.equal(restored.particulars.some(x=>/^(?:Tax Identification Number(?: \(TIN\))?|TIN|COMPANY REVIEW AND VERIFICATION NOTES)$/i.test(x.en)),false);
  assert.equal(restored.particulars.some(x=>x.en==='Preference Allotment'&&x.value==='Private client details'),false);
  assert.equal(Object.hasOwn(restored.signatureDirector,'date'),false);
@@ -146,7 +146,7 @@ test('V1.6 removes all requested dates in both blank template and legacy importe
  const legacy=cloneBlank();
  legacy.particulars.push(...fieldNames.map(en=>({type:'field',en,cn:'测试',value:'2026-10-18'})));
  const parsed=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(legacy)+';','legacy.gs');
- assert.equal(parsed.particulars.length,129);
+ assert.equal(parsed.particulars.length,132);
  assert.equal(parsed.particulars.some(x=>fieldNames.includes(x.en)),false);
  assert.equal(parsed.particulars.some(x=>x.en==='Date of Incorporation'),true);
  assert.equal(parsed.particulars.some(x=>x.en==='Date of Birth'),true);
@@ -181,7 +181,7 @@ test('legacy Beneficial Owner notice date aliases never appear in saved drafts o
  for(const extension of ['.json','.gs']){
    const input=extension==='.gs'?'const AR_SINGLE_COMPANY = '+JSON.stringify(legacy)+';':JSON.stringify(legacy);
    const result=importAnnualReturnText(input,'older'+extension);
-   assert.equal(result.particulars.length,129);
+   assert.equal(result.particulars.length,132);
    assert.equal(result.particulars.some(x=>extra.includes(x.en)),false);
  }
 });
@@ -323,8 +323,8 @@ test('old .gs and JSON imports drop Constitution while preserving existing non-c
  paid.cn='非现金优先股视为已缴足金额';
  paid.value='RM 7,500';
  const verify=restored=>{
-  assert.equal(restored.schemaVersion,6);
-  assert.equal(restored.particulars.length,129);
+  assert.equal(restored.schemaVersion,7);
+  assert.equal(restored.particulars.length,132);
   assert.equal(restored.particulars.some(x=>x.en==='Company Constitution'),false);
   assert.equal(restored.particulars.find(x=>x.en==='Shares Issued Otherwise Than in Cash').value,'7500 shares');
   assert.equal(restored.particulars.find(x=>x.en==='Amount Considered Paid on Non-Cash Allotment').value,'RM 7,500');
@@ -461,4 +461,40 @@ test('the Windows and website PDF download bridge has an implementation and an i
  assert.ok(pdf.includes('link.hidden=Capacitor.isNativePlatform()'));
  assert.ok(pdf.includes('await savePdfToAndroidFiles(blob,name)'));
  assert.ok(windows.includes("session.defaultSession.on('will-download'"));
+});
+
+test('Company Secretary PDF particulars match bilingual review and upgrade pre-v7 drafts safely',()=>{
+ const expected=['Secretary Name','Secretary NRIC','Date of Birth','Gender',
+  'Professional Membership','Practising Certificate Number','Nationality / Race',
+  'Secretary Residential Address','Service / Business Address'];
+ const secretaryFields=doc=>{
+  const start=doc.particulars.findIndex(x=>x.type==='heading'&&x.en==='COMPANY SECRETARY');
+  const end=doc.particulars.findIndex((x,i)=>i>start&&x.type==='heading'&&x.en==='AUDITOR');
+  assert.ok(start>=0&&end>start);
+  return doc.particulars.slice(start+1,end);
+ };
+ const template=cloneBlank();
+ assert.deepEqual(secretaryFields(template).map(x=>x.en),expected);
+ assert.deepEqual(secretaryFields(template).map(x=>x.displayEn||x.en),
+  ['Full Name','NRIC','Date of Birth','Gender','Professional Membership',
+   'Practising Certificate Number','Nationality / Race','Residential Address','Service / Business Address']);
+ const draft=cloneBlank();
+ draft.schemaVersion=6;
+ const start=draft.particulars.findIndex(x=>x.type==='heading'&&x.en==='COMPANY SECRETARY');
+ const end=draft.particulars.findIndex((x,i)=>i>start&&x.type==='heading'&&x.en==='AUDITOR');
+ draft.particulars.splice(start+1,end-start-1,
+  ...draft.particulars.slice(start+1,end).filter(x=>!['Date of Birth','Gender','Service / Business Address'].includes(x.en)));
+ secretaryFields(draft).find(x=>x.en==='Secretary Name').value='EXISTING SECRETARY';
+ const directorName=draft.particulars.find(x=>x.type==='field'&&x.en==='Full Name');
+ if(directorName)directorName.value='UNCHANGED DIRECTOR';
+ const migrated=normalizeDocument(draft);
+ assert.deepEqual(secretaryFields(migrated).map(x=>x.en),expected);
+ assert.equal(secretaryFields(migrated)[0].value,'EXISTING SECRETARY');
+ if(directorName)assert.equal(migrated.particulars.find(x=>x.en==='Full Name').value,'UNCHANGED DIRECTOR');
+ const userEdited=cloneBlank();
+ const userStart=userEdited.particulars.findIndex(x=>x.type==='heading'&&x.en==='COMPANY SECRETARY');
+ const gender=userEdited.particulars.findIndex((x,i)=>i>userStart&&x.type==='field'&&x.en==='Gender');
+ userEdited.particulars.splice(gender,1);
+ assert.equal(secretaryFields(normalizeDocument(userEdited)).some(x=>x.en==='Gender'),false,
+  'Do not restore deliberately removed current-version fields');
 });
