@@ -63,6 +63,7 @@ function fixture(){
 test('safe save retains independent edits made in another device',async()=>{
  const {tab,path,records,read}=fixture();
  await tab.openCompany(company.id);
+ tab.command('sr-sheet','0');
  const saved=await read();
  saved.sheets[0].rows[0][1]='Cloud edit';
  saved.updatedAt='2026-10-31T02:00:00.000Z';
@@ -84,6 +85,7 @@ test('safe save retains independent edits made in another device',async()=>{
 test('overlapping edits protect cloud version until explicit backed-up recovery',async()=>{
  const {tab,path,records,read}=fixture();
  await tab.openCompany(company.id);
+ tab.command('sr-sheet','0');
  const remote=await read();
  remote.sheets[0].rows[0][0]='Cloud change';
  remote.updatedAt='2026-10-31T03:00:00.000Z';
