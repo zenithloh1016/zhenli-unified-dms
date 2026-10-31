@@ -11,6 +11,7 @@ import {formatStatutoryNumberByKind,normalizeStatutoryNumberByKind} from './stat
 import {referenceKind,referenceFieldIndex} from './statutory-register-reference.js';
 import {formatMemberFolioNumber} from './statutory-member-folio-format.js';
 import {browserDownload,saveOrShareFile} from './file-transfer.js';
+import {mergeStatutoryRegisterEdits} from './statutory-register-conflict.js';
 import {Capacitor} from '@capacitor/core';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
 
@@ -25,7 +26,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  const state={
   userId:'',loaded:false,loading:false,saving:false,error:'',message:'',
   search:'',page:0,available:new Set(),selectedId:null,book:null,
-  originalUpdatedAt:null,dirty:false,sheetIndex:0,rowPage:0,
+  originalUpdatedAt:null,baseBook:null,conflict:false,dirty:false,sheetIndex:0,rowPage:0,
   reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:false,
   importPreview:null,importFilename:'',importing:false,originalDocs:[],
   historyOpen:false,historyItems:[],historyPreview:null,historyPreviewName:'',
@@ -38,7 +39,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  const status=(message,error='')=>{state.message=message;state.error=error;notify();};
  function reset(){
   Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,error:'',message:'',
-   search:'',page:0,available:new Set(),selectedId:null,book:null,originalUpdatedAt:null,
+   search:'',page:0,available:new Set(),selectedId:null,book:null,originalUpdatedAt:null,baseBook:null,conflict:false,
    dirty:false,sheetIndex:0,rowPage:0,reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:false,
     importPreview:null,importFilename:'',importing:false,originalDocs:[],
     historyOpen:false,historyItems:[],historyPreview:null,historyPreviewName:'',
@@ -184,7 +185,8 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    const referenceAdded=ensureReferenceParticulars(book);
    const changed=chargesAdded||referenceAdded;
    if(getUser?.()?.id!==uid)return;
-   state.selectedId=id;state.book=book;state.originalUpdatedAt=book.updatedAt;state.originalDocs=originalDocs;
+   state.selectedId=id;state.book=book;state.originalUpdatedAt=saved?.updatedAt||null;
+    state.baseBook=structuredClone(saved||book);state.conflict=false;state.originalDocs=originalDocs;
    state.historyOpen=false;state.historyItems=[];state.historyPreview=null;
    state.historyPreviewName='';state.historyLoaded=false;state.historyLoading=false;
    state.dirty=!!changed;
@@ -198,6 +200,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  function closeCompany(){
   if(!canLeave())return;
   state.selectedId=null;state.book=null;state.originalDocs=[];state.dirty=false;state.message='';
+  state.baseBook=null;state.conflict=false;state.originalUpdatedAt=null;
   state.historyOpen=false;state.historyItems=[];state.historyPreview=null;
   state.historyPreviewName='';state.historyLoaded=false;notify();
  }
@@ -212,6 +215,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    '<div><h2>'+esc(company.name)+'</h2><p class="muted">'+esc(company.registration_no||'No registration number')+
    ' · '+esc(book.sourceFile||'Manually created records')+'</p></div></div>'+
    '<div class="rb-editor-actions">'+act('Save Changes','sr-save','','primary')+
+     (state.conflict?act('Overwrite Latest (Back Up First)','sr-force-save','','secondary'):'')+
     act('Previous Versions','sr-history')+
     (state.dirty?act('Discard Unsaved Edits','sr-discard'):'')+
     (sheet&&!isManagerRegister(sheet.name)?act('Export This Register PDF','sr-pdf','','secondary'):'')+
@@ -597,35 +601,61 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   }
   return false;
  }
- async function writeBook(book,{expectedUpdatedAt=null,overwrite=false}={}){
+ function conflictFailure(){
+  const error=Error('Newer cloud edits overlap your current register. Your edits are kept on this device. Choose Overwrite Latest (Back Up First) if your edits should replace them, or Discard Unsaved Edits to load the cloud version.');
+  error.code='STATUTORY_REGISTER_CONFLICT';return error;
+ }
+ async function writeBook(book,{expectedUpdatedAt=null,overwrite=false,baseBook=null}={}){
   const user=getUser?.();if(!user?.id)throw Error('Please sign in.');
   validateRegisterBook(book);
   const key=path(user.id,book.companyId);
   const current=await remoteBook(user.id,book.companyId);
-  if(!overwrite && current && current.updatedAt!==expectedUpdatedAt)
-   throw Error('This register was updated on another device. Refresh before saving to avoid overwriting their changes.');
+  let pending=book,merged=false;
+  if(!overwrite){
+   if(!current&&expectedUpdatedAt)throw conflictFailure();
+   if(current&&current.updatedAt!==expectedUpdatedAt){
+    const result=mergeStatutoryRegisterEdits(baseBook,book,current);
+    if(!result.book)throw conflictFailure();
+    pending=result.book;merged=true;
+   }
+  }
+  validateRegisterBook(pending);
+  const updated={...pending,updatedAt:new Date().toISOString()};
+  const body=new Blob([JSON.stringify(updated)],{type:'application/json'});
+  if(body.size>24*1024*1024)throw Error('Register exceeds 24 MB. Split its worksheets.');
   if(current){
    const backup=user.id+'/statutory-registers/history/'+book.companyId+'-'+Date.now()+'-'+crypto.randomUUID()+'.json';
    const result=await storage.upload(backup,new Blob([JSON.stringify(current)],{type:'application/json'}),
     {upsert:false,contentType:'application/json'});
    if(result.error)throw Error('Could not create private backup: '+result.error.message);
   }
-  const updated={...book,updatedAt:new Date().toISOString()};
-  const body=new Blob([JSON.stringify(updated)],{type:'application/json'});
-  if(body.size>24*1024*1024)throw Error('Register exceeds 24 MB. Split its worksheets.');
   const result=await storage.upload(key,body,{upsert:true,contentType:'application/json',cacheControl:'0'});
   if(result.error)throw Error('Unable to save statutory register: '+result.error.message);
-  state.available.add(updated.companyId);return updated;
+  state.available.add(updated.companyId);return {updated,merged};
  }
- async function save(){
+ async function save({force=false}={}){
+  if(state.saving)return;
   if(!state.book||!state.selectedId)throw Error('Choose a company.');
-  state.saving=true;status('Saving your register and backup…');
+  if(force){
+   if(!state.conflict)throw Error('Try Save Changes before conflict recovery.');
+   if(!window.confirm('The cloud register contains different edits. Replace them with your current changes?\\n\\nUNICOSEC will first preserve the latest cloud version in Previous Versions.'))return;
+  }
+  state.saving=true;state.error='';status('Saving your register and private backup…');
   try{
-   const updated=await writeBook(state.book,{expectedUpdatedAt:state.originalUpdatedAt});
-   state.book=updated;state.originalUpdatedAt=updated.updatedAt;state.dirty=false;
-   status('Saved successfully. All statutory register worksheets are synchronized privately.');
-  }catch(error){state.error=String(error?.message||error);notify();throw error;}
-  finally{state.saving=false;notify();}
+   const {updated,merged}=await writeBook(state.book,{
+    expectedUpdatedAt:state.originalUpdatedAt,baseBook:state.baseBook,overwrite:force
+   });
+   state.book=updated;state.baseBook=structuredClone(updated);
+   state.originalUpdatedAt=updated.updatedAt;state.conflict=false;state.dirty=false;
+   status(force?'Your edits were saved. The replaced cloud version is in Previous Versions.':
+    merged?'Saved successfully. Non-conflicting cloud changes were safely included.':
+    'Saved successfully. All statutory register worksheets are synchronized privately.');
+  }catch(error){
+   state.conflict=error?.code==='STATUTORY_REGISTER_CONFLICT';
+   state.message=state.conflict?'Save paused. Your unsaved edits remain in this register.':
+    'Save failed. Your edits remain unsaved.';
+   state.error=String(error?.message||error);notify();throw error;
+  }finally{state.saving=false;notify();}
  }
 
  async function discardUnsaved(){
@@ -639,7 +669,8 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    if(getUser?.()?.id!==uid||state.selectedId!==company.id)return;
    const original=saved||makeRegisterBook(company);
    ensureChargeRegister(original);
-   state.book=original;state.originalUpdatedAt=original.updatedAt;state.dirty=false;
+   state.book=original;state.originalUpdatedAt=saved?.updatedAt||null;
+    state.baseBook=structuredClone(original);state.conflict=false;state.dirty=false;
    state.sheetIndex=Math.max(0,original.sheets.findIndex(s=>!isManagerRegister(s.name)));
    state.message='Unsaved edits discarded. The last saved version is loaded.';
   }finally{state.loading=false;notify();}
@@ -651,7 +682,8 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    const uid=getUser?.()?.id;if(!uid)throw Error('Sign in first.');
    const saved=await remoteBook(uid,state.selectedId);
    if(!saved)throw Error('No previously saved Statutory Registers found for this company.');
-   state.book=saved;state.originalUpdatedAt=saved.updatedAt;state.dirty=false;
+   state.book=saved;state.originalUpdatedAt=saved.updatedAt;
+    state.baseBook=structuredClone(saved);state.conflict=false;state.dirty=false;
   }
   state.historyOpen=true;state.historyPreview=null;state.historyPreviewName='';
   state.historyItems=[];state.historyLoaded=false;state.error='';
@@ -725,9 +757,10 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    restored.companyId=company.id;
    restored.companyName=company.name;
    restored.registrationNo=company.registration_no||restored.registrationNo||'';
-   const updated=await writeBook(restored,{expectedUpdatedAt:state.originalUpdatedAt});
+   const {updated}=await writeBook(restored,{expectedUpdatedAt:state.originalUpdatedAt,baseBook:state.baseBook});
    if(getUser?.()?.id!==uid)return;
    state.book=updated;state.originalUpdatedAt=updated.updatedAt;state.dirty=false;
+   state.baseBook=structuredClone(updated);state.conflict=false;
    ensureChargeRegister(state.book);
    state.sheetIndex=Math.max(0,state.book.sheets.findIndex(s=>!isManagerRegister(s.name)));
    state.historyOpen=false;state.historyItems=[];state.historyPreview=null;
@@ -762,10 +795,11 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
      ensureChargeRegister(merged.book);
      skipped+=merged.skipped;
      if(merged.added){
-      const updated=await writeBook(merged.book,{expectedUpdatedAt:existing?.updatedAt||null});
+      const {updated}=await writeBook(merged.book,{expectedUpdatedAt:existing?.updatedAt||null,baseBook:existing});
       added+=merged.added;saved++;
       if(state.selectedId===row.company.id){
        state.book=updated;state.originalUpdatedAt=updated.updatedAt;state.dirty=false;
+       state.baseBook=structuredClone(updated);state.conflict=false;
       }
      }
     }catch(e){failed.push(row.path+': '+(e?.message||e));}
