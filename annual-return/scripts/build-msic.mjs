@@ -88,6 +88,11 @@ try{
  await writeFile(pdfFile,downloaded.bytes);
  const {stdout}=await promisify(execFile)('pdftotext',['-layout','-nopgbrk','-enc','UTF-8',pdfFile,'-'],{maxBuffer:8*1024*1024});
  rocRows=parseSSMROCText(stdout);
+ const probable=stdout.split(/\r?\n/).filter(line=>/^\s*\d{1,4}\s+\d{5}[a-z]?\b/i.test(line));
+ const matched=new Set(rocRows.map(x=>x.sequence));
+ const missing=probable.filter(line=>!matched.has(Number(line.trim().match(/^\d+/)?.[0])));
+ console.log('SSM ROC extractor diagnostics: probable rows='+probable.length+', parsed='+rocRows.length+', missing count='+missing.length);
+ console.log('Unparsed sample (first 15):',JSON.stringify(missing.slice(0,15)));
 }finally{await rm(tmp,{recursive:true,force:true});}
 if(rocRows.length!==1446)throw Error('SSM ROC PDF extraction yielded '+rocRows.length+' codes instead of 1446; refusing incomplete catalogue.');
 const check=(code,part)=>rocRows.find(x=>x.code===code)?.en.toLowerCase().includes(part);
