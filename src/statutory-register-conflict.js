@@ -5,12 +5,19 @@
  */
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const record=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+const reordered=(before,after)=>before.length===after.length&&!equal(before,after)&&
+ before.map(x=>JSON.stringify(x)).sort().join('\\u0000')===
+ after.map(x=>JSON.stringify(x)).sort().join('\\u0000');
+
 
 function combine(base,local,remote,path,conflicts){
  if(equal(local,remote))return local;
  if(equal(local,base))return remote;
  if(equal(remote,base))return local;
  if(Array.isArray(base)&&Array.isArray(local)&&Array.isArray(remote)){
+  if(reordered(base,local)||reordered(base,remote)){
+   conflicts.push(path+' (row/sheet order changed)');return remote;
+  }
   if(base.length!==local.length||base.length!==remote.length){
    conflicts.push(path);return remote;
   }
