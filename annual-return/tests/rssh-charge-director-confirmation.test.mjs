@@ -10,10 +10,9 @@ function withSecondCharge(company='RSSH SERVICES SDN BHD'){
  doc.company.name=company;
  const items=doc.particulars;
  const first=items.findIndex(item=>item.type==='heading'&&item.en==='REGISTERED CHARGE 1');
- const total=items.findIndex(item=>item.type==='field'&&item.en==='Number of Registered Charges');
+ const total=items.findIndex(item=>item.type==='field'&&item.en==='Current Outstanding Indebtedness');
  const firstData=items.findIndex((x,i)=>i>first&&x.en==='Registered No.');
  items[firstData].value='SAVED-CHARGE-ONE';
- items[total].value='2';
  items.splice(total,0,
   {type:'heading',en:'REGISTERED CHARGE 2',cn:'已登记押记 2',value:''},
   {type:'field',en:'Registered No.',cn:'登记编号',value:'SAVED-CHARGE-TWO'},
@@ -31,11 +30,11 @@ test('RSSH only: removing second registered charge preserves first and summary f
  const doc=withSecondCharge();
  const history=createAnnualReturnHistory(doc);
  const result=removeRsshRegisteredCharge2(doc);
- assert.deepEqual(result,{removed:true,removedFields:2,remaining:1,updatedCount:true});
+ assert.deepEqual(result,{removed:true,removedFields:2,remaining:1,updatedCount:false});
  assert.ok(!doc.particulars.some(item=>item.type==='heading'&&item.en==='REGISTERED CHARGE 2'));
  assert.ok(doc.particulars.some(item=>item.en==='Registered No.'&&item.value==='SAVED-CHARGE-ONE'));
  assert.ok(!doc.particulars.some(item=>item.value==='SAVED-CHARGE-TWO'));
- assert.equal(doc.particulars.find(x=>x.en==='Number of Registered Charges').value,'1');
+ assert.ok(!doc.particulars.some(x=>x.en==='Number of Registered Charges'));
  assert.ok(doc.particulars.some(x=>x.en==='Current Outstanding Indebtedness'));
  history.capture(doc);
  assert.ok(history.undo().particulars.some(x=>x.en==='REGISTERED CHARGE 2'));
@@ -57,13 +56,13 @@ test('Other companies and already corrected RSSH drafts are unchanged',()=>{
  assert.equal(JSON.stringify(rssh),after);
  assert.ok(normalizeDocument(rssh));
 });
-test('Non-matching statutory charge counts are not silently overwritten',()=>{
+test('Removing charge 2 does not restore retired charge-count fields',()=>{
  const doc=withSecondCharge();
- doc.particulars.find(x=>x.en==='Number of Registered Charges').value='3';
  const result=removeRsshRegisteredCharge2(doc);
  assert.equal(result.removed,true);
  assert.equal(result.updatedCount,false);
- assert.equal(doc.particulars.find(x=>x.en==='Number of Registered Charges').value,'3');
+ assert.ok(!doc.particulars.some(x=>x.en==='Number of Registered Charges'));
+ assert.ok(doc.particulars.some(x=>x.en==='Current Outstanding Indebtedness'));
 });
 test('RSSH saved draft performs one-time correction, with an explicit manual option',()=>{
  const editor=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
@@ -93,16 +92,16 @@ test('Registered Charge 2 Remove heading works in any company and preserves the 
  assert.equal(result.name,'REGISTERED CHARGE 2');
  assert.equal(result.fields,2);
  assert.equal(result.remaining,1);
- assert.equal(result.updatedCount,true);
- assert.equal(doc.particulars.find(x=>x.en==='Number of Registered Charges').value,'1');
+ assert.equal(result.updatedCount,false);
+ assert.ok(!doc.particulars.some(x=>x.en==='Number of Registered Charges'));
  assert.ok(doc.particulars.some(x=>x.en==='Current Outstanding Indebtedness'));
  assert.ok(!doc.particulars.some(x=>x.value==='SAVED-CHARGE-TWO'));
  assert.ok(doc.particulars.some(x=>x.value==='SAVED-CHARGE-ONE'));
  const first=doc.particulars.findIndex(x=>x.type==='heading'&&x.en==='REGISTERED CHARGE 1');
  const deleted=removeRegisteredChargeRecord(doc,first);
  assert.equal(deleted.remaining,0);
- assert.ok(doc.particulars.some(x=>x.en==='Number of Registered Charges'));
- assert.equal(doc.particulars.find(x=>x.en==='Number of Registered Charges').value,'0');
+ assert.ok(!doc.particulars.some(x=>x.en==='Number of Registered Charges'));
+ assert.ok(doc.particulars.some(x=>x.en==='Current Outstanding Indebtedness'));
 });
 
 test('Removing Registered Charge 1 leaves Registered Charge 2 and retains the section totals',()=>{
@@ -113,5 +112,6 @@ test('Removing Registered Charge 1 leaves Registered Charge 2 and retains the se
  assert.equal(result.remaining,1);
  assert.ok(doc.particulars.some(x=>x.en==='REGISTERED CHARGE 2'));
  assert.ok(doc.particulars.some(x=>x.value==='SAVED-CHARGE-TWO'));
- assert.ok(doc.particulars.some(x=>x.en==='Number of Registered Charges'&&x.value==='1'));
+ assert.ok(!doc.particulars.some(x=>x.en==='Number of Registered Charges'));
+ assert.ok(doc.particulars.some(x=>x.en==='Current Outstanding Indebtedness'));
 });

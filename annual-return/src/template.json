@@ -219,12 +219,6 @@
     },
     {
       "type": "field",
-      "en": "Number of Registered Charges",
-      "cn": "已登记押记数量",
-      "value": ""
-    },
-    {
-      "type": "field",
       "en": "Current Outstanding Indebtedness",
       "cn": "当前未偿债务",
       "value": ""

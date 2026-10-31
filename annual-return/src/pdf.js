@@ -3,7 +3,7 @@ import {jsPDF} from 'jspdf';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {outputFilename,showMemberField,displayParticularLabel} from './core.js';
+import {outputFilename,showMemberField,displayParticularLabel,isRetiredAnnualReturnField} from './core.js';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
 import {selectedBoCriteria} from './bo-criteria.js';
 
@@ -184,7 +184,7 @@ export function renderPages(doc){
  // Retain the precise field order the user arranged in UNICOSEC, including
  // custom bilingual headings and individually added or removed fields.
  for(const [index,item] of (doc.particulars||[]).entries()){
-  if(!showMemberField(doc.particulars,index))continue;
+  if(isRetiredAnnualReturnField(item)||!showMemberField(doc.particulars,index))continue;
   if(item.type==='section'||item.type==='heading'){
    appendRow(tableRow(item.type,displayParticularLabel(item),displayParticularLabel(item,'cn')),
     item.type==='section'?72:50);

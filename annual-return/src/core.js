@@ -283,6 +283,10 @@ function readJsonObjectAfter(script,marker){
   }
   throw Error('Unfinished Apps Script data object: '+marker);
 }
+/** Retired review rows must never show after undo, cloud-sync or an older draft. */
+export const isRetiredAnnualReturnField=item=>item?.type==='field'&&
+ /^(?:Shares Held by (?:Body|Bodies) Corporate|(?:Number|No\\.?|Total Number) of Registered Charges?)$/i
+ .test(String(item.en||'').trim());
 const EXCLUDED_FIELDS=/^(?:Company Constitution|Tax Identification Number(?: \(TIN\))?|TIN|Statutory Lodgement Deadline(?: \(30 calendar days\))?|Master Listing Internal Due Date|Register Last Updated|Master Listing Internal Due vs Statutory 30 Days|Corporate Shareholder Control Classification|Shares Held by (?:Body|Bodies) Corporate|Preference Share Rights|Recorded Amount of Indebtedness \(not outstanding balance\)|Discharge Date|Date of Appointment|Date of Secretary Appointment|Date Entered as Member|Date Became\s*\/\s*Ceased as BO|Date of (?:Becoming|Ceasing) (?:a )?(?:Beneficial Owner|BO)|Notice\s*\/\s*BO Confirmation Dates|Date of Notice(?: Issued| of (?:BO|Beneficial Owner|Beneficial Ownership))?|Notice Date|(?:BO|Beneficial Ownership) Notice Date|Date of (?:BO|Beneficial Ownership) Notice)$/i;
 function cleanParticulars(items){
  let excludedSection=false;
@@ -292,7 +296,7 @@ function cleanParticulars(items){
     excludedSection=/^COMPANY REVIEW AND VERIFICATION NOTES$/i.test(String(x.en||'').trim());
     return !excludedSection;
   }
-  return !excludedSection&&!EXCLUDED_FIELDS.test(String(x.en||'').trim());
+  return !excludedSection&&!isRetiredAnnualReturnField(x)&&!EXCLUDED_FIELDS.test(String(x.en||'').trim());
  });
 }
 export const MEMBER_PERSONAL_FIELDS=[

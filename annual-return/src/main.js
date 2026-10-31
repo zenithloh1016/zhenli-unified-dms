@@ -3,7 +3,7 @@ import {createAnnualReturnHistory} from './history.js';
 import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
-import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord,displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading,moveParticularField,moveParticularSection,insertParticularHeading,restoreRsshAuditorHeading,removeRsshRegisteredCharge2} from './core.js';
+import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord,displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading,moveParticularField,moveParticularSection,insertParticularHeading,restoreRsshAuditorHeading,removeRsshRegisteredCharge2,isRetiredAnnualReturnField} from './core.js';
 import {importCombinedRegisterSnapshot} from './register-import.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC,mergeMSICCatalogues} from './msic.js';
@@ -421,7 +421,7 @@ function addRecord(kind){
  for(let i=last+1;i<until;i++)if(doc.particulars[i].type==='heading'){end=i;break;}
  let templateEnd=headings[1]||end;
  if(kind==='charge'){
-  const summary=doc.particulars.findIndex((x,i)=>i>start&&i<templateEnd&&x.type==='field'&&/^Number of Registered Charges$/i.test(x.en));
+  const summary=doc.particulars.findIndex((x,i)=>i>start&&i<templateEnd&&x.type==='field'&&/^(?:(?:Number|No\\.?|Total Number) of Registered Charges?|Current Outstanding Indebtedness)$/i.test(x.en));
   if(summary>=0)templateEnd=summary;
  }
  const next=doc.particulars.slice(start,templateEnd).map(x=>({...x,value:''}));
@@ -434,7 +434,7 @@ function addRecord(kind){
  // or secretary/auditor particulars. Do not displace unrelated records.
  let insertAt=end;
  if(kind==='charge'){
-  const totalIndex=doc.particulars.findIndex((x,i)=>i>last&&i<until&&x.type==='field'&&x.en==='Number of Registered Charges');
+  const totalIndex=doc.particulars.findIndex((x,i)=>i>last&&i<until&&x.type==='field'&&/^(?:(?:Number|No\\.?|Total Number) of Registered Charges?|Current Outstanding Indebtedness)$/i.test(x.en));
   if(totalIndex>=0)insertAt=totalIndex;
  }
  if(doc.particulars.length+next.length>1200)return status('Too many review items; remove unnecessary entries first.',true);
@@ -719,6 +719,7 @@ function controlsFor(item,index){
 function groups(){
  const all=[];let group=null;
  doc.particulars.forEach((item,index)=>{
+  if(isRetiredAnnualReturnField(item))return;
   if(item.type==='section'){group={index,title:item.en,cn:item.cn,items:[]};all.push(group);}
   else {if(!group){group={index:-1,title:'COMPANY PARTICULARS',cn:'公司资料',items:[]};all.push(group);}group.items.push({index,item});}
  });
