@@ -845,6 +845,7 @@ ROOT.addEventListener('click', event=>{
   if(a==='sr-pick'){ROOT.querySelector('#sr-zip-input')?.click();return;}
   if(a==='sr-open'){busyDo(()=>registerBookUI.openCompany(id));return;}
   if(a==='sr-save'){busyDo(()=>registerBookUI.save());return;}
+  if(a==='sr-force-save'){busyDo(()=>registerBookUI.save({force:true}));return;}
   if(a==='sr-history'){busyDo(()=>registerBookUI.openHistory());return;}
   if(a==='sr-history-preview'){busyDo(()=>registerBookUI.previewHistory(id));return;}
   if(a==='sr-history-restore'){busyDo(()=>registerBookUI.restoreHistory());return;}
