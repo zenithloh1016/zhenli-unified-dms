@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {cloneBlank,importAnnualReturnText,normalizeDocument,outputFilename,emptyCount,populatedCount} from '../src/core.js';
 test('blank bilingual template has all current structural fields without real client values',()=>{
   const blank=cloneBlank();
-  assert.equal(blank.particulars.length,132);
-  assert.equal(blank.particulars.filter(x=>x.type==='field').length,115);
+  assert.equal(blank.particulars.length,131);
+  assert.equal(blank.particulars.filter(x=>x.type==='field').length,114);
   assert.equal(populatedCount(blank),0);
-  assert.equal(emptyCount(blank),115);
+  assert.equal(emptyCount(blank),114);
   assert.ok(blank.particulars.some(x=>x.cn.includes('股权')));
   assert.equal(blank.company.name,'');
   assert.equal(blank.signatureDirector.nric,'');
@@ -30,7 +30,7 @@ test('rejects malformed or unsafe scripts and maintains editable draft JSON',()=
   const recovered=importAnnualReturnText(JSON.stringify(draft),'save.json');
   assert.equal(recovered.company.name,'SAMPLE SDN. BHD.');
   assert.equal(recovered.particulars[2].value,'Test');
-  assert.equal(normalizeDocument(draft).particulars.length,132);
+  assert.equal(normalizeDocument(draft).particulars.length,131);
 });
 
 test('preserves multiple BO criteria and director capacity without signing date',()=>{
@@ -104,7 +104,7 @@ test('excluded internal due dates and register update fields never survive .gs o
  draft.particulars.push(...forbidden.map(en=>({type:'field',en,cn:'',value:'2026-10-18'})));
  const out=normalizeDocument(draft);
  assert.equal(out.schemaVersion,7);
- assert.equal(out.particulars.length,132);
+ assert.equal(out.particulars.length,131);
  assert.equal(out.particulars.some(x=>forbidden.includes(x.en)),false);
  assert.equal(Object.hasOwn(out.company,'lodgementDueDate'),false);
  assert.equal(Object.hasOwn(out.company,'masterListingDueDate'),false);
@@ -123,7 +123,7 @@ test('V1.6 removes TIN and the entire Company Review and Verification section fr
  raw.signatureDirector.date='2026-10-18';
  raw.signatureDirector.acknowledgement='Signed';
  const restored=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(raw)+';', 'legacy.gs');
- assert.equal(restored.particulars.length,132);
+ assert.equal(restored.particulars.length,131);
  assert.equal(restored.particulars.some(x=>/^(?:Tax Identification Number(?: \(TIN\))?|TIN|COMPANY REVIEW AND VERIFICATION NOTES)$/i.test(x.en)),false);
  assert.equal(restored.particulars.some(x=>x.en==='Preference Allotment'&&x.value==='Private client details'),false);
  assert.equal(Object.hasOwn(restored.signatureDirector,'date'),false);
@@ -146,7 +146,7 @@ test('V1.6 removes all requested dates in both blank template and legacy importe
  const legacy=cloneBlank();
  legacy.particulars.push(...fieldNames.map(en=>({type:'field',en,cn:'测试',value:'2026-10-18'})));
  const parsed=importAnnualReturnText('const AR_SINGLE_COMPANY = '+JSON.stringify(legacy)+';','legacy.gs');
- assert.equal(parsed.particulars.length,132);
+ assert.equal(parsed.particulars.length,131);
  assert.equal(parsed.particulars.some(x=>fieldNames.includes(x.en)),false);
  assert.equal(parsed.particulars.some(x=>x.en==='Date of Incorporation'),true);
  assert.equal(parsed.particulars.some(x=>x.en==='Date of Birth'),true);
@@ -181,7 +181,7 @@ test('legacy Beneficial Owner notice date aliases never appear in saved drafts o
  for(const extension of ['.json','.gs']){
    const input=extension==='.gs'?'const AR_SINGLE_COMPANY = '+JSON.stringify(legacy)+';':JSON.stringify(legacy);
    const result=importAnnualReturnText(input,'older'+extension);
-   assert.equal(result.particulars.length,132);
+   assert.equal(result.particulars.length,131);
    assert.equal(result.particulars.some(x=>extra.includes(x.en)),false);
  }
 });
@@ -324,7 +324,7 @@ test('old .gs and JSON imports drop Constitution while preserving existing non-c
  paid.value='RM 7,500';
  const verify=restored=>{
   assert.equal(restored.schemaVersion,7);
-  assert.equal(restored.particulars.length,132);
+  assert.equal(restored.particulars.length,131);
   assert.equal(restored.particulars.some(x=>x.en==='Company Constitution'),false);
   assert.equal(restored.particulars.find(x=>x.en==='Shares Issued Otherwise Than in Cash').value,'7500 shares');
   assert.equal(restored.particulars.find(x=>x.en==='Amount Considered Paid on Non-Cash Allotment').value,'RM 7,500');
@@ -497,4 +497,23 @@ test('Company Secretary PDF particulars match bilingual review and upgrade pre-v
  userEdited.particulars.splice(gender,1);
  assert.equal(secretaryFields(normalizeDocument(userEdited)).some(x=>x.en==='Gender'),false,
   'Do not restore deliberately removed current-version fields');
+});
+
+test('removes Shares Held by Bodies Corporate from shareholding particulars in all new and older drafts',()=>{
+ const blank=cloneBlank();
+ assert.equal(blank.particulars.some(x=>/Shares Held by (?:Body|Bodies) Corporate/i.test(x.en)),false);
+ assert.ok(blank.particulars.some(x=>x.en==='Shares Issued for Cash (ordinary)'));
+ const prior={...structuredClone(blank),schemaVersion:7};
+ prior.particulars.splice(15,0,{
+  type:'field',en:'Shares Held by Bodies Corporate',
+  cn:'由法人实体持有的股份',value:'250,000'});
+ prior.particulars.push({
+  type:'field',en:'Shares Held by Body Corporate',
+  cn:'由法人实体持有的股份',value:'300,000'});
+ const migrated=normalizeDocument(prior);
+ assert.equal(migrated.particulars.length,blank.particulars.length);
+ assert.ok(migrated.particulars.every(x=>!/Shares Held by (?:Body|Bodies) Corporate/i.test(x.en)));
+ assert.equal(migrated.particulars.find(x=>x.en==='Shares Issued for Cash (ordinary)').value,'');
+ const imported=importAnnualReturnText(JSON.stringify(prior),'previous-review.json');
+ assert.ok(imported.particulars.every(x=>!/Shares Held by (?:Body|Bodies) Corporate/i.test(x.en)));
 });

@@ -177,12 +177,6 @@
     },
     {
       "type": "field",
-      "en": "Shares Held by Bodies Corporate",
-      "cn": "由法人实体持有的股份",
-      "value": ""
-    },
-    {
-      "type": "field",
       "en": "Total Calls Called Up / Received",
       "cn": "已催缴 / 收取股份款项",
       "value": ""
