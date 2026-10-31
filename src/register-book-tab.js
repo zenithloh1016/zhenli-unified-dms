@@ -602,7 +602,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   return false;
  }
  function conflictFailure(){
-  const error=Error('Newer cloud edits overlap your current register. Your edits are kept on this device. Choose Overwrite Latest (Back Up First) if your edits should replace them, or Discard Unsaved Edits to load the cloud version.');
+  const error=Error('This register was updated on another device. Newer cloud edits overlap your current register. Your edits are kept on this device. Choose Overwrite Latest (Back Up First) if your edits should replace them, or Discard Unsaved Edits to load the cloud version.');
   error.code='STATUTORY_REGISTER_CONFLICT';return error;
  }
  async function writeBook(book,{expectedUpdatedAt=null,overwrite=false,baseBook=null}={}){
