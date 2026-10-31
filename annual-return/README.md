@@ -78,3 +78,7 @@ The selected company name and registration number populate **Company Details** t
 - At build time, the app downloads SSM's official **MSIC 2008 Code – ROC** PDF and parses the **1,446 published ROC codes** into a separate bundled JSON. The list includes `29300e`, `29300i`, `29300u` and special `a/b` codes where SSM published them; suffixes are never guessed for unrelated five-digit MSIC codes.
 - Search the combined DOSM/SSM catalogue, choose up to three entries, and retain the exact code and description in editable drafts and the PDF. The same catalogue is bundled into the web, main Android and standalone Annual Return Android builds.
 - The build requires the `pdftotext` command (`poppler-utils`) and fails if the SSM catalogue extraction is incomplete, so a broken source cannot silently publish misleading codes.
+
+## Removed retired shareholding and charge-count review fields (31 October 2026)
+
+The Annual Return review no longer displays **Shares Held by Bodies Corporate** or **Number of Registered Charges**. Those fields are excluded from the default form, older imported or saved drafts, web/Android editing, and generated PDFs. This does not delete the underlying statutory registers or any of the individual Registered Charge records. The Combined Registers importer copies the charge particulars instead of reconstructing the removed charge-count field.

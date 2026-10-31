@@ -192,8 +192,8 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
  transfer(/^register of members$/i,/^MEMBER \d+$/i,members,'members');
  transfer(/^register of beneficial owners$/i,/^BENEFICIAL OWNER \d+$/i,bos,'bos');
  transfer(/^register of charges$/i,/^REGISTERED CHARGE \d+$/i,charges,'charges');
- const activeCharges=getRecords(findSection(/^register of charges$/i)||{blocks:[]});
- if(activeCharges.length)write(doc.particulars,'Number of Registered Charges',String(activeCharges.length));
+ // Charge headings and details are transferred individually above. The retired
+ // Number of Registered Charges field must not be recreated from an import.
  const sec=getRecords(findSection(/^register of secretaries$/i)||{blocks:[]})[0];
  if(sec)for(const [target,patterns] of Object.entries(secretaries))
   write(doc.particulars,target,select(sec.fields,...patterns));

@@ -25,7 +25,7 @@ test('Sections and headings span both columns and fields retain bilingual labels
  assert.match(pdf,/row\.innerHTML='<th colspan="2" scope="colgroup">/);
  assert.match(pdf,/<th scope="row">/);
  assert.match(pdf,/doc\.particulars\|\|\[\]\)\.entries\(\)/);
- assert.match(pdf,/if\(!showMemberField\(doc\.particulars,index\)\)continue/);
+ assert.match(pdf,/if\(isRetiredAnnualReturnField\(item\)\|\|!showMemberField\(doc\.particulars,index\)\)continue/);
  assert.match(pdf,/parts\.forEach\(\(part,i\)=>/);
  const doc=cloneBlank();
  const heads=doc.particulars.filter(x=>x.type==='heading').map(x=>x.en);

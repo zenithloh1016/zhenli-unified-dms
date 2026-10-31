@@ -175,7 +175,7 @@ function removeRsshChargeTwoOnce(){
  }
  return result.removed?'Removed Registered Charge 2 and '+result.removedFields+
   ' related field(s) from RSSH. '+(result.updatedCount?'Charge count adjusted to '+result.remaining+'. ':
-  'Verify Number of Registered Charges against the statutory records. '):'';
+  'Verify the remaining registered charges against the statutory records. '):'';
 }
 function removeRsshChargeTwoNow(){
  if(String(doc.company?.name||'').trim().replace(/\s+/g,' ').toUpperCase()!=='RSSH SERVICES SDN BHD')
@@ -188,7 +188,7 @@ function removeRsshChargeTwoNow(){
   // Mark this device/company as corrected, so later intentional additions survive.
   try{localStorage.setItem('unicosec:ar:rssh-charge-2-removed:v2:'+encodeURIComponent(draftScope)+':'+encodeURIComponent(currentDraftId()),'1');}catch{}
   status('RSSH SERVICES: Removed Registered Charge 2 and '+result.removedFields+' fields. '+
-   (result.updatedCount?'Adjusted the displayed charge count to '+result.remaining+'. ':'Verify the displayed charge count. ')+
+   (result.updatedCount?'Verified '+result.remaining+' remaining charge(s). ':'Verify the remaining registered charges. ')+
    'Undo is available this session.');
  });
 }
