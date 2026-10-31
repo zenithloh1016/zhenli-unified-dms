@@ -82,3 +82,7 @@ The selected company name and registration number populate **Company Details** t
 ## Removed retired shareholding and charge-count review fields (31 October 2026)
 
 The Annual Return review no longer displays **Shares Held by Bodies Corporate** or **Number of Registered Charges**. Those fields are excluded from the default form, older imported or saved drafts, web/Android editing, and generated PDFs. This does not delete the underlying statutory registers or any of the individual Registered Charge records. The Combined Registers importer copies the charge particulars instead of reconstructing the removed charge-count field.
+
+## Beneficial Ownership Criterion F (31 October 2026)
+
+The Annual Return review supports all six SSM beneficial ownership criteria A–F. Criterion F is: "Has less than 20% of shares or voting shares but exercises significant control or influence over the company". The editor includes a **Criteria F** checkbox alongside its description, and generated PDFs print the selected **Criteria F — description** together in the right-hand cell of the Beneficial Ownership criteria table row. Existing saved and imported A–E selections remain unchanged; saved Criteria F selections are recognised on reopening. Source: SSM's BO criteria for private companies, https://crmsv.ssm4u.com.my/ssmkb/SSM4UExternal?wiki_id=10046 .
