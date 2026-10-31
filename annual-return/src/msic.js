@@ -32,9 +32,20 @@ export function mergeMSICCatalogues(dosmCodes,rocCodes){
   const code=String(row.code||'').toLowerCase();
   if(/^\d{5}$/.test(code)&&row.en)codes.set(code,{...row,code});
  }
+ const rocByCode=new Map();
  for(const row of rocCodes||[]){
   const code=String(row.code||'').toLowerCase();
-  if(/^\d{5}[abeiu]?$/.test(code)&&row.en)codes.set(code,{...row,code});
+  if(!/^\d{5}[abeiu]?$/.test(code)||!row.en)continue;
+  if(!rocByCode.has(code)){rocByCode.set(code,{...row,code});continue;}
+  // SSM lists some distinct business activities under the same ROC code.
+  // Preserve every description without treating identical codes as different codes.
+  const entry=rocByCode.get(code);
+  for(const field of ['en','bm']){
+   const label=String(row[field]||'').trim();
+   if(label&&!String(entry[field]||'').split(' / ').includes(label))
+    entry[field]=(entry[field]?entry[field]+' / ':'')+label;
+  }
  }
+ for(const [code,row] of rocByCode)codes.set(code,row);
  return [...codes.values()].sort((a,b)=>a.code.localeCompare(b.code));
 }

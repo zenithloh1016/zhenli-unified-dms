@@ -38,3 +38,9 @@ test('official ROC suffix variants remain distinct and appear in search/PDF valu
  assert.equal(extractMSICCodes(value)[0].code,'29300u');
  assert.equal(extractMSICCodes(formatMSICCodes([roc[3]]))[0].code,'47991a');
 });
+
+test('preserves multiple SSM ROC descriptions published under one business code',()=>{
+ const list=mergeMSICCatalogues([],[{code:'01466e',en:'Export of chicken eggs'}, {code:'01466e',en:'Export of duck eggs'}]);
+ assert.equal(list.length,1);
+ assert.match(list[0].en,/Export of chicken eggs \/ Export of duck eggs/);
+});
