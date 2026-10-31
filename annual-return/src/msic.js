@@ -7,7 +7,7 @@ export function extractMSICCodes(value){
  const lines=String(value||'').split(/\r?\n/);
  const rows=[];
  for(const line of lines){
-  const match=line.trim().match(/^(\d{5}[eiu]?)\s*(?:[—–:\-|]\s*|\s{2,})(.*)$/i);
+  const match=line.trim().match(/^(\d{5}[abeiu]?)\s*(?:[—–:\-|]\s*|\s{2,})(.*)$/i);
   if(match&&!rows.some(v=>v.code===match[1].toLowerCase()))
     rows.push({code:match[1].toLowerCase(),en:(match[2]||'').trim()});
  }
@@ -23,4 +23,18 @@ export function matchesMSIC(list,q,max=16){
  if(term.length<2)return [];
  return list.filter(x=>x.code.toLowerCase().includes(term)||
   String(x.en).toLowerCase().includes(term)||String(x.bm||'').toLowerCase().includes(term)).slice(0,max);
+}
+
+/** SSM ROC variants are distinct official business codes, not universal suffixes. */
+export function mergeMSICCatalogues(dosmCodes,rocCodes){
+ const codes=new Map();
+ for(const row of dosmCodes||[]){
+  const code=String(row.code||'').toLowerCase();
+  if(/^\d{5}$/.test(code)&&row.en)codes.set(code,{...row,code});
+ }
+ for(const row of rocCodes||[]){
+  const code=String(row.code||'').toLowerCase();
+  if(/^\d{5}[abeiu]?$/.test(code)&&row.en)codes.set(code,{...row,code});
+ }
+ return [...codes.values()].sort((a,b)=>a.code.localeCompare(b.code));
 }

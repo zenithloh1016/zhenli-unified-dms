@@ -72,3 +72,9 @@ Inside the existing DMS web or Android app, choose **Documents → Companies →
 
 The selected company name and registration number populate **Company Details** through a guarded, same-origin iframe message, without a public query string or external server call. No other register or beneficial ownership information is transferred. Switching to a different company prompts before starting a clean form so previously entered statutory particulars cannot inadvertently carry across companies. Existing Supabase company/document records and Tencent EdgeOne signing requests are not changed. Export the editable JSON before changing tabs; finished PDFs can be manually uploaded to the correct DMS folder.
 
+
+## SSM ROC business-code catalogue (31 October 2026)
+
+- At build time, the app downloads SSM's official **MSIC 2008 Code – ROC** PDF and parses the **1,446 published ROC codes** into a separate bundled JSON. The list includes `29300e`, `29300i`, `29300u` and special `a/b` codes where SSM published them; suffixes are never guessed for unrelated five-digit MSIC codes.
+- Search the combined DOSM/SSM catalogue, choose up to three entries, and retain the exact code and description in editable drafts and the PDF. The same catalogue is bundled into the web, main Android and standalone Annual Return Android builds.
+- The build requires the `pdftotext` command (`poppler-utils`) and fails if the SSM catalogue extraction is incomplete, so a broken source cannot silently publish misleading codes.

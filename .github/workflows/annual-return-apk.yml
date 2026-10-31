@@ -24,6 +24,8 @@ jobs:
         run: cd annual-return && npm install --no-audit --no-fund
       - name: Test GS import and bilingual schema
         run: cd annual-return && npm run test
+      - name: Install SSM PDF extraction utility
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
       - name: Build Annual Return website
         run: cd annual-return && npm run build
   android:
@@ -41,6 +43,8 @@ jobs:
       - uses: android-actions/setup-android@v4
       - name: Install Annual Return dependencies
         run: cd annual-return && npm install --no-audit --no-fund
+      - name: Install SSM PDF extraction utility
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
       - name: Build app and initialize Capacitor Android
         run: |
           cd annual-return
