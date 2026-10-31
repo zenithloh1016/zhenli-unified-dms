@@ -421,7 +421,7 @@ function addRecord(kind){
  for(let i=last+1;i<until;i++)if(doc.particulars[i].type==='heading'){end=i;break;}
  let templateEnd=headings[1]||end;
  if(kind==='charge'){
-  const summary=doc.particulars.findIndex((x,i)=>i>start&&i<templateEnd&&x.type==='field'&&/^(?:(?:Number|No\\.?|Total Number) of Registered Charges?|Current Outstanding Indebtedness)$/i.test(x.en));
+  const summary=doc.particulars.findIndex((x,i)=>i>start&&i<templateEnd&&x.type==='field'&&/^(?:(?:Number|No\.?|Total Number) of Registered Charges?|Current Outstanding Indebtedness)$/i.test(x.en));
   if(summary>=0)templateEnd=summary;
  }
  const next=doc.particulars.slice(start,templateEnd).map(x=>({...x,value:''}));
@@ -434,7 +434,7 @@ function addRecord(kind){
  // or secretary/auditor particulars. Do not displace unrelated records.
  let insertAt=end;
  if(kind==='charge'){
-  const totalIndex=doc.particulars.findIndex((x,i)=>i>last&&i<until&&x.type==='field'&&/^(?:(?:Number|No\\.?|Total Number) of Registered Charges?|Current Outstanding Indebtedness)$/i.test(x.en));
+  const totalIndex=doc.particulars.findIndex((x,i)=>i>last&&i<until&&x.type==='field'&&/^(?:(?:Number|No\.?|Total Number) of Registered Charges?|Current Outstanding Indebtedness)$/i.test(x.en));
   if(totalIndex>=0)insertAt=totalIndex;
  }
  if(doc.particulars.length+next.length>1200)return status('Too many review items; remove unnecessary entries first.',true);
