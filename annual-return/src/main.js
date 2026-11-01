@@ -89,7 +89,15 @@ function saveDraftNow({quiet=false}={}){
  if(!hasDraftData()&&!history.state.canUndo&&!history.state.canRedo)return true;
  if(window.parent!==window&&draftScope==='dms:pending'){draftStatus('Waiting for DMS session before saving.',true);return false;}
  try{
-  const result=saveAnnualReturnDraft(localStorage,draftScope,currentDraftId(),doc);
+  // No-op saves (including pagehide/visibilitychange) must not falsely make an
+  // older device draft appear newer than the copy in Supabase.
+  const snapshot=normalizeDocument(doc);
+  const previous=readAnnualReturnDraft(localStorage,draftScope,currentDraftId());
+  if(previous&&JSON.stringify(previous.data)===JSON.stringify(snapshot)){
+   if(!quiet)draftStatus('Draft already saved on this device.');
+   return true;
+  }
+  const result=saveAnnualReturnDraft(localStorage,draftScope,currentDraftId(),snapshot);
   draftOptions(result.key);
   draftStatus((quiet?'Autosaved':'Saved draft')+' on this device · '+new Date(result.updatedAt).toLocaleTimeString());
   cloudDraft.markEdited();
