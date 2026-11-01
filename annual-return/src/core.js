@@ -415,6 +415,20 @@ export function normalizeDocument(raw){
       };
     })
   };
+  // Keep the Beneficial Owners identification label bilingual and consistent
+  // in imported, cached and cloud-synchronised drafts, without touching values.
+  let inBeneficialOwners=false;
+  for(const item of doc.particulars){
+    if(item.type==='section'){
+      inBeneficialOwners=/PARTICULARS OF (?:CURRENT )?BENEFICIAL OWNERS/i.test(item.en||'');
+    }else if(inBeneficialOwners && item.type==='field' &&
+      /^(?:NRIC No\.|NRIC\s*\/\s*Passport No\.)$/i.test(String(item.en||'').trim())){
+      item.en='NRIC / Passport No.';
+      item.cn='身份证 / 护照号码';
+      delete item.displayEn;
+      delete item.displayCn;
+    }
+  }
   // Historic .gs source may omit this controlled field; append it without deleting any data.
   if((!Number(raw.schemaVersion)||Number(raw.schemaVersion)<3)&&!doc.particulars.some(x=>x.type==='field'&&x.en==='Type of Shares Issued')){
     const i=doc.particulars.findIndex(x=>x.type==='section'&&/SHARE CAPITAL/i.test(x.en));
