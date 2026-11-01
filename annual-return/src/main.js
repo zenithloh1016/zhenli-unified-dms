@@ -58,7 +58,7 @@ document.addEventListener('keydown',event=>{
 });
 
 let draftScope=window.parent===window?'standalone':'dms:pending',newDraftId='new-'+Date.now().toString(36),draftTimer=null;
-let selectedDmsCompanyId=null,dmsCompanies=[];
+let selectedDmsCompanyId=null,dmsCompanies=[],cloudDrafts=[];
 let pendingRegisterImport='';
 const cloudDraft=createCloudDraftClient({
  getCompanyId:()=>selectedDmsCompanyId,
@@ -72,6 +72,8 @@ const cloudDraft=createCloudDraftClient({
   const el=$('cloud-sync-status');
   if(el){el.textContent=message;el.style.color=error?'#b23b44':'#327284';}
   draftOptions(); // Refresh device and backup draft choices after cloud operations.
+  if(message.startsWith('Cloud synced')&&window.parent!==window)
+   window.parent.postMessage({type:'ZHENLI_AR_CLOUD_DRAFT_LIST_REFRESH'},window.location.origin);
  }
 });
 function currentDraftId(){return selectedDmsCompanyId||newDraftId;}
@@ -81,10 +83,25 @@ function draftStatus(message,error=false){const el=$('draft-status');if(el){el.t
 function draftOptions(preferred=''){
  const select=$('draft-picker');if(!select)return;
  const previous=preferred||select.value;let rows=[];
- try{rows=listAnnualReturnDrafts(localStorage,draftScope);}catch(err){draftStatus('Device storage unavailable: '+err.message,true);return;}
- select.innerHTML=rows.length?rows.map(x=>'<option value="'+esc(x.key)+'">'+esc(x.name)+(String(x.companyId||'').startsWith('backup-')?' · DEVICE BACKUP':'')+(x.registrationNo?' · '+esc(x.registrationNo):'')+' · '+esc(new Date(x.updatedAt).toLocaleString())+'</option>').join(''):'<option value="">No saved drafts</option>';
- const chosen=rows.find(x=>x.key===previous)||rows.find(x=>x.companyId===currentDraftId())||rows[0];
- select.value=chosen?.key||'';$('resume-draft').disabled=!rows.length;$('delete-draft').disabled=!rows.length;
+ try{rows=listAnnualReturnDrafts(localStorage,draftScope);}
+ catch(err){draftStatus('Device storage unavailable: '+err.message,true);}
+ const remote=cloudDrafts.filter(x=>dmsCompanies.some(c=>c.id===x.companyId))
+  .map(x=>({...x,key:'cloud:'+x.companyId,name:dmsCompanies.find(c=>c.id===x.companyId).name}));
+ const options=[
+  ...rows.map(x=>({key:x.key,companyId:x.companyId,label:x.name+
+   (String(x.companyId||'').startsWith('backup-')?' · DEVICE BACKUP':' · DEVICE')+
+   (x.registrationNo?' · '+x.registrationNo:'')+' · '+new Date(x.updatedAt).toLocaleString()})),
+  ...remote.map(x=>({key:x.key,companyId:x.companyId,label:x.name+' · CLOUD · '+
+    new Date(x.updatedAt).toLocaleString()+' · Rev '+x.revision}))
+ ];
+ select.innerHTML=options.length?options.map(x=>'<option value="'+esc(x.key)+'">'+esc(x.label)+'</option>').join('')
+  :'<option value="">No device or cloud drafts</option>';
+ const chosen=options.find(x=>x.key===previous)||
+  options.find(x=>x.companyId===currentDraftId()&&!x.key.startsWith('cloud:'))||
+  options.find(x=>x.companyId===currentDraftId())||options[0];
+ select.value=chosen?.key||'';
+ $('resume-draft').disabled=!options.length;
+ $('delete-draft').disabled=!chosen||chosen.key.startsWith('cloud:');
 }
 function saveDraftNow({quiet=false}={}){
  if(!hasDraftData()&&!history.state.canUndo&&!history.state.canRedo)return true;
@@ -225,7 +242,7 @@ function applyDmsCompany(company){
  if(!isValidCompanyRecord(company))return {ok:false,reason:'Invalid company record from DMS.'};
  const name=company.name.trim(),registrationNo=company.registrationNo.trim();
  if(selectedDmsCompanyId===company.id&&doc.company.name===name&&doc.company.no===registrationNo){
-  void cloudDraft.open();
+  void cloudDraft.open({force:true});
   const fixed=removeRsshChargeTwoOnce();
   if(fixed)status(fixed);
   return {ok:true};
@@ -283,6 +300,12 @@ if(window.parent!==window){
     if(selectedDmsCompanyId)void cloudDraft.open();
    }
    renderSections();return;
+  }
+  if(event.data?.type==='ZHENLI_DMS_AR_CLOUD_DRAFT_LIST'){
+   const items=Array.isArray(event.data.drafts)?event.data.drafts:[];
+   cloudDrafts=items.slice(0,500).filter(x=>typeof x.companyId==='string'&&
+     typeof x.updatedAt==='string'&&Number.isSafeInteger(x.revision)&&x.revision>0);
+   draftOptions();return;
   }
   if(event.data?.type==='ZHENLI_DMS_AR_IMPORT_COMBINED_RESPONSE'){
    if(!pendingRegisterImport||event.data.id!==pendingRegisterImport)return;
@@ -976,7 +999,20 @@ $('import-combined-register').addEventListener('click',()=>{
 });
 $('save-draft').addEventListener('click',()=>{if(!hasDraftData())return draftStatus('Enter some particulars before saving.',true);saveDraftNow();});
 $('cloud-sync-now').addEventListener('click',()=>cloudDraft.syncNow());
-$('resume-draft').addEventListener('click',()=>{if(flushDraft())resumeLocalDraft($('draft-picker').value);});
+$('draft-picker').addEventListener('change',()=>{
+ $('delete-draft').disabled=$('draft-picker').value.startsWith('cloud:');
+});
+$('resume-draft').addEventListener('click',()=>{
+ const key=$('draft-picker').value;
+ if(key.startsWith('cloud:')){
+  const id=key.slice(6);
+  if(!dmsCompanies.some(c=>c.id===id))return draftStatus('Cloud company no longer exists in this DMS account.',true);
+  if(!flushDraft())return;
+  if(window.parent!==window)window.parent.postMessage({type:'ZHENLI_AR_SELECT_COMPANY_REQUEST',id},window.location.origin);
+  return;
+ }
+ if(flushDraft())resumeLocalDraft(key);
+});
 $('delete-draft').addEventListener('click',()=>{
  const key=$('draft-picker').value;if(!key)return;
  if(!confirm('Permanently delete this locally saved Annual Return draft? The currently open form remains unchanged.'))return;
