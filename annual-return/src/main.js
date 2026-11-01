@@ -71,6 +71,7 @@ const cloudDraft=createCloudDraftClient({
  onStatus:(message,error=false)=>{
   const el=$('cloud-sync-status');
   if(el){el.textContent=message;el.style.color=error?'#b23b44':'#327284';}
+  draftOptions(); // Refresh device and backup draft choices after cloud operations.
  }
 });
 function currentDraftId(){return selectedDmsCompanyId||newDraftId;}
@@ -81,7 +82,7 @@ function draftOptions(preferred=''){
  const select=$('draft-picker');if(!select)return;
  const previous=preferred||select.value;let rows=[];
  try{rows=listAnnualReturnDrafts(localStorage,draftScope);}catch(err){draftStatus('Device storage unavailable: '+err.message,true);return;}
- select.innerHTML=rows.length?rows.map(x=>'<option value="'+esc(x.key)+'">'+esc(x.name)+(x.registrationNo?' · '+esc(x.registrationNo):'')+' · '+esc(new Date(x.updatedAt).toLocaleString())+'</option>').join(''):'<option value="">No saved drafts</option>';
+ select.innerHTML=rows.length?rows.map(x=>'<option value="'+esc(x.key)+'">'+esc(x.name)+(x.companyId.startsWith('backup-')?' · DEVICE BACKUP':'')+(x.registrationNo?' · '+esc(x.registrationNo):'')+' · '+esc(new Date(x.updatedAt).toLocaleString())+'</option>').join(''):'<option value="">No saved drafts</option>';
  const chosen=rows.find(x=>x.key===previous)||rows.find(x=>x.companyId===currentDraftId())||rows[0];
  select.value=chosen?.key||'';$('resume-draft').disabled=!rows.length;$('delete-draft').disabled=!rows.length;
 }
@@ -115,8 +116,15 @@ function resumeLocalDraft(key){
  try{
   const id=draftIdOfKey(key,draftScope),draft=readAnnualReturnDraft(localStorage,draftScope,id);
   if(!draft)throw Error('Draft no longer exists.');
+  const backup=/^backup-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-[a-z0-9]+$/i.exec(id);
+  const companyId=backup?.[1]||id;
+  const match=dmsCompanies.find(c=>c.id===companyId);
+  if(backup&&match){
+   if(!confirm('Restore this older device backup as the active Annual Return? The existing device copy will be replaced. The cloud version remains protected by revision checks.'))return false;
+   saveAnnualReturnDraft(localStorage,draftScope,companyId,draft.data);
+  }
   doc=draft.data;
-  const match=dmsCompanies.find(c=>c.id===id);selectedDmsCompanyId=match?.id||null;
+  selectedDmsCompanyId=match?.id||null;
   if(!match)newDraftId=id;
   if(match&&window.parent!==window)
     window.parent.postMessage({type:'ZHENLI_AR_SELECT_COMPANY_REQUEST',id},window.location.origin);
@@ -124,8 +132,8 @@ function resumeLocalDraft(key){
   resetView();draftOptions(key);
   const restored=restoreRsshSavedDraftOnce();
   const chargeRemoved=removeRsshChargeTwoOnce();
-  draftStatus('Resumed '+draft.name+' · '+new Date(draft.updatedAt).toLocaleString()+'. '+restored+chargeRemoved);
-  if(match)void cloudDraft.open();
+  draftStatus('Resumed '+(backup?'device backup for ':'')+draft.name+' · '+new Date(draft.updatedAt).toLocaleString()+'. '+restored+chargeRemoved);
+  if(match)void cloudDraft.open({force:true});
   return true;
  }catch(err){draftStatus('Could not resume draft: '+err.message,true);return false;}
 }
