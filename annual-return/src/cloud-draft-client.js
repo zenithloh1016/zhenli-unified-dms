@@ -83,17 +83,35 @@ export function createCloudDraftClient({getCompanyId,getScope,getDocument,applyD
     if(String(document.company?.name||'').trim().replace(/\s+/g,' ').toUpperCase()!==
        String(getDocument()?.company?.name||'').trim().replace(/\s+/g,' ').toUpperCase())
      throw Error('Cloud draft belongs to a different company.');
+    // Never discard changes made while a slow cloud load was in flight.
+    if(dirty){
+     conflict=true;ready=false;
+     message('Edits were made while fetching the cloud draft. Your device copy is safe. Press Sync Draft Now to choose which copy to keep.',true);
+     return;
+    }
     const localAt=Date.parse(local?.updatedAt||'')||0;
     const cloudAt=Date.parse(cloud.updatedAt||'')||0;
-    if(preferRemote||!local||cloudAt>=localAt){
-     applyDocument(document);
-     // Cache locally without incorrectly triggering a new cloud revision.
-     saveAnnualReturnDraft(localStorage,scope,id,document,{updatedAt:cloud.updatedAt});
-     message('Loaded cloud draft revision '+revision+' · Same draft available on web, Windows and Android.');
-    }else{
-     dirty=true;
-     message('A newer draft exists on this device; securely uploading it to your UNICOSEC account…');
+    const differs=!!local&&JSON.stringify(local.data)!==JSON.stringify(document);
+    if(differs&&localAt>cloudAt&&!preferRemote){
+     conflict=true;ready=false;dirty=true;
+     message('This device has a different local draft with a newer save time. Nothing was overwritten. Press Sync Draft Now to choose the cloud or device copy.',true);
+     return;
     }
+    if(differs){
+     // Preserve the previous device draft as a separate, recoverable copy before
+     // replacing it with the cloud version in the editor and device cache.
+     try{
+      saveAnnualReturnDraft(localStorage,scope,'backup-'+id+'-'+Date.now().toString(36),local.data,{updatedAt:local.updatedAt});
+     }catch(error){
+      conflict=true;ready=false;dirty=true;
+      message('Cannot safely load cloud draft because local backup failed: '+error.message,true);
+      return;
+     }
+    }
+    applyDocument(document);
+    saveAnnualReturnDraft(localStorage,scope,id,document,{updatedAt:cloud.updatedAt});
+    message('Loaded cloud draft revision '+revision+' · Available on web, Windows and Android.'+
+     (differs?' Previous device copy retained in local draft backups.':''));
    }else if(local){
     dirty=true;
     message('Uploading your existing local draft to make it available on other devices…');
@@ -108,18 +126,45 @@ export function createCloudDraftClient({getCompanyId,getScope,getDocument,applyD
    message('Local draft is safe, but the cloud draft could not be loaded: '+error.message,true);
   }
  }
+ async function uploadLocalAfterReview(){
+  const id=getCompanyId(),token=session;
+  message('Checking the current cloud revision before uploading the device draft…');
+  try{
+   const latest=await call('load',id);
+   if(token!==session||id!==getCompanyId())return;
+   const currentRevision=Number(latest.record?.revision)||0;
+   if(currentRevision!==revision){
+    revision=currentRevision;
+    message('The cloud changed again on another device. Press Sync Draft Now to review again before uploading.',true);
+    return;
+   }
+   ready=true;conflict=false;dirty=true;
+   await save(); // Server-side revision check still prevents concurrent overwrite.
+  }catch(error){
+   if(token===session)message('Could not verify the cloud revision: '+error.message,true);
+  }
+ }
  function syncNow(){
   if(!getCompanyId()||!isEmbedded()){
    message('Select a company through the signed-in UNICOSEC DMS to sync this draft.',true);return;
   }
   if(conflict){
-   if(!confirm('Another device has a newer cloud draft. Load that version into the editor? The current local copy remains saved on this device.'))return;
-   void open({force:true,preferRemote:true});return;
+   if(confirm('The Annual Return cloud and device copies differ. Press OK to LOAD the CLOUD copy (your device copy will be backed up). Press Cancel to consider uploading this device copy instead.')){
+    void open({force:true,preferRemote:true});return;
+   }
+   if(confirm('UPLOAD this device draft to Supabase instead? This replaces the current cloud copy for other devices. Press Cancel to keep both copies unchanged.'))
+    void uploadLocalAfterReview();
+   return;
   }
   if(ready){
-   dirty=true;
-   if(timer)clearTimeout(timer);
-   timer=null;void save();
+   if(dirty){
+    if(timer)clearTimeout(timer);
+    timer=null;void save();
+   }else{
+    // A manual sync with no pending local changes must FETCH the latest remote
+    // revision, not spuriously upload a stale device copy.
+    void open({force:true});
+   }
   }else void open({force:true});
  }
  async function remove(companyId){
