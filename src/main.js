@@ -579,6 +579,23 @@ function sendAnnualReturnCompanyList(){
   id:String(c.id),name:String(c.name||''),registrationNo:String(c.registration_no||'')
  }));
  frame.contentWindow?.postMessage({type:'ZHENLI_DMS_AR_COMPANY_LIST',companies,userId:String(state.user.id)},window.location.origin);
+ void sendAnnualReturnDraftList();
+}
+async function sendAnnualReturnDraftList(){
+ const frame=ROOT.querySelector('#zh-annual-return-frame'),user=state.user;
+ if(!frame||!user||!db)return;
+ try{
+  // Only send draft metadata; full content is fetched separately using RLS.
+  const {data,error}=await db.from('annual_return_drafts')
+   .select('company_id,updated_at,revision')
+   .eq('user_id',user.id).order('updated_at',{ascending:false}).limit(500);
+  if(error)throw error;
+  if(state.user?.id!==user.id||state.tab!=='annual-return'||
+     frame!==ROOT.querySelector('#zh-annual-return-frame'))return;
+  frame.contentWindow?.postMessage({type:'ZHENLI_DMS_AR_CLOUD_DRAFT_LIST',
+   drafts:(data||[]).map(x=>({companyId:x.company_id,updatedAt:x.updated_at,revision:Number(x.revision)}))
+  },window.location.origin);
+ }catch(error){console.warn('Could not list Annual Return cloud draft metadata:',error);}
 }
 function sendAnnualReturnCompany(){
  const frame=ROOT.querySelector('#zh-annual-return-frame');
@@ -1188,6 +1205,7 @@ window.addEventListener('message',event=>{
    })();
    return;
  }
+ if(event.data.type==='ZHENLI_AR_CLOUD_DRAFT_LIST_REFRESH'){void sendAnnualReturnDraftList();return;}
  if(event.data.type==='ZHENLI_AR_FULLSCREEN_TOGGLE'){setAnnualReturnFullscreen(!state.arFullscreen);return;}
  if(event.data.type==='ZHENLI_AR_READY'){sendAnnualReturnCompanyList();sendAnnualReturnCompany();return;}
  if(event.data.type==='ZHENLI_AR_SELECT_COMPANY_REQUEST'){
