@@ -82,7 +82,7 @@ function draftOptions(preferred=''){
  const select=$('draft-picker');if(!select)return;
  const previous=preferred||select.value;let rows=[];
  try{rows=listAnnualReturnDrafts(localStorage,draftScope);}catch(err){draftStatus('Device storage unavailable: '+err.message,true);return;}
- select.innerHTML=rows.length?rows.map(x=>'<option value="'+esc(x.key)+'">'+esc(x.name)+(x.companyId.startsWith('backup-')?' · DEVICE BACKUP':'')+(x.registrationNo?' · '+esc(x.registrationNo):'')+' · '+esc(new Date(x.updatedAt).toLocaleString())+'</option>').join(''):'<option value="">No saved drafts</option>';
+ select.innerHTML=rows.length?rows.map(x=>'<option value="'+esc(x.key)+'">'+esc(x.name)+(String(x.companyId||'').startsWith('backup-')?' · DEVICE BACKUP':'')+(x.registrationNo?' · '+esc(x.registrationNo):'')+' · '+esc(new Date(x.updatedAt).toLocaleString())+'</option>').join(''):'<option value="">No saved drafts</option>';
  const chosen=rows.find(x=>x.key===previous)||rows.find(x=>x.companyId===currentDraftId())||rows[0];
  select.value=chosen?.key||'';$('resume-draft').disabled=!rows.length;$('delete-draft').disabled=!rows.length;
 }
@@ -93,7 +93,9 @@ function saveDraftNow({quiet=false}={}){
   // No-op saves (including pagehide/visibilitychange) must not falsely make an
   // older device draft appear newer than the copy in Supabase.
   const snapshot=normalizeDocument(doc);
-  const previous=readAnnualReturnDraft(localStorage,draftScope,currentDraftId());
+  let previous=null;
+  try{previous=readAnnualReturnDraft(localStorage,draftScope,currentDraftId());}
+  catch(error){console.warn('Local Annual Return draft is malformed; saving current editor copy:',error);}
   if(previous&&JSON.stringify(previous.data)===JSON.stringify(snapshot)){
    if(!quiet)draftStatus('Draft already saved on this device.');
    return true;
