@@ -753,8 +753,8 @@
     },
     {
       "type": "field",
-      "en": "NRIC No.",
-      "cn": "身份证号码",
+      "en": "NRIC / Passport No.",
+      "cn": "身份证 / 护照号码",
       "value": ""
     },
     {
