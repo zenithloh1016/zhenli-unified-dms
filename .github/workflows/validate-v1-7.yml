@@ -15,6 +15,14 @@ jobs:
       - name: Test Master Listing Excel parser
         run: npm run test:import
       - run: npm run build
+      - name: Install SSM PDF extraction utility
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+      - name: Test and build Annual Return Generator
+        run: |
+          cd annual-return
+          npm install --no-audit --no-fund
+          npm test
+          npm run build
       - name: Validate Annual Return PDF app
         run: |
           cd annual-return-app

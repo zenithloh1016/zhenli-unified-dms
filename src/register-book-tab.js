@@ -31,7 +31,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:false,
   importPreview:null,importFilename:'',importing:false,originalDocs:[],
   historyOpen:false,historyItems:[],historyPreview:null,historyPreviewName:'',
-  historyLoading:false,historyLoaded:false
+  historyLoading:false,historyLoaded:false,rateEditor:null
  };
  let renderHook=null;
  const afterRender=fn=>{renderHook=fn;};
@@ -44,7 +44,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    dirty:false,sheetIndex:0,rowPage:0,reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:false,
     importPreview:null,importFilename:'',importing:false,originalDocs:[],
     historyOpen:false,historyItems:[],historyPreview:null,historyPreviewName:'',
-    historyLoading:false,historyLoaded:false});
+    historyLoading:false,historyLoaded:false,rateEditor:null});
  }
  function canLeave(){
   return !state.dirty||window.confirm('Your Statutory Registers have unsaved edits. Leave without saving?');
@@ -239,7 +239,13 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
      renderStatutoryRegisterDocument(book,state.sheetIndex,{showBlanks:state.showBlankFields}):
      '<div class="rb-help">Select Add Register to begin.</div>')+
    (state.originalDocs.length?'<details class="rb-originals"><summary>Preserved original Register Book files ('+state.originalDocs.length+')</summary><p class="muted">Original files remain securely archived, even though their former Documents folders are hidden.</p>'+state.originalDocs.map(d=>'<div class="rb-original-row"><span>'+esc(d.name)+'</span>'+act('Download Original','sr-original',d.id)+'</div>').join('')+'</details>':'')+
-   '<p class="rb-footnote muted">Working statutory register particulars. Verify information against SSM filings and the original documents before relying on these records. Changes are saved privately.</p></div>';
+   '<p class="rb-footnote muted">Working statutory register particulars. Verify information against SSM filings and the original documents before relying on these records. Changes are saved privately.</p>'+ 
+   (state.rateEditor?'<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="Set share consideration rate">'+
+     '<div class="modal-heading"><h3>Set RM per share</h3>'+act('✕','sr-cancel-consideration-rate')+'</div>'+
+     '<p class="muted">'+esc(state.rateEditor.title)+' · Enter the documented consideration paid per share. Current shares held × RM/share determines the displayed total.</p>'+
+     '<label class="input-label" for="sr-rate-input">Consideration per share (RM)<input id="sr-rate-input" type="text" inputmode="decimal" autocomplete="off" value="'+esc(state.rateEditor.rate)+'" placeholder="e.g. 1.00"></label>'+
+     '<p class="muted">Leave blank to use recorded acquisition ledger totals. Do not assume RM1 per share without supporting documents.</p>'+
+     '<div class="modal-actions">'+act('Cancel','sr-cancel-consideration-rate')+act('Apply RM/share','sr-apply-consideration-rate','','primary')+'</div></section></div>':'')+'</div>';
  }
 
  function dateLabel(value){
@@ -392,33 +398,40 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    const match=/^(\d+):(\d+)$/.exec(String(id));
    if(!match)return true;
    const si=Number(match[1]),ri=Number(match[2]);
-   if(registerKind(state.book?.sheets?.[si]?.name)!=='member')return true;
+   if(registerKind(state.book?.sheets?.[si]?.name)!=='member'||
+      !registerGroupIndices(state.book,state.sheetIndex).includes(si))return true;
    const section=buildGroupedRegister(state.book,state.sheetIndex,{showBlanks:true});
    const member=section.blocks.find(b=>b.type==='record'&&
     b.sheetIndex===si&&b.row===ri&&b.status==='Current');
    if(!member)return true;
-   const key=si+':'+ri;
-   const previous=state.book.memberShareRates?.[key]??'';
-   const answer=window.prompt(
-    'Enter the documented consideration paid per share (RM) for '+member.title+
-    '.\n\nCurrent shares held × RM/share determines the displayed consideration. '+
-    'Clear the rate to use recorded acquisition ledger amounts when available. '+
-    'Do not assume RM1/share without supporting documents.',String(previous));
-   if(answer===null)return true;
-   const raw=String(answer).trim();
-   let rate='';
-   if(raw){
-    const candidate=raw.replace(/^(?:RM|MYR)\s*/i,'').replace(/,/g,'');
-    if(!/^\d+(?:\.\d{1,6})?$/.test(candidate)||!Number.isFinite(Number(candidate))||
-      Number(candidate)>1e12)
-     throw Error('Enter a valid non-negative RM rate per share (maximum six decimal places).');
-    rate=candidate;
+   state.rateEditor={key:si+':'+ri,title:member.title,
+    rate:String(state.book.memberShareRates?.[si+':'+ri]??'')};
+   state.error='';notify();return true;
+  }
+  if(action==='sr-cancel-consideration-rate'){
+   state.rateEditor=null;state.error='';notify();return true;
+  }
+  if(action==='sr-apply-consideration-rate'){
+   const editor=state.rateEditor;
+   if(!editor)return true;
+   const input=document.getElementById('sr-rate-input');
+   if(!input)return true;
+   const raw=String(input.value??'').trim();
+   const candidate=raw.replace(/^(?:RM|MYR)\s*/i,'').replace(/,/g,'');
+   if(candidate&&(!/^\d+(?:\.\d{1,6})?$/.test(candidate)||
+      !Number.isFinite(Number(candidate))||Number(candidate)>1e12)){
+    state.rateEditor.rate=raw;
+    state.error='Enter a valid non-negative RM rate per share (maximum six decimal places).';
+    notify();return true;
    }
-   if(rate===String(previous))return true;
-   if(!state.book.memberShareRates)state.book.memberShareRates={};
-   if(rate)state.book.memberShareRates[key]=rate;
-   else delete state.book.memberShareRates[key];
-   state.dirty=true;notify();return true;
+   const previous=String(state.book.memberShareRates?.[editor.key]??'');
+   if(candidate!==previous){
+    if(!state.book.memberShareRates)state.book.memberShareRates={};
+    if(candidate)state.book.memberShareRates[editor.key]=candidate;
+    else delete state.book.memberShareRates[editor.key];
+    state.dirty=true;
+   }
+   state.rateEditor=null;state.error='';notify();return true;
   }
   if(action==='sr-edit-field'){
    const match=/^(\d+):(\d+):(\d+)$/.exec(String(id));

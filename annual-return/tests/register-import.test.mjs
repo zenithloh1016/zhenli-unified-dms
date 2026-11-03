@@ -103,3 +103,51 @@ test('invalid combined snapshots do not change Annual Return',()=>{
  assert.throws(()=>importCombinedRegisterSnapshot(draft,{version:0,sections:[]}),/Invalid combined/);
  assert.equal(JSON.stringify(draft),before);
 });
+
+test('pre-populates all secretary-specific fields without touching directors or existing draft values',()=>{
+ const snapshot=structuredClone(source);
+ snapshot.sections.find(x=>x.title==='Register of Secretaries').blocks=[
+  group('Current'),record('SECRETARY CURRENT','Current'),
+  field('Name','SECRETARY CURRENT'),field('Identification No.','555555-08-5555'),
+  field('SSM Practicing Certificate No.','PC 2026-001'),
+  field('Membership No.','MAICSA 88888'),
+  field('Date of Birth','16/05/1978'),field('Gender','FEMALE'),
+  field('Nationality / Race','MALAYSIAN'),field('Residential Address','IPOH'),
+  field('Service Address','KL SERVICE ADDRESS')
+ ];
+ const input=cloneBlank();
+ input.company.name='EXAMPLE SDN BHD';input.company.no='202601000001';
+ const heading=input.particulars.findIndex(x=>x.en==='COMPANY SECRETARY');
+ const fields=()=>input.particulars.slice(heading+1,input.particulars.findIndex((x,i)=>i>heading&&x.type==='heading'));
+ fields().find(x=>x.en==='Gender').value='CONFIRMED GENDER';
+ const {document:doc,summary}=importCombinedRegisterSnapshot(input,snapshot,{secretaryOnly:true});
+ const secretary=doc.particulars.slice(heading+1,doc.particulars.findIndex((x,i)=>i>heading&&x.type==='heading'));
+ const at=label=>secretary.find(x=>x.en===label)?.value;
+ assert.equal(at('Secretary Name'),'SECRETARY CURRENT');
+ assert.equal(at('Secretary NRIC'),'555555-08-5555');
+ assert.equal(at('Practising Certificate Number'),'PC 2026-001');
+ assert.equal(at('Professional Membership'),'MAICSA 88888');
+ assert.equal(at('Date of Birth'),'16/05/1978');
+ assert.equal(at('Gender'),'CONFIRMED GENDER');
+ assert.equal(at('Nationality / Race'),'MALAYSIAN');
+ assert.equal(at('Secretary Residential Address'),'IPOH');
+ assert.equal(at('Service / Business Address'),'KL SERVICE ADDRESS');
+ assert.equal(doc.particulars.find(x=>x.en==='Date of Birth')?.value||'','',
+  'director date of birth must not be overwritten');
+ assert.equal(value(doc,'Registered Office'),'','secretary-only update must not change other fields');
+ assert.equal(summary.kept,1);
+ assert.ok(summary.filled>=7);
+ assert.equal(input.particulars.slice(heading+1).find(x=>x.en==='Secretary Name').value,'',
+  'the existing draft must not be mutated');
+});
+test('former secretary appointments cannot prepopulate a current annual return',()=>{
+ const snapshot=structuredClone(source);
+ snapshot.sections.find(x=>x.title==='Register of Secretaries').blocks=[
+  group('Former'),record('FORMER SECRETARY','Former'),
+  field('Name','FORMER SECRETARY'),field('Identification No.','111111-00-1111')
+ ];
+ const input=cloneBlank();input.company.name='EXAMPLE SDN BHD';input.company.no='202601000001';
+ const {document:doc,summary}=importCombinedRegisterSnapshot(input,snapshot,{secretaryOnly:true});
+ assert.equal(value(doc,'Secretary Name'),'');
+ assert.equal(summary.filled,0);
+});
