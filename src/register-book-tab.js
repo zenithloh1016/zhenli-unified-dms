@@ -14,6 +14,7 @@ import {browserDownload,saveOrShareFile} from './file-transfer.js';
 import {mergeStatutoryRegisterEdits} from './statutory-register-conflict.js';
 import {Capacitor} from '@capacitor/core';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
+import {secretaryFromAnnualReturn,mergeSecretaryIntoBook} from './statutory-secretary-sync.js';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const act=(label,action,id='',style='secondary')=>'<button type="button" class="btn '+style+'" data-action="'+action+'" data-id="'+esc(id)+'">'+esc(label)+'</button>';
@@ -318,7 +319,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  function render(){
   return '<section class="rb-workspace"><div class="content-header"><div><p class="eyebrow">COMPANY STATUTORY RECORDS</p>'+
     '<h1>Statutory Registers</h1><p class="muted">View, edit, privately save and export your companies’ statutory registers as PDF.</p></div>'+
-    '<div class="header-buttons">'+act('↑ Import Register Book ZIP','sr-pick','','primary')+
+    '<div class="header-buttons">'+(state.selectedId?'':act('Sync Secretaries from Annual Return','sr-sync-secretaries'))+act('↑ Import Register Book ZIP','sr-pick','','primary')+
     act('Refresh','rb-refresh')+'</div></div>'+
     (state.error?'<div class="rb-error" role="alert">'+esc(state.error)+'</div>':'')+
     (state.message?'<p class="rb-help" role="status">'+esc(state.message)+'</p>':'')+
@@ -811,7 +812,67 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     (failed.length?' Errors: '+failed.slice(0,3).join(' | '):'');
   }finally{state.saving=false;notify();}
  }
- async function pdf({combined=false}={}){
+ 
+  /**
+   * Company-ID-matched, authenticated import from existing Annual Return cloud drafts.
+   * Each changed register receives its usual private version backup.
+   */
+  async function syncSecretariesFromAnnualReturns(){
+   if(state.saving||state.loading)throw Error('Another register operation is still running.');
+   if(state.dirty||state.selectedId)throw Error('Return to All Companies and save or discard any unsaved register edits first.');
+   const user=getUser?.();
+   if(!user?.id)throw Error('Sign in to access saved Annual Return drafts.');
+   const uid=user.id;
+   const {data,error}=await db.from('annual_return_drafts')
+    .select('company_id,payload').eq('user_id',uid);
+   if(error)throw Error('Unable to read existing Annual Return drafts: '+error.message);
+   const companies=new Map((getCompanies?.()||[]).filter(c=>c.user_id===uid).map(c=>[c.id,c]));
+   const targets=(data||[]).filter(d=>companies.has(d.company_id));
+   if(!targets.length){status('No matching saved Annual Return drafts were found.');return;}
+   if(!window.confirm('Sync secretary information from '+targets.length+' saved Annual Return drafts into their matching company Register of Secretaries?\n\n' +
+     'Only empty particulars will be filled and missing secretary entries added. Existing register values, historical entries and appointment/cessation dates will be kept. Each modified register is backed up in Previous Versions.'))return;
+   state.saving=true;state.error='';
+   const summary={updated:0,added:0,filled:0,unchanged:0,conflicts:0,skipped:0,failures:[]};
+   try{
+    for(let i=0;i<targets.length;i++){
+     if(getUser?.()?.id!==uid)throw Error('Signed-in account changed during synchronization.');
+     const draft=targets[i],company=companies.get(draft.company_id);
+     try{
+      const nameInDraft=String(draft.payload?.company?.name||'').trim().replace(/\s+/g,' ').toUpperCase();
+      const expectedName=String(company.name||'').trim().replace(/\s+/g,' ').toUpperCase();
+      if(nameInDraft!==expectedName){summary.skipped++;summary.failures.push(company.name+': company name mismatch');continue;}
+      const secretary=secretaryFromAnnualReturn(draft.payload);
+      if(!secretary){summary.skipped++;summary.failures.push(company.name+': secretary details missing');continue;}
+      const existing=await remoteBook(uid,company.id);
+      const book=structuredClone(existing||makeRegisterBook(company));
+      ensureReferenceParticulars(book);
+      const result=mergeSecretaryIntoBook(book,secretary);
+      summary.conflicts+=result.conflicts;
+      if(!result.changed){
+       if(result.skipped){summary.skipped++;summary.failures.push(company.name+': '+result.skipped);}
+       else summary.unchanged++;
+       continue;
+      }
+      validateRegisterBook(book);
+      await writeBook(book,{expectedUpdatedAt:existing?.updatedAt||null,baseBook:existing||makeRegisterBook(company)});
+      summary.updated++;summary.added+=result.added;summary.filled+=result.filled;
+     }catch(e){
+      summary.skipped++;
+      summary.failures.push(company.name+': '+String(e?.message||e));
+     }
+     if(i%3===2||i===targets.length-1){
+      state.message='Secretary import: processed '+(i+1)+' of '+targets.length+' saved Annual Return drafts…';
+      notify();
+     }
+    }
+    state.message='Secretary import finished: '+summary.updated+' company register(s) updated; '+
+     summary.added+' new secretary entry/entries; '+summary.filled+' blank fields filled; '+
+     summary.unchanged+' already current; '+summary.skipped+' skipped. '+
+     (summary.conflicts?summary.conflicts+' existing discrepancies retained for review. ':'')+
+     (summary.failures.length?'Review: '+summary.failures.slice(0,4).join(' | '):'Originals and historical versions preserved.');
+   }finally{state.saving=false;notify();}
+  }
+  async function pdf({combined=false}={}){
   if(!state.book)throw Error('Select a company.');
   state.saving=true;state.error='';status('Generating statutory register PDF…');
   try{
@@ -831,6 +892,6 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  function search(value){state.search=String(value||'');state.page=0;notify();}
  function searchReview(value){state.reviewQuery=String(value||'');state.reviewPage=0;state.reviewExpanded='';notify();}
  return {state,afterRender,reset,canLeave,load,render,search,openCompany,closeCompany,updateCell,command,
-  readZip,importZip,save,pdf,downloadOriginal,searchReview,
+  readZip,importZip,save,syncSecretariesFromAnnualReturns,pdf,downloadOriginal,searchReview,
   openHistory,previewHistory,restoreHistory,discardUnsaved};
 }
