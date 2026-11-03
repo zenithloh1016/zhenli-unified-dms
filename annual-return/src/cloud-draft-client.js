@@ -183,5 +183,5 @@ export function createCloudDraftClient({getCompanyId,getScope,getDocument,applyD
   session++;activeId=null;revision=0;ready=false;dirty=false;conflict=false;saving=false;
   if(timer){clearTimeout(timer);timer=null;}
  }
- return {receive,open,markEdited,syncNow,remove,reset};
+ return {receive,open,markEdited,syncNow,remove,reset,isReady:()=>ready&&!conflict};
 }
