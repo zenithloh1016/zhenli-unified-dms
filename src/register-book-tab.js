@@ -14,7 +14,7 @@ import {browserDownload,saveOrShareFile} from './file-transfer.js';
 import {mergeStatutoryRegisterEdits} from './statutory-register-conflict.js';
 import {Capacitor} from '@capacitor/core';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
-import {secretaryFromAnnualReturn,mergeSecretaryIntoBook} from './statutory-secretary-sync.js';
+import {secretaryFromAnnualReturn,unanimousSecretaryReferences,mergeSecretaryIntoBook} from './statutory-secretary-sync.js';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const act=(label,action,id='',style='secondary')=>'<button type="button" class="btn '+style+'" data-action="'+action+'" data-id="'+esc(id)+'">'+esc(label)+'</button>';
@@ -319,7 +319,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  function render(){
   return '<section class="rb-workspace"><div class="content-header"><div><p class="eyebrow">COMPANY STATUTORY RECORDS</p>'+
     '<h1>Statutory Registers</h1><p class="muted">View, edit, privately save and export your companies’ statutory registers as PDF.</p></div>'+
-    '<div class="header-buttons">'+(state.selectedId?'':act('Sync Secretaries from Annual Return','sr-sync-secretaries'))+act('↑ Import Register Book ZIP','sr-pick','','primary')+
+    '<div class="header-buttons">'+(state.selectedId?'':act('Sync Secretaries Across Companies','sr-sync-secretaries'))+act('↑ Import Register Book ZIP','sr-pick','','primary')+
     act('Refresh','rb-refresh')+'</div></div>'+
     (state.error?'<div class="rb-error" role="alert">'+esc(state.error)+'</div>':'')+
     (state.message?'<p class="rb-help" role="status">'+esc(state.message)+'</p>':'')+
@@ -819,60 +819,95 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    */
   async function syncSecretariesFromAnnualReturns(){
    if(state.saving||state.loading)throw Error('Another register operation is still running.');
-   if(state.dirty||state.selectedId)throw Error('Return to All Companies and save or discard any unsaved register edits first.');
+   if(state.dirty||state.selectedId)
+    throw Error('Return to All Companies and save or discard any unsaved register edits first.');
    const user=getUser?.();
-   if(!user?.id)throw Error('Sign in to access saved Annual Return drafts.');
+   if(!user?.id)throw Error('Sign in to access saved company registers.');
    const uid=user.id;
    const {data,error}=await db.from('annual_return_drafts')
     .select('company_id,payload').eq('user_id',uid);
    if(error)throw Error('Unable to read existing Annual Return drafts: '+error.message);
-   const companies=new Map((getCompanies?.()||[]).filter(c=>c.user_id===uid).map(c=>[c.id,c]));
-   const targets=(data||[]).filter(d=>companies.has(d.company_id));
-   if(!targets.length){status('No matching saved Annual Return drafts were found.');return;}
-   if(!window.confirm('Sync secretary information from '+targets.length+' saved Annual Return drafts into their matching company Register of Secretaries?\n\n' +
-     'Only empty particulars will be filled and missing secretary entries added. Existing register values, historical entries and appointment/cessation dates will be kept. Each modified register is backed up in Previous Versions.'))return;
+   const companies=(getCompanies?.()||[]).filter(c=>c?.id&&c.user_id===uid);
+   const byCompany=new Map(companies.map(c=>[c.id,c]));
+   const drafts=new Map();
+   const invalidDrafts=new Set();
+   for(const draft of data||[]){
+    const company=byCompany.get(draft.company_id);
+    if(!company)continue;
+    const sourceName=String(draft.payload?.company?.name||'').trim().replace(/\s+/g,' ').toUpperCase();
+    const companyName=String(company.name||'').trim().replace(/\s+/g,' ').toUpperCase();
+    if(sourceName!==companyName){invalidDrafts.add(company.id);continue;}
+    drafts.set(company.id,draft.payload);
+   }
+   const references=unanimousSecretaryReferences([...drafts.values()]);
+   if(!drafts.size && !references.length){
+    status('No matching Annual Return secretary information is available. Nothing changed.');return;
+   }
+   if(!window.confirm('Synchronize secretary particulars across all '+companies.length+' companies?\n\n'+
+     drafts.size+' companies have their own saved Annual Return drafts. For other companies, only a secretary whose identity already appears in the company Register of Secretaries will receive matching, consistent particulars from the Annual Return reference.\n\n'+
+     'No new appointments, cessations or company-secretary identities will be assumed. Existing differing fields will stay unchanged. Each modified register is backed up.'))return;
    state.saving=true;state.error='';
-   const summary={updated:0,added:0,filled:0,unchanged:0,conflicts:0,skipped:0,failures:[]};
+   const summary={updated:0,fromDraft:0,matchedOther:0,added:0,filled:0,unchanged:0,
+    noSource:0,conflicts:0,failed:[]};
    try{
-    for(let i=0;i<targets.length;i++){
+    for(let i=0;i<companies.length;i++){
      if(getUser?.()?.id!==uid)throw Error('Signed-in account changed during synchronization.');
-     const draft=targets[i],company=companies.get(draft.company_id);
+     const company=companies[i];
      try{
-      const nameInDraft=String(draft.payload?.company?.name||'').trim().replace(/\s+/g,' ').toUpperCase();
-      const expectedName=String(company.name||'').trim().replace(/\s+/g,' ').toUpperCase();
-      if(nameInDraft!==expectedName){summary.skipped++;summary.failures.push(company.name+': company name mismatch');continue;}
-      const secretary=secretaryFromAnnualReturn(draft.payload);
-      if(!secretary){summary.skipped++;summary.failures.push(company.name+': secretary details missing');continue;}
+      if(invalidDrafts.has(company.id)){
+       summary.noSource++;summary.failed.push(company.name+': saved Annual Return name mismatch');continue;
+      }
+      const specific=drafts.get(company.id);
+      const secretary=specific?secretaryFromAnnualReturn(specific):null;
+      if(specific&&!secretary){
+       summary.noSource++;summary.failed.push(company.name+': secretary details absent');continue;
+      }
       const existing=await remoteBook(uid,company.id);
+      // A blank register template alone does not substantiate an appointment.
+      if(!specific&&!existing){summary.noSource++;continue;}
       const book=structuredClone(existing||makeRegisterBook(company));
       ensureReferenceParticulars(book);
-      const result=mergeSecretaryIntoBook(book,secretary);
-      summary.conflicts+=result.conflicts;
-      if(!result.changed){
-       if(result.skipped){summary.skipped++;summary.failures.push(company.name+': '+result.skipped);}
-       else summary.unchanged++;
+      const results=secretary?
+       [mergeSecretaryIntoBook(book,secretary)]:
+       references.map(person=>mergeSecretaryIntoBook(book,person,{matchExistingOnly:true}));
+      const changes=results.filter(r=>r.changed);
+      summary.conflicts+=results.reduce((n,r)=>n+r.conflicts,0);
+      if(!changes.length){
+       const relevant=results.some(r=>!r.skipped);
+       if(relevant)summary.unchanged++;
+       else summary.noSource++;
        continue;
       }
       validateRegisterBook(book);
-      await writeBook(book,{expectedUpdatedAt:existing?.updatedAt||null,baseBook:existing||makeRegisterBook(company)});
-      summary.updated++;summary.added+=result.added;summary.filled+=result.filled;
+      await writeBook(book,{
+       expectedUpdatedAt:existing?.updatedAt||null,
+       baseBook:existing||makeRegisterBook(company)
+      });
+      summary.updated++;
+      if(specific)summary.fromDraft++;else summary.matchedOther++;
+      summary.added+=changes.reduce((n,r)=>n+r.added,0);
+      summary.filled+=changes.reduce((n,r)=>n+r.filled,0);
      }catch(e){
-      summary.skipped++;
-      summary.failures.push(company.name+': '+String(e?.message||e));
-     }
-     if(i%3===2||i===targets.length-1){
-      state.message='Secretary import: processed '+(i+1)+' of '+targets.length+' saved Annual Return drafts…';
-      notify();
+      summary.failed.push(company.name+': '+String(e?.message||e));
+     }finally{
+      if(i%5===4||i===companies.length-1){
+       state.message='Checking secretary particulars: '+(i+1)+' of '+companies.length+' companies…';
+       notify();
+      }
      }
     }
-    state.message='Secretary import finished: '+summary.updated+' company register(s) updated; '+
-     summary.added+' new secretary entry/entries; '+summary.filled+' blank fields filled; '+
-     summary.unchanged+' already current; '+summary.skipped+' skipped. '+
-     (summary.conflicts?summary.conflicts+' existing discrepancies retained for review. ':'')+
-     (summary.failures.length?'Review: '+summary.failures.slice(0,4).join(' | '):'Originals and historical versions preserved.');
+    state.message='Secretary sync completed: '+summary.updated+' company register(s) updated ('+
+     summary.fromDraft+' from their own Annual Return, '+summary.matchedOther+
+     ' matched in other registers); '+summary.added+' new secretary entries; '+
+     summary.filled+' blank particulars filled; '+summary.unchanged+' already matched; '+
+     summary.noSource+' without sufficient matching secretary evidence; '+
+     summary.failed.length+' errors. '+
+     (summary.conflicts?summary.conflicts+' differing or ambiguous values preserved. ':'')+
+     (summary.failed.length?'Review: '+summary.failed.slice(0,4).join(' | '):
+      'Existing and former appointments remain unchanged; private backups preserved.');
    }finally{state.saving=false;notify();}
   }
-  async function pdf({combined=false}={}){
+    async function pdf({combined=false}={}){
   if(!state.book)throw Error('Select a company.');
   state.saving=true;state.error='';status('Generating statutory register PDF…');
   try{
