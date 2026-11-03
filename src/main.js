@@ -860,6 +860,7 @@ ROOT.addEventListener('click', event=>{
   if(signingSupabaseUI.onClick(a,id,event))return;
   if(a==='rb-refresh'){busyDo(()=>registerBookUI.load(true));return;}
   if(a==='sr-pick'){ROOT.querySelector('#sr-zip-input')?.click();return;}
+  if(a==='sr-sync-secretaries'){busyDo(()=>registerBookUI.syncSecretariesFromAnnualReturns());return;}
   if(a==='sr-open'){busyDo(()=>registerBookUI.openCompany(id));return;}
   if(a==='sr-save'){busyDo(()=>registerBookUI.save());return;}
   if(a==='sr-force-save'){busyDo(()=>registerBookUI.save({force:true}));return;}
