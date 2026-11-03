@@ -59,7 +59,7 @@ document.addEventListener('keydown',event=>{
 
 let draftScope=window.parent===window?'standalone':'dms:pending',newDraftId='new-'+Date.now().toString(36),draftTimer=null;
 let selectedDmsCompanyId=null,dmsCompanies=[],cloudDrafts=[];
-let pendingRegisterImport='';
+let pendingRegisterImport='',pendingSecretaryImport='';
 const cloudDraft=createCloudDraftClient({
  getCompanyId:()=>selectedDmsCompanyId,
  getScope:()=>draftScope,
@@ -76,6 +76,23 @@ const cloudDraft=createCloudDraftClient({
    window.parent.postMessage({type:'ZHENLI_AR_CLOUD_DRAFT_LIST_REFRESH'},window.location.origin);
  }
 });
+// Fill only blank secretary particulars after the current cloud draft is loaded.
+function requestSecretaryRegisterImport(companyId){
+ if(window.parent===window||!companyId||companyId!==selectedDmsCompanyId||
+    !cloudDraft.isReady()||pendingRegisterImport||pendingSecretaryImport)return;
+ pendingSecretaryImport='ar_register_secretary_'+Date.now().toString(36);
+ window.parent.postMessage({
+  type:'ZHENLI_DMS_AR_IMPORT_COMBINED_REQUEST',
+  id:pendingSecretaryImport,companyId
+ },window.location.origin);
+}
+function loadCloudThenSecretary(options={}){
+ const companyId=selectedDmsCompanyId;
+ void cloudDraft.open(options).then(()=>{
+  if(companyId===selectedDmsCompanyId&&cloudDraft.isReady())
+   requestSecretaryRegisterImport(companyId);
+ }).catch(error=>console.warn('Annual Return cloud load:',error));
+}
 function currentDraftId(){return selectedDmsCompanyId||newDraftId;}
 function hasDraftData(){return JSON.stringify(doc.particulars)!==DEFAULT_PARTICULARS||
  Boolean(doc.company?.name||doc.company?.no||doc.signatureDirector?.name||doc.signatureDirector?.nric);}
@@ -242,7 +259,7 @@ function applyDmsCompany(company){
  if(!isValidCompanyRecord(company))return {ok:false,reason:'Invalid company record from DMS.'};
  const name=company.name.trim(),registrationNo=company.registrationNo.trim();
  if(selectedDmsCompanyId===company.id&&doc.company.name===name&&doc.company.no===registrationNo){
-  void cloudDraft.open({force:true});
+  loadCloudThenSecretary({force:true});
   const fixed=removeRsshChargeTwoOnce();
   if(fixed)status(fixed);
   return {ok:true};
@@ -262,6 +279,7 @@ function applyDmsCompany(company){
    else if(doc.particulars[i].en==='Company Registration No.'){doc.particulars[i].value=registrationNo;setCompanyDetail(doc,i,registrationNo);}
  }
  selectedDmsCompanyId=company.id;
+ pendingSecretaryImport='';
  generated=null;$('download-box').hidden=true;
  let previous=null;
  try{previous=readAnnualReturnDraft(localStorage,draftScope,company.id);}
@@ -270,7 +288,7 @@ function applyDmsCompany(company){
  resetView();draftOptions();
  const restored=restoreRsshSavedDraftOnce();
  const chargeRemoved=removeRsshChargeTwoOnce();
- void cloudDraft.open({force:true});
+ loadCloudThenSecretary({force:true});
  status('Company loaded from DMS Documents: '+name+(registrationNo?' ('+registrationNo+')':' — registration number missing; please enter it before PDF generation')+'. '+restored+chargeRemoved+'Complete and verify all remaining statutory particulars.');
  return {ok:true};
 }
@@ -297,7 +315,7 @@ if(window.parent!==window){
      }catch(error){console.warn('Annual Return deleted-company draft cleanup:',error);}
     }
     draftOptions();
-    if(selectedDmsCompanyId)void cloudDraft.open();
+    if(selectedDmsCompanyId)loadCloudThenSecretary();
    }
    renderSections();return;
   }
@@ -308,7 +326,27 @@ if(window.parent!==window){
    draftOptions();return;
   }
   if(event.data?.type==='ZHENLI_DMS_AR_IMPORT_COMBINED_RESPONSE'){
-   if(!pendingRegisterImport||event.data.id!==pendingRegisterImport)return;
+   const automatic=Boolean(pendingSecretaryImport&&event.data.id===pendingSecretaryImport);
+   if(!automatic&&(!pendingRegisterImport||event.data.id!==pendingRegisterImport))return;
+   if(automatic){
+    pendingSecretaryImport='';
+    // Newly created companies can have no saved register; leave drafts alone.
+    if(!event.data.ok||!cloudDraft.isReady())return;
+    try{
+     const payload=event.data.payload;
+     if(payload?.companyId!==selectedDmsCompanyId)return;
+     const result=importCombinedRegisterSnapshot(doc,payload,{secretaryOnly:true});
+     if(result.summary.filled>0){
+      if(!flushDraft())throw Error('Current draft could not be backed up.');
+      doc=result.document;
+      generated=null;$('download-box').hidden=true;
+      renderSections();queueDraftSave();
+      status('Company Secretary particulars populated from the saved Register of Secretaries ('+
+       result.summary.filled+' blank fields). Existing values kept; verify before filing.');
+     }
+    }catch(error){status('Secretary pre-population could not be applied: '+error.message,true);}
+    return;
+   }
    pendingRegisterImport='';
    const button=$('import-combined-register');if(button)button.disabled=false;
    if(!event.data.ok){
