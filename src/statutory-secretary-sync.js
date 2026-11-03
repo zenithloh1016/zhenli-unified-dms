@@ -64,6 +64,39 @@ export function secretaryFromAnnualReturn(document) {
   return meaningful(result.Name) ? result : null;
 }
 
+
+/**
+ * Build a reusable reference only from particulars that agree across all
+ * drafts for the SAME verified identification number. Inconsistent addresses
+ * are deliberately omitted rather than transferred between companies.
+ */
+export function unanimousSecretaryReferences(documents){
+  const grouped=new Map();
+  for(const document of documents||[]){
+    const person=secretaryFromAnnualReturn(document);
+    if(!person || !meaningful(person['Identification No.']))continue;
+    const id=personKey(person['Identification No.']);
+    if(!id)continue;
+    if(!grouped.has(id))grouped.set(id,[]);
+    grouped.get(id).push(person);
+  }
+  const references=[];
+  for(const people of grouped.values()){
+    const names=new Set(people.map(p=>personKey(p.Name)));
+    if(names.size!==1 || names.has(''))continue;
+    const safe={};
+    const allKeys=[...new Set(people.flatMap(p=>Object.keys(p)))];
+    for(const field of allKeys){
+      const values=people.map(p=>p[field]).filter(meaningful);
+      if(!values.length)continue;
+      const distinct=new Set(values.map(v=>field==='Identification No.'?personKey(v):norm(v)));
+      if(distinct.size===1)safe[field]=values[0];
+    }
+    if(meaningful(safe.Name) && meaningful(safe['Identification No.']))references.push(safe);
+  }
+  return references;
+}
+
 function tableHeader(sheet) {
   const rows=sheet?.rows||[];
   for(let i=0;i<Math.min(rows.length,40);i++) {
@@ -90,7 +123,7 @@ function rowAsObject(row,mapped) {
 }
 
 /** Fill blanks only, never replace recorded facts or reactivate former people. */
-export function mergeSecretaryIntoBook(book, incoming) {
+export function mergeSecretaryIntoBook(book, incoming, {matchExistingOnly=false}={}) {
   const result={changed:false,added:0,filled:0,conflicts:0,skipped:''};
   if(!book || !Array.isArray(book.sheets) || !meaningful(incoming?.Name)) {
     result.skipped='No secretary particulars or register book'; return result;
@@ -98,6 +131,7 @@ export function mergeSecretaryIntoBook(book, incoming) {
   const secretarySheets=book.sheets.map((sheet,index)=>({sheet,index,header:tableHeader(sheet)}))
     .filter(v=>isSecretarySheet(v.sheet));
   if(!secretarySheets.length) {
+    if(matchExistingOnly){result.skipped='No recorded Register of Secretaries';return result;}
     if(book.sheets.length>=100){result.skipped='Maximum register sections reached';return result;}
     const sheet={name:'Register of Secretaries',rows:[canonical.slice()]};
     book.sheets.push(sheet);
@@ -157,6 +191,7 @@ export function mergeSecretaryIntoBook(book, incoming) {
     result.conflicts++;
     return result;
   }
+  if(matchExistingOnly){result.skipped='No verified matching secretary entry';return result;}
   // Append only to the canonical sheet; preserve imported history.
   const primary=usable.find(x=>/^register of secretaries$/i.test(norm(x.sheet.name)))||usable[0];
   const row=Array.from({length:primary.header.mapped.length},()=> '');
