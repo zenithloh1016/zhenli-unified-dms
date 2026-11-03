@@ -56,24 +56,33 @@ test('member paid per-share setting can be changed and reset from register UI',a
  const folio=tab.state.book.sheets[folioIndex];
  const nameRow=folio.rows.findIndex(r=>r[0]==='Name:');
  folio.rows.find(r=>r[0]==='Total Shares Held:')[1]='100000';
- const previous=globalThis.window;
+ const previousWindow=globalThis.window,previousDocument=globalThis.document;
  let answer='1';
- globalThis.window={prompt(){return answer}};
+ globalThis.window={};
+ globalThis.document={getElementById:id=>id==='sr-rate-input'?{value:answer}:null};
  try{
   assert.match(tab.render(),/Set RM\/share/);
   tab.command('sr-set-consideration-rate',folioIndex+':'+nameRow);
+  assert.match(tab.render(),/id="sr-rate-input"/);
+  tab.command('sr-apply-consideration-rate');
   assert.equal(tab.state.book.memberShareRates[folioIndex+':'+nameRow],'1');
   assert(tab.render().includes('RM100,000'));
   folio.rows.find(r=>r[0]==='Total Shares Held:')[1]='200000';
   assert(tab.render().includes('RM200,000'));
   answer='';
   tab.command('sr-set-consideration-rate',folioIndex+':'+nameRow);
+  tab.command('sr-apply-consideration-rate');
   assert(tab.render().includes('Not recorded'));
   assert.equal(tab.state.book.memberShareRates[folioIndex+':'+nameRow],undefined);
   answer='not a rate';
-  assert.throws(()=>tab.command('sr-set-consideration-rate',folioIndex+':'+nameRow),
-   /valid non-negative RM rate/);
- }finally{globalThis.window=previous;}
+  tab.command('sr-set-consideration-rate',folioIndex+':'+nameRow);
+  tab.command('sr-apply-consideration-rate');
+  assert.match(tab.state.error,/valid non-negative RM rate/);
+  assert.equal(tab.state.rateEditor.rate,'not a rate');
+  assert.equal(tab.state.book.memberShareRates[folioIndex+':'+nameRow],undefined);
+  tab.command('sr-cancel-consideration-rate');
+  assert.equal(tab.state.rateEditor,null);
+ }finally{globalThis.window=previousWindow;globalThis.document=previousDocument;}
 });
 test('former shareholders show their transfer history but no rate-adjustment button',()=>{
  const b=book();
