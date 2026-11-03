@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import {strict as assert} from 'node:assert';
-import {secretaryFromAnnualReturn,mergeSecretaryIntoBook} from '../src/statutory-secretary-sync.js';
+import {secretaryFromAnnualReturn,unanimousSecretaryReferences,mergeSecretaryIntoBook} from '../src/statutory-secretary-sync.js';
 const draft={particulars:[
  {type:'section',en:'SECTION D - DIRECTORS'},
  {type:'field',en:'Date of Birth',value:'99/99/9999'},
@@ -57,4 +57,49 @@ test('skips ambiguous duplicated secretary identity',()=>{
  b.sheets[0].rows.push(['Jane Secretary','','','','780516-14-5295']);
  const p=mergeSecretaryIntoBook(b,secretaryFromAnnualReturn(draft));
  assert.equal(p.changed,false);assert.ok(p.conflicts);
+});
+
+test('cross-company import never creates a new secretary appointment',()=>{
+ const b=book();
+ const r=mergeSecretaryIntoBook(b,secretaryFromAnnualReturn(draft),{matchExistingOnly:true});
+ assert.equal(r.changed,false);assert.equal(r.added,0);
+ assert.equal(b.sheets[0].rows.length,1);
+});
+test('cross-company import enriches only the existing matching secretary',()=>{
+ const b=book();
+ b.sheets[0].rows.push(['Jane Secretary','','','','780516145295','','','02/02/2024','']);
+ const r=mergeSecretaryIntoBook(b,secretaryFromAnnualReturn(draft),{matchExistingOnly:true});
+ assert.equal(r.changed,true);assert.equal(r.added,0);
+ assert.equal(b.sheets[0].rows[1][1],'202208000750');
+ assert.equal(b.sheets[0].rows[1][7],'02/02/2024');
+});
+test('cross-company import ignores another person with a different identity',()=>{
+ const b=book();
+ b.sheets[0].rows.push(['Different Secretary','','','','760502145422','','','01/03/2021','']);
+ const r=mergeSecretaryIntoBook(b,secretaryFromAnnualReturn(draft),{matchExistingOnly:true});
+ assert.equal(r.changed,false);assert.equal(r.added,0);
+ assert.equal(b.sheets[0].rows[1][0],'Different Secretary');
+});
+test('consensus excludes conflicting addresses but keeps verified identity and qualifications',()=>{
+ const a=structuredClone(draft),b=structuredClone(draft);
+ b.particulars.find(p=>p.en==='Secretary Residential Address').value='Other Address';
+ const refs=unanimousSecretaryReferences([a,b]);
+ assert.equal(refs.length,1);
+ assert.equal(refs[0].Name,'Jane Secretary');
+ assert.equal(refs[0]['Identification No.'],'780516-14-5295');
+ assert.equal(refs[0]['Membership No.'],'MIA27166');
+ assert.equal(refs[0]['Residential Address'],undefined);
+});
+test('consensus does not cross two different identity numbers',()=>{
+ const a=structuredClone(draft),b=structuredClone(draft);
+ b.particulars.find(p=>p.en==='Secretary NRIC').value='900101145218';
+ const refs=unanimousSecretaryReferences([a,b]);
+ assert.equal(refs.length,2);
+});
+test('historical secretary record not modified in cross-company mode',()=>{
+ const b=book();
+ b.sheets[0].rows.push(['Jane Secretary','','','','780516145295','','','','30/09/2024']);
+ const r=mergeSecretaryIntoBook(b,secretaryFromAnnualReturn(draft),{matchExistingOnly:true});
+ assert.equal(r.changed,false);
+ assert.equal(b.sheets[0].rows[1][1],'');
 });
