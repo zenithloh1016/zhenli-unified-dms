@@ -89,11 +89,16 @@ const charges={
 };
 const secretaries={
  'Secretary Name':[/^(?:secretary )?name$/i,/^full name$/i],
- 'Secretary NRIC':[/^nric(?: no\.?)?$/i,/^identification (?:no|number)$/i],
- 'Professional Membership':[/^professional membership$/i,/membership(?: no| number)?/i],
- 'Practising Certificate Number':[/^practising certificate(?: number| no)?$/i],
- 'Nationality / Race':[/^nationality(?: \/ race)?$/i],
- 'Secretary Residential Address':[/^residential address$/i]
+ 'Secretary NRIC':[/^nric(?: no\.?)?$/i,/^identification (?:no\.?|number)$/i,/^nric \/ passport no\.?$/i],
+ 'Date of Birth':[/^date of birth$/i,/^dob$/i],
+ 'Gender':[/^gender$/i],
+ 'Professional Membership':[/^professional membership$/i,/^membership(?: no\.?| number)?$/i],
+ 'Practising Certificate Number':[/^ssm practi[cs]ing certificate (?:no\.?|number)$/i,
+  /^practi[cs]ing certificate (?:no\.?|number)$/i],
+ 'Nationality / Race':[/^nationality(?: \/ race)?$/i,/^nationality$/i],
+ 'Secretary Residential Address':[/^residential address$/i,/^address$/i],
+ 'Service / Business Address':[/^service address$/i,/^service \/ business address$/i,
+  /^business address$/i]
 };
 function addMissingBlocks(items,template,sectionRe,headingRe,count,limit=1200){
  const indexes=[];
@@ -127,7 +132,7 @@ function blocksOf(items,headingRe){
  }
  return result;
 }
-export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=false}={}){
+export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=false,secretaryOnly=false}={}){
  if(snapshot?.version!==1||!Array.isArray(snapshot.sections)||
     snapshot.sections.length>100||!snapshot.companyId||!snapshot.companyName)
   throw Error('Invalid combined statutory register data.');
@@ -145,10 +150,26 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
   if(!overwrite&&exists(cell.value)){changes.kept++;return;}
   cell.value=cleanValue(value);changes.filled++;
  };
- write(doc.particulars,'Company Name',snapshot.companyName);
- write(doc.particulars,'Company Registration No.',snapshot.registrationNo||'');
+ if(!secretaryOnly){
+  write(doc.particulars,'Company Name',snapshot.companyName);
+  write(doc.particulars,'Company Registration No.',snapshot.registrationNo||'');
+ }
  const sections=snapshot.sections;
  const findSection=re=>sections.find(s=>re.test(s.title||''));
+ // Repeated labels belong to the secretary heading, not the first director.
+ const populateSecretary=()=>{
+  const sec=getRecords(findSection(/^register of secretaries$/i)||{blocks:[]})[0];
+  if(!sec)return;
+  const secretaryFields=blocksOf(doc.particulars,/^COMPANY SECRETARY$/i)[0]||[];
+  for(const [target,patterns] of Object.entries(secretaries)){
+   const value=select(sec.fields,...patterns);
+   write(secretaryFields,target,/^Date /.test(target)?safeDate(value):value);
+  }
+ };
+ if(secretaryOnly){
+  populateSecretary();
+  return {document:doc,summary:changes};
+ }
  const profile=profileFields(findSection(/^company details$/i)||{blocks:[]});
  const profileMap={
   'Former Name':[/^former name$/i],
@@ -194,9 +215,7 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
  transfer(/^register of charges$/i,/^REGISTERED CHARGE \d+$/i,charges,'charges');
  // Charge headings and details are transferred individually above. The retired
  // Number of Registered Charges field must not be recreated from an import.
- const sec=getRecords(findSection(/^register of secretaries$/i)||{blocks:[]})[0];
- if(sec)for(const [target,patterns] of Object.entries(secretaries))
-  write(doc.particulars,target,select(sec.fields,...patterns));
+ populateSecretary();
  // No guesswork about total issued shares, capital amounts, AR year, BO
  // ownership criteria, outstanding debt, issued class, or MSIC codes.
  doc.company.name=txt(doc.particulars.find(p=>p.en==='Company Name')?.value)||snapshot.companyName;
