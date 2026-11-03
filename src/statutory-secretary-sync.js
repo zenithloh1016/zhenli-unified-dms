@@ -107,18 +107,23 @@ export function mergeSecretaryIntoBook(book, incoming) {
   if(!usable.length){result.skipped='Secretary register uses an unrecognised layout';return result;}
   const matches=[];
   let conflictingName=false;
+  let historicalMatch=false;
+  let unmatchedCurrent=false;
   for(const {sheet,index,header} of usable) {
     for(let r=header.row+1;r<sheet.rows.length;r++) {
       const row=sheet.rows[r];
       if(!Array.isArray(row))continue;
       const existing=rowAsObject(row,header.mapped);
       if(!meaningful(existing.Name))continue;
+      const ceased=header.mapped.some((field,col)=>field==='Cessation Date' && meaningful(row[col]));
+      const status=book.recordStatuses?.[index+':'+r];
       if(isSame(existing,incoming)){
-        const ceased=header.mapped.some((field,col)=>field==='Cessation Date' && meaningful(row[col]));
-        const status=book.recordStatuses?.[index+':'+r];
         if(!ceased && status!=='former')matches.push({sheet,index,rowIndex:r,header});
+        else historicalMatch=true;
       } else if(personKey(existing.Name)===personKey(incoming.Name)) {
         conflictingName=true;
+      } else if(!ceased && status!=='former') {
+        unmatchedCurrent=true;
       }
     }
   }
@@ -140,6 +145,16 @@ export function mergeSecretaryIntoBook(book, incoming) {
         result.conflicts++;
       }
     }
+    return result;
+  }
+  // An old ceased appointment never proves that the person has been reappointed.
+  // Equally, an unmatched current secretary may be a replacement or a co-secretary.
+  // Never infer those statutory events from the Annual Return draft alone.
+  if(historicalMatch || unmatchedCurrent){
+    result.skipped=historicalMatch?
+      'Former matching secretary needs reappointment verification':
+      'Existing current secretary needs appointment/cessation verification';
+    result.conflicts++;
     return result;
   }
   // Append only to the canonical sheet; preserve imported history.
