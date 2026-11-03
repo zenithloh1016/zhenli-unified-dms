@@ -34,11 +34,18 @@ test('fills blanks without changing appointment dates or existing differing deta
  assert.equal(p.added,0);assert.ok(p.filled>0);assert.ok(p.conflicts>=1);
  assert.equal(b.sheets[0].rows[1][3],'31/12/1977');assert.equal(b.sheets[0].rows[1][7],'01/01/2001');
 });
-test('never changes historical ceased secretary',()=>{
+test('does not invent reappointment for a historical ceased secretary',()=>{
  const b=book();b.sheets[0].rows.push(['Jane Secretary','','','','780516-14-5295','','','','01/01/2019']);
  const p=mergeSecretaryIntoBook(b,secretaryFromAnnualReturn(draft));
- assert.equal(p.added,1);assert.equal(b.sheets[0].rows.length,3);
+ assert.equal(p.changed,false);assert.equal(b.sheets[0].rows.length,2);
+ assert.match(p.skipped,/reappointment verification/i);
  assert.equal(b.sheets[0].rows[1][8],'01/01/2019');
+});
+test('does not invent the cessation of a different current secretary',()=>{
+ const b=book();b.sheets[0].rows.push(['Other Secretary','','','','850202140012','','','','']);
+ const p=mergeSecretaryIntoBook(b,secretaryFromAnnualReturn(draft));
+ assert.equal(p.changed,false);assert.equal(b.sheets[0].rows.length,2);
+ assert.match(p.skipped,/verification/i);
 });
 test('skips unknown secretary register layout',()=>{
  const b={sheets:[{name:'Register of Secretaries',rows:[['Some prose rather than table']]}]};
