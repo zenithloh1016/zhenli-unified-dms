@@ -17,7 +17,7 @@ export function auditorFromMasterListing(source,company){
  const matches=model.rows.filter(row=>{
   const info=companyData(model,row),rowReg=registered(info.registration);
   // A conflicting 12-digit registration always rejects a same-named row.
-  if(reg&&rowReg)return reg===rowReg;
+  if(reg&&rowReg)return reg===rowReg&&nameKey(info.name)===companyName;
   return nameKey(info.name)===companyName;
  });
  if(matches.length!==1)return null;
