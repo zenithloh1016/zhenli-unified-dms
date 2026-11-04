@@ -144,7 +144,7 @@ export async function buildStatutoryRegistersPdf(book,{sheetIndex=0,combined=fal
  async function drawField(label,value){
   const labelW=260,outerW=RM-LM,valueW=outerW-labelW;
   setFont(700,12);const labels=wrap(ctx,label,labelW-25);
-  setFont(400,13);const values=wrap(ctx,String(value??'')||' ',valueW-26);
+  setFont(400,13);const values=wrap(ctx,String(value??'').trim()?String(value):'-',valueW-26);
   const total=Math.max(labels.length,values.length);
   let offset=0;
   while(offset<total){
