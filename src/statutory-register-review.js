@@ -124,9 +124,16 @@ function isPlaceholder(row){
  const entries=rowCells(row);
  return !entries.length||entries.every(x=>absent(x.value)||/^0(?:\.0+)?$/.test(x.value));
 }
+// A separate recorded cessation/discharge date is authoritative for Former.
+function isCessationField(label){
+ const s=cleanLabel(label).toLowerCase();
+ return /^(?:cessation date|date of (?:cessation|resignation|termination|removal|discharge|satisfaction|release)|date ceased(?:\s+(?:to be|as)\s+(?:a\s+)?(?:director|member|beneficial owner|bo|secretary))?|date (?:a person )?ceases? to be\s+(?:a\s+)?(?:beneficial owner|bo|director|member|secretary))$/.test(s);
+}
+export function recordHasCessationDate(record){
+ return (record?.fields||[]).some(f=>isCessationField(f.label)&&!absent(f.value)&&tidy(f.value)!=='0');
+}
 function statusFor(fields){
- const end=fields.find(f=>/^(?:date of cessation|cessation date|date ceased|date of discharge|date of satisfaction|date of release|date ceased to be(?: a member)?|date of resignation|date of termination)$/i.test(f.label));
- if(end)return absent(end.value)?'current':'former';
+ if(recordHasCessationDate({fields}))return 'former';
  const status=fields.find(f=>/^(?:status|charge status|appointment status|active\/inactive)$/i.test(f.label));
  if(status){
   if(/(?:discharg|satisfi|releas|cease|resign|terminat|former|inactive|cancel)/i.test(status.value))return 'former';
@@ -409,6 +416,8 @@ export function ensureReferenceParticulars(book){
 }
 /** An explicit saved display classification never destroys original cessation data. */
 export function registerRecordStatus(book,si,record){
+ // Do not let an old manual Current flag override an actual cessation date.
+ if(recordHasCessationDate(record))return 'former';
  const saved=book?.recordStatuses?.[si+':'+record.row];
  if(saved==='former'||saved==='current')return saved;
  if(record.status==='former')return 'former';
