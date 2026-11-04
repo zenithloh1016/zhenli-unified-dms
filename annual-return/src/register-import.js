@@ -71,7 +71,14 @@ const members={
 };
 const bos={
  'Full Name':[/^full name$/i,/^name$/i],
- 'NRIC No.':[/^nric (?:no|number)$/i,/^identification (?:no|number)$/i],
+ // Target the current bilingual Annual Return BO field, not its retired
+ // "NRIC No." label. Registers may contain NRIC, passport or a generic ID.
+ 'NRIC / Passport No.':[
+  /^(?:nric|ic)(?: (?:no\.?|number))?(?:\s*\/\s*(?:passport|pp)(?: (?:no\.?|number))?)?$/i,
+  /^(?:passport|pp)(?: (?:no\.?|number))?$/i,
+  /^identification (?:no\.?|number)(?:\s*\/\s*passport (?:no\.?|number))?$/i,
+  /^identity card (?:no\.?|number)$/i
+ ],
  'Date of Birth':[/^date of birth$/i],
  'Nationality / Race':[/nationality/i],
  'Position / Occupation':[/^occupation$/i,/^position$/i,/business occupation/i],
