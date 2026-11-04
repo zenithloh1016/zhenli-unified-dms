@@ -56,6 +56,8 @@ function publicLinkBase() {
 }
 const allowedOrigins = () => {
   const list = env("DMS_ALLOWED_ORIGINS").split(",").map(x=>x.trim()).filter(Boolean);
+  // Capacitor Android serves the installed UNICOSEC app from this secure local origin.
+  list.push("https://localhost");
   try { list.push(publicLinkBase().origin); } catch { /* configuration error surfaced on link creation */ }
   return list;
 };
@@ -505,6 +507,37 @@ async function handleAdmin(action,req,body) {
     const d=r.documents.find(x=>x.id===body.documentId);if(!d)throw Error("Document missing");
     const b=rowError(await bucket().download(d.finalPath||d.path));
     return {pdf:b}; 
+  }
+  if(action==="delete-document"){
+    if(body.confirmation!=="DELETE DOCUMENT")throw Error("Type DELETE DOCUMENT exactly to confirm");
+    if(r.status!=="draft"||r.signers.some(s=>!!s.signedAt))
+      throw Error("Uploaded PDFs can only be removed from an unsigned draft");
+    if(!isUuid(body.documentId))throw Error("Invalid PDF document identifier");
+    const document=r.documents.find(d=>d.id===body.documentId);
+    if(!document)throw Error("PDF document not found in this draft");
+    if(document.finalPath)throw Error("Signed PDFs cannot be deleted");
+    const updatedAt=now();
+    // Remove the document and its signature boxes atomically before touching
+    // Storage, so concurrent activation or edits cannot leave broken requests.
+    const {data:updated,error:problem}=await table().update({
+      documents:r.documents.filter(d=>d.id!==document.id),
+      boxes:r.boxes.filter(b=>b.documentId!==document.id),
+      updated_at:updatedAt,
+      audit:[...r.audit,{event:"draft_pdf_removed",at:updatedAt,documentId:document.id,
+        filename:document.name}]
+    }).eq("id",r.id).eq("owner_id",user).eq("status","draft")
+      .eq("updated_at",r.updated_at).is("deleted_at",null)
+      .select("*").maybeSingle();
+    if(problem)throw Error(problem.message);
+    if(!updated)throw Error("Draft was changed; reload before deleting the PDF");
+    // Only remove this request's known original object via the Storage API,
+    // never by editing storage.objects or touching any completed PDF.
+    const validPath=user+"/"+r.id+"/original/"+document.id+".pdf";
+    const removed= document.path===validPath
+      ? await bucket().remove([validPath])
+      : {error:{message:"Storage path did not match"}};
+    return {request:await presentation(updated,true),removed:true,
+      storageDeleted:!removed.error,boxesRemoved:r.boxes.length-updated.boxes.length};
   }
   if(action==="upload"){
     if(r.status!=="draft"||r.documents.length>=8)throw Error("Draft allows no more than 8 documents");
