@@ -1163,7 +1163,7 @@ window.addEventListener('message',event=>{
  }
  if(event.data.type==='ZHENLI_DMS_AR_AUDITOR_REQUEST'){
    const requestId=event.data.id,requested=event.data.companyId;
-   if(typeof requestId!=='string'||!/^ar_auditor_[\\w-]{1,70}$/.test(requestId))return;
+   if(typeof requestId!=='string'||!/^ar_auditor_[\w-]{1,70}$/.test(requestId))return;
    const source=frame.contentWindow,user=state.user;
    const company=state.companies.find(c=>c.id===requested);
    const reply=(ok,auditor,error='')=>source?.postMessage({
