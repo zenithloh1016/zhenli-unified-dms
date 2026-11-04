@@ -28,7 +28,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   userId:'',loaded:false,loading:false,saving:false,error:'',message:'',
   search:'',page:0,available:new Set(),selectedId:null,book:null,
   originalUpdatedAt:null,baseBook:null,conflict:false,dirty:false,sheetIndex:0,rowPage:0,
-  reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:false,
+  reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:true,
   importPreview:null,importFilename:'',importing:false,originalDocs:[],
   historyOpen:false,historyItems:[],historyPreview:null,historyPreviewName:'',
   historyLoading:false,historyLoaded:false,rateEditor:null
@@ -41,7 +41,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  function reset(){
   Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,error:'',message:'',
    search:'',page:0,available:new Set(),selectedId:null,book:null,originalUpdatedAt:null,baseBook:null,conflict:false,
-   dirty:false,sheetIndex:0,rowPage:0,reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:false,
+   dirty:false,sheetIndex:0,rowPage:0,reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:true,
     importPreview:null,importFilename:'',importing:false,originalDocs:[],
     historyOpen:false,historyItems:[],historyPreview:null,historyPreviewName:'',
     historyLoading:false,historyLoaded:false,rateEditor:null});
