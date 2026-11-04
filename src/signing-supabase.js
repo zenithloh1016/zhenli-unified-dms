@@ -410,6 +410,13 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       deleteIntent={kind:'one',id:selected.id,company:selected.company,subject:selected.subject};
       message='';error=false;update();return true;
     }
+    if(action==='delete-document'){
+      if(detail?.status!=='draft')return feedback('Only unsigned drafts allow PDF removal.',true),true;
+      const pdf=detail.documents.find(d=>d.id===id);
+      if(!pdf)return feedback('PDF missing. Reload the signing draft.',true),true;
+      deleteIntent={kind:'document',requestId:detail.id,documentId:pdf.id,filename:pdf.name};
+      message='';error=false;update();return true;
+    }
     if(action==='delete-all'){
       if(totalRequests<1)return true;
       deleteIntent={kind:'all',count:totalRequests};
@@ -570,13 +577,24 @@ export function createSupabaseSigning({db,getCompanies,update}) {
     if(form?.id==='ns-confirm-delete'){
       const pending=deleteIntent;
       if(!pending)return feedback('No deletion selected. Choose a request first.',true),true;
-      const expected=pending.kind==='one'?'DELETE REQUEST':'DELETE ALL';
+      const expected=pending.kind==='document'?'DELETE DOCUMENT':
+        pending.kind==='one'?'DELETE REQUEST':'DELETE ALL';
       const typed=String(new FormData(form).get('confirm')||'');
       if(typed!==expected){
         feedback('Deletion cancelled. Type '+expected+' exactly to confirm.',true);
         return true;
       }
       work(async()=>{
+        if(pending.kind==='document'){
+          const result=await api('delete-document',{requestId:pending.requestId,
+            documentId:pending.documentId,confirmation:typed});
+          await open(pending.requestId);
+          feedback(result.storageDeleted
+            ?'Draft PDF removed. Associated signature boxes were cleared.'
+            :'Draft PDF removed, but storage cleanup requires attention. Other documents are unaffected.',
+            !result.storageDeleted);
+          return;
+        }
         const result=pending.kind==='one'
           ?await api('delete-one',{requestId:pending.id,confirmation:typed})
           :await api('delete-all',{expectedCount:pending.count,confirmation:typed});
