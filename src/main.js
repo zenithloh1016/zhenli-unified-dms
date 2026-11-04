@@ -1,6 +1,6 @@
 import {createSupabaseSigning} from './signing-supabase.js';
 import {annualReturnCloudAction} from './annual-return-cloud.js';
-import {syncAnnualReturnAfterRegisterSave} from './annual-return-register-sync.js';
+import {syncAnnualReturnAfterRegisterSave,annualReturnHistoryAction} from './annual-return-register-sync.js';
 import {auditorFromMasterListing} from './master-listing-auditor.js';
 import { createClient } from '@supabase/supabase-js';
 import readExcelFile from 'read-excel-file/browser';
@@ -1150,7 +1150,7 @@ window.addEventListener('message',event=>{
   const id=event.data.id,requested=event.data.companyId;
   const operation=event.data.operation;
   if(typeof id!=='string'||!/^ar_cloud_[\w-]{1,75}$/.test(id)||
-   !['load','save','delete'].includes(operation))return;
+   !['load','save','delete','list-history','restore-history'].includes(operation))return;
   const source=frame.contentWindow,user=state.user;
   const company=state.companies.find(c=>c.id===requested);
   const reply=(payload)=>source?.postMessage({
@@ -1162,9 +1162,13 @@ window.addEventListener('message',event=>{
   }
   void (async()=>{
    try{
-    const result=await annualReturnCloudAction(db,{
-     user,company,operation,document:event.data.document,revision:event.data.revision
-    });
+    const result=['list-history','restore-history'].includes(operation)?
+     await annualReturnHistoryAction(db,{
+      user,company,operation,filename:event.data.filename,revision:event.data.revision,bucket:BUCKET
+     }):
+     await annualReturnCloudAction(db,{
+      user,company,operation,document:event.data.document,revision:event.data.revision
+     });
     if(state.user?.id!==user.id||state.arSelectedCompanyId!==requested||
        state.tab!=='annual-return')return;
     reply({ok:true,...result});
