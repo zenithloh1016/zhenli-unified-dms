@@ -7,7 +7,7 @@ function fieldHtml(f,{showBlanks=false}={}){
  if(!showBlanks&&empty(f.value)&&!/^(?:name|full name|director name)$/i.test(f.label))return '';
  const value=String(f.value??'');
  return '<label class="sr-field"><span class="sr-field-label">'+esc(f.label)+'</span>'+
-  '<textarea class="rb-cell sr-field-input" data-r="'+f.row+'" data-c="'+f.col+
+  '<textarea placeholder="-" class="rb-cell sr-field-input" data-r="'+f.row+'" data-c="'+f.col+
   '" rows="'+(value.length>85?3:2)+'" maxlength="15000" aria-label="'+esc(f.label)+'">'+esc(value)+'</textarea></label>';
 }
 function fieldsHtml(fields,showBlanks,showAll=false){
