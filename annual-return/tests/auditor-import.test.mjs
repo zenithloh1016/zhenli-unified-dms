@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {cloneBlank} from '../src/core.js';
+import {prepopulateAuditorFromMasterListing} from '../src/auditor-import.js';
+const auditor={name:'MY & CO.',registrationNo:'AF1254',address:'NO. 1 IPOH'};
+const lookup=(doc,label)=>doc.particulars.find(x=>x.type==='field'&&x.en===label)?.value;
+test('prefills only blank auditor fields without overwriting existing saved draft particulars',()=>{
+ const draft=cloneBlank(),before=structuredClone(draft);
+ draft.particulars.find(x=>x.en==='Audit Firm Name').value='EXISTING VERIFIED AUDITOR';
+ const out=prepopulateAuditorFromMasterListing(draft,auditor);
+ assert.equal(lookup(out.document,'Audit Firm Name'),'EXISTING VERIFIED AUDITOR');
+ assert.equal(lookup(out.document,'Audit Firm Registration No.'),'AF1254');
+ assert.equal(lookup(out.document,'Audit Firm Address'),'NO. 1 IPOH');
+ assert.equal(out.filled,2);
+ assert.equal(out.kept,1);
+ assert.equal(lookup(draft,'Audit Firm Registration No.'),lookup(before,'Audit Firm Registration No.'));
+});
+test('restores missing Auditor heading only for a draft with source details',()=>{
+ const draft=cloneBlank();
+ const start=draft.particulars.findIndex(x=>x.type==='heading'&&x.en==='AUDITOR');
+ const end=draft.particulars.findIndex((x,i)=>i>start&&x.type==='section');
+ draft.particulars.splice(start,end-start);
+ const output=prepopulateAuditorFromMasterListing(draft,auditor);
+ assert.equal(output.restored,true);
+ assert.equal(output.filled,3);
+ assert.equal(lookup(output.document,'Audit Firm Name'),'MY & CO.');
+ assert.equal(draft.particulars.some(x=>x.en==='AUDITOR'),false);
+ const missing=prepopulateAuditorFromMasterListing(draft,null);
+ assert.equal(missing.restored,false);
+ assert.equal(missing.filled,0);
+});
