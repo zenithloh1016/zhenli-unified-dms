@@ -26,10 +26,11 @@ export function auditorFromMasterListing(source,company){
   const label=header(model.columns[i].label),value=tidy(row.values[i]);
   if(!meaningful(value)||!/\b(?:auditor|auditors|audit|juruaudit)\b/.test(label))continue;
   if(/\b(?:address|alamat)\b/.test(label)){fields.address ||=value;continue;}
-  if(/\b(?:registration|registered|firm no|firm number|af no|af number)\b/.test(label)&&
+  if(/\b(?:registration|registered|reg|firm no|firm number|af no|af number)\b/.test(label)&&
     /\b(?:no|number|registration|registered)\b/.test(label)){
     fields.registrationNo ||=value;continue;
   }
+  if(/\b(?:no|number)\b/.test(label))continue;
   if(/\b(?:fee|fees|date|appointed|appointment|status|remarks|change|resignation|financial|year|contact|email|telephone|phone|tin|tax)\b/.test(label))continue;
   if(/\b(?:name|firm|company|auditors|auditor|juruaudit)\b/.test(label))fields.name ||= value;
  }
