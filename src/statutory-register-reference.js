@@ -94,12 +94,15 @@ const synonyms={
   'Membership No.':['Membership Number','MIA Membership No.','MIA No.']
  },
  beneficialOwners:{
-  'Full Name':['Name'],
+  'Full Name':['Name','Beneficial Owner Name','Beneficial Owner\'s Name','Name of Beneficial Owner','Name of BO','BO Name'],
   'Identification No.':['NRIC No. / Passport No.','NRIC No.','Passport No.'],
   'Type of Ownership':['Type of Beneficial Ownership','Nature of Ownership'],
   'Criteria':['Criteria of BO','Beneficial Owner Criteria'],
   'Effective Date Becoming BO':['Effective Date','Date Becoming BO','Date of Becoming BO','Date a Person Becomes BO','Date a Person Becomes a BO'],
-  'Cessation Date':['Date of Cessation','Date Ceased','Date a Person Ceases to be BO']
+  'Cessation Date':['Date of Cessation','Date Ceased','Date a Person Ceases to be BO',
+    'Date Ceased as BO','Date Ceased to be BO','Date Ceased to be a BO',
+    'Date Ceased to be a Beneficial Owner','Date Ceased as Beneficial Owner',
+    'Date Ceasing BO','Date Ceased BO','Date of Ceasing to be BO']
  }
 };
 /**
@@ -108,7 +111,7 @@ const synonyms={
  */
 export function isLegacyBoCombinedDateField(label){
  const n=norm(label);
- return /^date a person becomes\b.*\bceas(?:e|es)\b.*\b(?:bo|beneficial owner)$/.test(n);
+ return /^date a person becomes\b.*\bceas(?:e|es|ed|ing)\b.*\b(?:bo|beneficial owner)$/.test(n);
 }
 const boDatePattern='(?:\\d{1,2}[./-]\\d{1,2}[./-]\\d{4}|\\d{4}[./-]\\d{1,2}[./-]\\d{1,2})';
 function validBecomingDate(value){
@@ -130,6 +133,23 @@ export function extractBoBecomingDate(value){
  if(meaningful.length===1&&new RegExp('^'+boDatePattern+'$').test(meaningful[0])&&
   validBecomingDate(meaningful[0]))return meaningful[0];
  return '';
+}
+/**
+ * Extract ONLY an explicitly labelled cessation date from the old combined
+ * "Date a Person Becomes / Ceases to Become BO" Excel cell. A lone date in
+ * that cell is not enough: the old workbook also used lone becoming dates.
+ * Return an empty string for placeholders, invalid dates, or conflicting dates.
+ */
+export function extractBoCessationDate(value){
+ const raw=String(value??'').replace(/\\n/g,'\n').trim();
+ if(!raw)return '';
+ const heading='(?:date[ \\t]+(?:of[ \\t]+)?(?:ceas(?:ing|ed)|cessation)|cessation[ \\t]+date|date[ \\t]+a[ \\t]+person[ \\t]+ceases[ \\t]+to[ \\t]+be|ceased[ \\t]+on)';
+ const labelEnd='(?:[ \\t]+(?:to[ \\t]+be[ \\t]+)?(?:a[ \\t]+)?(?:bo|beneficial[ \\t]+owner))?';
+ const source='(?:^|[\\r\\n;|])[ \\t]*'+heading+labelEnd+'[ \\t]*(?:[:=\\-][ \\t]*|[ \\t]+)('+boDatePattern+')(?![0-9])';
+ const matches=[...raw.matchAll(new RegExp(source,'gi'))].map(m=>m[1]);
+ if(!matches.length||matches.some(date=>!validBecomingDate(date)))return '';
+ const unique=[...new Set(matches)];
+ return unique.length===1?unique[0]:'';
 }
 export function referenceFieldIndex(kind,label){
  const q=norm(label),fields=REFERENCE_FIELDS[kind]||[];

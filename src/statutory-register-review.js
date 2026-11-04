@@ -1,5 +1,5 @@
 import {parseMemberFolios} from './statutory-current-members.js';
-import {REFERENCE_FIELDS,referenceKind,referencePriority,referenceFieldIndex,referenceTemplateSheets,createCompanyDetailsSheet,companyDetailIndex,isLegacyBoCombinedDateField,extractBoBecomingDate} from './statutory-register-reference.js';
+import {REFERENCE_FIELDS,referenceKind,referencePriority,referenceFieldIndex,referenceTemplateSheets,createCompanyDetailsSheet,companyDetailIndex,isLegacyBoCombinedDateField,extractBoBecomingDate,extractBoCessationDate} from './statutory-register-reference.js';
 /**
  * Review-only projections over the original imported worksheet cells.
  * No statutory particulars are deleted or written back in a different order.
@@ -8,7 +8,7 @@ import {REFERENCE_FIELDS,referenceKind,referencePriority,referenceFieldIndex,ref
 const tidy=value=>String(value??'').trim().replace(/\s+/g,' ');
 const cleanLabel=value=>tidy(value).replace(/:$/,'').slice(0,180);
 const absent=value=>!tidy(value)||/^(?:-|–|—|n\/a|na|nil|none)$/i.test(tidy(value));
-const isDateOrPerson=s=>/\b(?:name|full name|director|no\.?|date|chargee|allottee|shares|transfer|folio)\b/i.test(s);
+const isDateOrPerson=s=>/\b(?:name|full name|director|no\.?|date|chargee|allottee|shares|transfer|folio|nric|passport|identification|cessation)\b/i.test(s);
 
 /** Keep the familiar statutory register titles, not shortened Excel tabs. */
 export function isManagerRegister(name){
@@ -103,7 +103,7 @@ function headerCandidate(row){
  // header, but must never be interpreted as a new header. Check the first
  // heading using these actual Malaysian statutory workbook labels.
  const first=tidy(row?.[0]||'');
- if(!/^(?:director name|full name|name|allotment date|allottee(?: name)?|name of allottee|transferor(?: name)?|name of transferor|transferee(?: name)?|date|registered no\.?|registration no\.?|allotment no\.?|transfer no\.?|chargee(?: name)?|folio(?: no\.?)?|no\.?(?: of)?(?: shares)?)$/i.test(first))return -1;
+ if(!/^(?:director name|full name|name of (?:bo|beneficial owner)|(?:bo|beneficial owner)(?:'s)? name|name|allotment date|allottee(?: name)?|name of allottee|transferor(?: name)?|name of transferor|transferee(?: name)?|date|registered no\.?|registration no\.?|allotment no\.?|transfer no\.?|chargee(?: name)?|folio(?: no\.?)?|no\.?(?: of)?(?: shares)?)$/i.test(first))return -1;
  const short=entries.filter(x=>x.value.length<=95);
  if(short.length<Math.max(3,Math.ceil(entries.length*0.68)))return -1;
  const texts=entries.map(x=>x.value);
@@ -127,25 +127,27 @@ function isPlaceholder(row){
 // A separate recorded cessation/discharge date is authoritative for Former.
 function isCessationField(label){
  const s=cleanLabel(label).toLowerCase();
- return /^(?:cessation date|date of (?:cessation|resignation|termination|removal|discharge|satisfaction|release)|date ceased(?:\s+(?:to be|as)\s+(?:a\s+)?(?:director|member|beneficial owner|bo|secretary))?|date (?:a person )?ceases? to be\s+(?:a\s+)?(?:beneficial owner|bo|director|member|secretary))$/.test(s);
+ return /^(?:cessation date|date of (?:cessation|resignation|termination|removal|discharge|satisfaction|release)|date ceased(?:\s+(?:to be|as)\s+(?:a\s+)?(?:director|member|beneficial owner|bo|secretary))?|date (?:a person )?ceases? to be\s+(?:a\s+)?(?:beneficial owner|bo|director|member|secretary))$/.test(s)||
+  referenceFieldIndex('beneficialOwners',label)===REFERENCE_FIELDS.beneficialOwners.indexOf('Cessation Date');
 }
 export function recordHasCessationDate(record){
- return (record?.fields||[]).some(f=>isCessationField(f.label)&&!absent(f.value)&&tidy(f.value)!=='0');
+ return (record?.fields||[]).some(f=>
+  (isCessationField(f.label)&&!absent(f.value)&&tidy(f.value)!=='0')||
+  (isLegacyBoCombinedDateField(f.label)&&Boolean(extractBoCessationDate(f.value))));
 }
 function statusFor(fields){
  if(recordHasCessationDate({fields}))return 'former';
- // A present but blank cessation column means the appointment remains Current.
- // Keep historical "unknown" only where the source has no such field or status.
- if(fields.some(f=>isCessationField(f.label)))return 'current';
  const status=fields.find(f=>/^(?:status|charge status|appointment status|active\/inactive)$/i.test(f.label));
  if(status){
   if(/(?:discharg|satisfi|releas|cease|resign|terminat|former|inactive|cancel)/i.test(status.value))return 'former';
   if(/(?:current|active|existing|ongoing|appointed|outstanding)/i.test(status.value))return 'current';
  }
+ // A present but blank cessation column provisionally indicates Current.
+ if(fields.some(f=>isCessationField(f.label)))return 'current';
  return 'unknown';
 }
 function titleFor(fields,index){
- const preferred=fields.find(f=>/^(?:director name|full name|name|allottee|allottee'?s? name|name of allottee|chargee(?: name)?|name of chargee|transferor|transferor name|name of transferor|registered no\.?)$/i.test(f.label));
+ const preferred=fields.find(f=>/^(?:director name|full name|name of (?:bo|beneficial owner)|(?:bo|beneficial owner)(?:'s)? name|name|allottee|allottee'?s? name|name of allottee|chargee(?: name)?|name of chargee|transferor|transferor name|name of transferor|registered no\.?)$/i.test(f.label));
  const named=preferred||fields.find(f=>/\b(?:name|registered no|allotment no|transfer no)\b/i.test(f.label));
  const first=named||fields.find(f=>!absent(f.value));
  return first&&!absent(first.value)?tidy(first.value).slice(0,160):'Entry '+(index+1);
@@ -336,6 +338,30 @@ export function registerGroupIndices(book,index){
  * original cells remain untouched; only the distinct effective-date cell is
  * filled, and existing dates are never overwritten.
  */
+/**
+ * Safely backfill distinct BO Cessation Date from a legacy combined cell.
+ * Original imported legacy values remain untouched and recoverable.
+ */
+export function migrateBoCessationDates(sheet,headerIndex){
+ if(!Array.isArray(sheet?.rows)||headerIndex<0)return false;
+ const headings=sheet.rows[headerIndex]||[];
+ const sources=headings.flatMap((label,col)=>isLegacyBoCombinedDateField(label)?[col]:[]);
+ const index=REFERENCE_FIELDS.beneficialOwners.indexOf('Cessation Date');
+ const dest=headings.findIndex(label=>referenceFieldIndex('beneficialOwners',label)===index);
+ if(!sources.length||dest<0)return false;
+ let changed=false;
+ for(let ri=headerIndex+1;ri<sheet.rows.length;ri++){
+  const row=sheet.rows[ri];
+  if(!Array.isArray(row))continue;
+  const existing=String(row[dest]??'').trim();
+  if(existing&&!/^(?:-|–|—|n\/a|na|nil|none)$/i.test(existing))continue;
+  const dates=[...new Set(sources.map(col=>extractBoCessationDate(row[col])).filter(Boolean))];
+  if(dates.length!==1)continue;
+  while(row.length<=dest)row.push('');
+  row[dest]=dates[0];changed=true;
+ }
+ return changed;
+}
 export function migrateBoEffectiveDates(sheet,headerIndex){
  if(!Array.isArray(sheet?.rows)||headerIndex<0)return false;
  const headings=sheet.rows[headerIndex]||[];
@@ -413,7 +439,10 @@ export function ensureReferenceParticulars(book){
    if(headings.length>=250)break;
    headings.push(name);changed=true;
   }
-  if(kind==='beneficialOwners'&&migrateBoEffectiveDates(sheet,header))changed=true;
+  if(kind==='beneficialOwners'){
+   if(migrateBoEffectiveDates(sheet,header))changed=true;
+   if(migrateBoCessationDates(sheet,header))changed=true;
+  }
  }
  return changed;
 }
@@ -440,12 +469,18 @@ export function latestRegisterRecords(book,indices){
   for(const record of desc.records||[]){
    const fields=record.fields||[];
    const id=fields.find(f=>/\b(?:nric|passport|identity|identification(?: no\.?| number)?|registration (?:no|number))\b/i.test(f.label)&&nonEmpty(f.value));
-   const person=fields.find(f=>/^(?:director name|full name|name|chargee|name of chargee|registered no\.?)$/i.test(f.label)&&nonEmpty(f.value));
+   const person=fields.find(f=>/^(?:director name|full name|name of (?:bo|beneficial owner)|(?:bo|beneficial owner)(?:'s)? name|name|chargee|name of chargee|registered no\.?)$/i.test(f.label)&&nonEmpty(f.value));
    const identity=String(id?.value||person?.value||record.title||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-   const event=fields.find(f=>/^(?:date of appointment|date of becoming (?:bo|a beneficial owner)|date of registration|date of creation)$/i.test(f.label)&&nonEmpty(f.value));
-   const key=(identity||'ROW'+sheetIndex+':'+record.row)+'|'+String(event?.value||'').trim();
+   const event=fields.find(f=>/^(?:date of appointment|effective date becoming bo|date becoming bo|date of becoming (?:bo|a beneficial owner)|date of registration|date of creation)$/i.test(f.label)&&nonEmpty(f.value));
+   const legacyEvent=referenceKind(sheet.name)==='beneficialOwners'?
+    fields.map(f=>isLegacyBoCombinedDateField(f.label)?extractBoBecomingDate(f.value):'').find(Boolean):'';
+   const key=(identity||'ROW'+sheetIndex+':'+record.row)+'|'+String(event?.value||legacyEvent||'').trim();
    const item={...record,sourceSheetIndex:sheetIndex,
     status:registerRecordStatus(book,sheetIndex,record)};
+   // Only the same BO appointment is deduplicated. An Excel cessation
+   // recorded in an earlier revision must survive a later blank snapshot.
+   if(referenceKind(sheet.name)==='beneficialOwners'&&
+      history.get(key)?.status==='former'&&item.status!=='former')continue;
    if(history.has(key))history.delete(key);
    history.set(key,item);
   }
