@@ -5,6 +5,7 @@ import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
 import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord,displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading,moveParticularField,moveParticularSection,insertParticularHeading,restoreRsshAuditorHeading,removeRsshRegisteredCharge2,isRetiredAnnualReturnField} from './core.js';
 import {importCombinedRegisterSnapshot} from './register-import.js';
+import {prepopulateAuditorFromMasterListing} from './auditor-import.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC,mergeMSICCatalogues} from './msic.js';
 import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,removeAnnualReturnDraft,draftIdOfKey} from './drafts.js';
@@ -59,7 +60,7 @@ document.addEventListener('keydown',event=>{
 
 let draftScope=window.parent===window?'standalone':'dms:pending',newDraftId='new-'+Date.now().toString(36),draftTimer=null;
 let selectedDmsCompanyId=null,dmsCompanies=[],cloudDrafts=[];
-let pendingRegisterImport='',pendingSecretaryImport='';
+let pendingRegisterImport='',pendingSecretaryImport='',pendingAuditorImport='';
 const cloudDraft=createCloudDraftClient({
  getCompanyId:()=>selectedDmsCompanyId,
  getScope:()=>draftScope,
@@ -86,11 +87,19 @@ function requestSecretaryRegisterImport(companyId){
   id:pendingSecretaryImport,companyId
  },window.location.origin);
 }
+function requestAuditorMasterListing(companyId){
+ if(window.parent===window||!companyId||companyId!==selectedDmsCompanyId||
+    !cloudDraft.isReady()||pendingAuditorImport)return;
+ pendingAuditorImport='ar_auditor_'+Date.now().toString(36);
+ window.parent.postMessage({
+  type:'ZHENLI_DMS_AR_AUDITOR_REQUEST',id:pendingAuditorImport,companyId
+ },window.location.origin);
+}
 function loadCloudThenSecretary(options={}){
  const companyId=selectedDmsCompanyId;
  void cloudDraft.open(options).then(()=>{
   if(companyId===selectedDmsCompanyId&&cloudDraft.isReady())
-   requestSecretaryRegisterImport(companyId);
+   {requestSecretaryRegisterImport(companyId);requestAuditorMasterListing(companyId);}
  }).catch(error=>console.warn('Annual Return cloud load:',error));
 }
 function currentDraftId(){return selectedDmsCompanyId||newDraftId;}
@@ -279,7 +288,7 @@ function applyDmsCompany(company){
    else if(doc.particulars[i].en==='Company Registration No.'){doc.particulars[i].value=registrationNo;setCompanyDetail(doc,i,registrationNo);}
  }
  selectedDmsCompanyId=company.id;
- pendingSecretaryImport='';
+ pendingSecretaryImport='';pendingAuditorImport='';
  generated=null;$('download-box').hidden=true;
  let previous=null;
  try{previous=readAnnualReturnDraft(localStorage,draftScope,company.id);}
@@ -324,6 +333,22 @@ if(window.parent!==window){
    cloudDrafts=items.slice(0,500).filter(x=>typeof x.companyId==='string'&&
      typeof x.updatedAt==='string'&&Number.isSafeInteger(x.revision)&&x.revision>0);
    draftOptions();return;
+  }
+  if(event.data?.type==='ZHENLI_DMS_AR_AUDITOR_RESPONSE'){
+   if(!pendingAuditorImport||event.data.id!==pendingAuditorImport)return;
+   pendingAuditorImport='';
+   if(!event.data.ok||!cloudDraft.isReady()||event.data.companyId!==selectedDmsCompanyId)return;
+   try{
+    const result=prepopulateAuditorFromMasterListing(doc,event.data.auditor);
+    if(result.filled>0){
+     if(!flushDraft())throw Error('Current draft could not be backed up.');
+     doc=result.document;generated=null;$('download-box').hidden=true;
+     renderSections();queueDraftSave();
+     status('Auditor particulars populated from the Master Listing ('+
+      result.filled+' blank fields). Existing entries retained; verify before filing.');
+    }
+   }catch(error){status('Auditor pre-population could not be applied: '+error.message,true);}
+   return;
   }
   if(event.data?.type==='ZHENLI_DMS_AR_IMPORT_COMBINED_RESPONSE'){
    const automatic=Boolean(pendingSecretaryImport&&event.data.id===pendingSecretaryImport);
