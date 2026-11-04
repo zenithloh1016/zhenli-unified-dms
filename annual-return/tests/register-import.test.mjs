@@ -45,6 +45,14 @@ const source={
  ]
 };
 function value(doc,label){return doc.particulars.find(f=>f.type==='field'&&f.en===label)?.value;}
+function recordValue(doc,heading,label){
+ const start=doc.particulars.findIndex(x=>x.type==='heading'&&x.en===heading);
+ assert.ok(start>=0,'expected record heading '+heading);
+ const items=doc.particulars.slice(start+1);
+ const end=items.findIndex(x=>x.type==='heading'||x.type==='section');
+ return (end<0?items:items.slice(0,end))
+  .find(x=>x.type==='field'&&x.en===label)?.value;
+}
 test('imports real combined statutory particulars into bilingual Annual Return safely',()=>{
  const blank=cloneBlank();const before=structuredClone(source);
  const {document:d,summary}=importCombinedRegisterSnapshot(blank,source);
@@ -60,6 +68,7 @@ test('imports real combined statutory particulars into bilingual Annual Return s
  assert.equal(d.particulars.find((p,i)=>p.type==='heading'&&p.en==='DIRECTOR 1').en,'DIRECTOR 1');
  assert.equal(value(d,'Number of Shares Held'),'100,000');
  assert.equal(value(d,'Member Type'),'Individual');
+ assert.equal(recordValue(d,'BENEFICIAL OWNER 1','NRIC / Passport No.'),'444444-08-4444');
  assert.equal(value(d,'Criteria of Beneficial Ownership'),'Criteria A');
  assert.equal(value(d,'Total Number of Issued Shares (all classes)'),'');
  assert.equal(value(d,'Percentage of Own Share Class'),'');
@@ -79,7 +88,7 @@ test('matches extra directors, members and BO records by cloned blocks without d
   record('MEMBER '+n,'Current'),field('Shareholder Name','MEMBER '+n),
   field('Current Number of Shares Held','100'));
  for(let n=2;n<=3;n++)expanded.sections[4].blocks.push(record('BO '+n,'Current / Active'),
-  field('Full Name','BO '+n));
+  field('Full Name','BO '+n),field('Identification No.','PASSPORT-BO-'+n));
  const {document:doc,summary}=importCombinedRegisterSnapshot(cloneBlank(),expanded);
  assert(doc.particulars.some(p=>p.type==='heading'&&p.en==='DIRECTOR 6'));
  assert(doc.particulars.some(p=>p.type==='heading'&&p.en==='MEMBER 4'));
@@ -87,6 +96,42 @@ test('matches extra directors, members and BO records by cloned blocks without d
  assert.equal(summary.records.directors,6);
  assert.equal(summary.records.members,4);
  assert.equal(summary.records.bos,3);
+ assert.equal(recordValue(doc,'BENEFICIAL OWNER 2','NRIC / Passport No.'),'PASSPORT-BO-2');
+ assert.equal(recordValue(doc,'BENEFICIAL OWNER 3','NRIC / Passport No.'),'PASSPORT-BO-3');
+});
+test('imports NRIC, passport and identification-number variants for current beneficial owners',()=>{
+ const variants=[
+  ['Identification No.','998877-08-1234'],
+  ['Identification Number','998877-08-1234'],
+  ['NRIC No.','998877-08-1234'],
+  ['NRIC No. / Passport No.','P12345678'],
+  ['NRIC / Passport No.','P12345678'],
+  ['IC No. / Passport No.','P12345678'],
+  ['Passport No.','A1234567'],
+  ['Identity Card No.','998877-08-1234']
+ ];
+ for(const [label,id] of variants){
+  const snapshot=structuredClone(source);
+  const current=snapshot.sections.find(s=>s.title==='Register of Beneficial Owners');
+  const identity=current.blocks.find(x=>x.type==='field'&&x.label==='NRIC No.');
+  identity.label=label;identity.value=id;
+  current.blocks.push(group('Former / Ceased'),record('FORMER BO','Former'),
+   field('Full Name','FORMER BO'),field('Identification No.','DO-NOT-IMPORT'));
+  const {document,summary}=importCombinedRegisterSnapshot(cloneBlank(),snapshot);
+  assert.equal(recordValue(document,'BENEFICIAL OWNER 1','NRIC / Passport No.'),id,label);
+  assert.equal(summary.records.bos,1,'former BO must not be imported');
+  assert.ok(!document.particulars.some(x=>x.type==='field'&&x.value==='DO-NOT-IMPORT'));
+  const draft=cloneBlank();
+  draft.particulars.find(x=>x.type==='section'&&/CURRENT BENEFICIAL OWNERS/.test(x.en));
+  const existing=draft.particulars.slice(draft.particulars.findIndex(x=>x.en==='BENEFICIAL OWNER 1')+1)
+   .find(x=>x.type==='field'&&x.en==='NRIC / Passport No.');
+  existing.value='VERIFIED-EXISTING-ID';
+  const kept=importCombinedRegisterSnapshot(draft,snapshot);
+  assert.equal(recordValue(kept.document,'BENEFICIAL OWNER 1','NRIC / Passport No.'),
+   'VERIFIED-EXISTING-ID','existing Annual Return data must not be overwritten');
+  assert.equal(recordValue(draft,'BENEFICIAL OWNER 1','NRIC / Passport No.'),
+   'VERIFIED-EXISTING-ID','original draft must remain unmodified');
+ }
 });
 test('keeps nonblank Annual Return drafts and rejects cross-company register import',()=>{
  const draft=cloneBlank();draft.company.name='EXAMPLE SDN BHD';draft.company.no='202601000001';
