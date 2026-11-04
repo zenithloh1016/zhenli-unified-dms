@@ -10,7 +10,9 @@
 <div class="ar-draft-actions"><label class="field-label" for="draft-picker">Saved drafts on this device
 <select id="draft-picker" class="choice-select"><option value="">No drafts yet</option></select></label>
 <button id="resume-draft" class="button outline" type="button">Resume Draft</button>
-<button id="delete-draft" class="button quiet" type="button">Delete Selected Draft</button><button id="cloud-sync-now" class="button outline" type="button">Sync Draft Now</button></div>
+<button id="delete-draft" class="button quiet" type="button">Delete Selected Draft</button><button id="cloud-sync-now" class="button outline" type="button">Sync Draft Now</button><button id="cloud-history" class="button outline" type="button">Previous Cloud Versions</button></div>
+<div class="ar-draft-actions" id="cloud-history-panel" hidden><label class="field-label" for="cloud-history-picker">Earlier private Annual Return versions
+<select id="cloud-history-picker" class="choice-select"></select></label><button id="cloud-history-restore" class="button outline" type="button">Restore Selected Cloud Version</button></div>
 <p class="ar-draft-status" id="draft-status" role="status">Local copies are saved on this device. Signed-in DMS company drafts also sync privately across web, Windows and Android.</p>
 <p class="ar-draft-status" id="cloud-sync-status" role="status">Select a company in UNICOSEC to load its cloud draft.</p></section>
 <section class="workspace">

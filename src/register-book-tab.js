@@ -22,7 +22,7 @@ const missing=e=>/not found|object not found|404|no such key/i.test(String(e?.me
 const ROW_PAGE=35,LIST_PAGE=25;
 const numeric=v=>Math.max(0,Number(v)||0);
 
-export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompanies}){
+export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompanies,onSaved}){
  const storage=db?.storage?.from(bucket);
  const state={
   userId:'',loaded:false,loading:false,saving:false,error:'',message:'',
@@ -645,7 +645,15 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   }
   const result=await storage.upload(key,body,{upsert:true,contentType:'application/json',cacheControl:'0'});
   if(result.error)throw Error('Unable to save statutory register: '+result.error.message);
-  state.available.add(updated.companyId);return {updated,merged};
+  state.available.add(updated.companyId);
+  // Save is already durable. Auto-sync failures must never misreport a
+  // successful register save as unsaved or undo its private history backup.
+  let sync=null,syncError='';
+  if(typeof onSaved==='function'){
+   try{sync=await onSaved({companyId:updated.companyId,previousBook:current,updatedBook:updated});}
+   catch(error){syncError=String(error?.message||error);}
+  }
+  return {updated,merged,sync,syncError};
  }
  async function save({force=false}={}){
   if(state.saving)return;
@@ -656,14 +664,23 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   }
   state.saving=true;state.error='';status('Saving your register and private backup…');
   try{
-   const {updated,merged}=await writeBook(state.book,{
+   const {updated,merged,sync,syncError}=await writeBook(state.book,{
     expectedUpdatedAt:state.originalUpdatedAt,baseBook:state.baseBook,overwrite:force
    });
    state.book=updated;state.baseBook=structuredClone(updated);
    state.originalUpdatedAt=updated.updatedAt;state.conflict=false;state.dirty=false;
-   status(force?'Your edits were saved. The replaced cloud version is in Previous Versions.':
+   const savedMessage=force?'Your edits were saved. The replaced cloud version is in Previous Versions.':
     merged?'Saved successfully. Non-conflicting cloud changes were safely included.':
-    'Saved successfully. All statutory register worksheets are synchronized privately.');
+    'Saved successfully. All statutory register worksheets are synchronized privately.';
+   const arMessage=syncError?' Automatic Annual Return sync could not complete; re-open the existing draft and review.':
+    sync?.changed?' Existing Annual Return cloud draft automatically updated ('+
+     (sync.filled+sync.updated+sync.cleared)+' field changes).'+
+     (sync.protectedRecords||sync.protectedFields?' Some manually edited particulars need review.':''):
+    sync?.found?(sync.protectedRecords||sync.protectedFields?
+     ' Annual Return has manually edited particulars that need review ('+
+      (sync.protectedRecords+sync.protectedFields)+' protected items).':
+     ' Annual Return draft checked; no register changes needed.') :'';
+   status(savedMessage+arMessage,syncError);
   }catch(error){
    state.conflict=error?.code==='STATUTORY_REGISTER_CONFLICT';
    state.message=state.conflict?'Save paused. Your unsaved edits remain in this register.':
@@ -771,7 +788,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    restored.companyId=company.id;
    restored.companyName=company.name;
    restored.registrationNo=company.registration_no||restored.registrationNo||'';
-   const {updated}=await writeBook(restored,{expectedUpdatedAt:state.originalUpdatedAt,baseBook:state.baseBook});
+   const {updated,sync,syncError}=await writeBook(restored,{expectedUpdatedAt:state.originalUpdatedAt,baseBook:state.baseBook});
    if(getUser?.()?.id!==uid)return;
    state.book=updated;state.originalUpdatedAt=updated.updatedAt;state.dirty=false;
    state.baseBook=structuredClone(updated);state.conflict=false;
@@ -780,7 +797,10 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    state.historyOpen=false;state.historyItems=[];state.historyPreview=null;
    state.historyPreviewName='';state.historyLoaded=false;
    state.message='Previous saved Statutory Registers restored for '+company.name+
-    '. A backup of the replaced version is preserved.';
+    '. A backup of the replaced version is preserved.'+
+    (sync?.changed?' Existing Annual Return draft synchronised.':'')+
+    (syncError?' Annual Return auto-sync requires review.':'');
+   if(syncError)state.error=syncError;
   }finally{state.saving=false;notify();}
  }
 
@@ -809,7 +829,8 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
      ensureChargeRegister(merged.book);
      skipped+=merged.skipped;
      if(merged.added){
-      const {updated}=await writeBook(merged.book,{expectedUpdatedAt:existing?.updatedAt||null,baseBook:existing});
+      const {updated,syncError}=await writeBook(merged.book,{expectedUpdatedAt:existing?.updatedAt||null,baseBook:existing});
+      if(syncError)failed.push(row.company.name+' Annual Return auto-sync: '+syncError);
       added+=merged.added;saved++;
       if(state.selectedId===row.company.id){
        state.book=updated;state.originalUpdatedAt=updated.updatedAt;state.dirty=false;
@@ -892,10 +913,11 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
        continue;
       }
       validateRegisterBook(book);
-      await writeBook(book,{
+      const saved=await writeBook(book,{
        expectedUpdatedAt:existing?.updatedAt||null,
        baseBook:existing||makeRegisterBook(company)
       });
+      if(saved.syncError)summary.failed.push(company.name+' Annual Return auto-sync: '+saved.syncError);
       summary.updated++;
       if(specific)summary.fromDraft++;else summary.matchedOther++;
       summary.added+=changes.reduce((n,r)=>n+r.added,0);

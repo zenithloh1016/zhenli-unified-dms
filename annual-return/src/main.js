@@ -1062,6 +1062,35 @@ $('import-combined-register').addEventListener('click',()=>{
 });
 $('save-draft').addEventListener('click',()=>{if(!hasDraftData())return draftStatus('Enter some particulars before saving.',true);saveDraftNow();});
 $('cloud-sync-now').addEventListener('click',()=>cloudDraft.syncNow());
+$('cloud-history').addEventListener('click',async()=>{
+ if(window.parent===window||!selectedDmsCompanyId)
+  return draftStatus('Open a company in UNICOSEC to view private cloud versions.',true);
+ const id=selectedDmsCompanyId;
+ try{
+  const versions=await cloudDraft.listHistory();
+  if(id!==selectedDmsCompanyId)return;
+  const panel=$('cloud-history-panel'),picker=$('cloud-history-picker');
+  panel.hidden=!versions.length;
+  if(!versions.length)return draftStatus('No previous auto-synchronised cloud versions are saved for this company.');
+  picker.dataset.companyId=id;
+  picker.innerHTML=versions.map(x=>'<option value="'+esc(x.filename)+'">'+
+   esc(new Date(x.createdAt).toLocaleString())+' · Before automatic update</option>').join('');
+  draftStatus(versions.length+' previous private cloud version(s) available. Review the date before restoring.');
+ }catch(error){draftStatus('Could not load earlier cloud versions: '+error.message,true);}
+});
+$('cloud-history-restore').addEventListener('click',async()=>{
+ const picker=$('cloud-history-picker');
+ if(!selectedDmsCompanyId||picker.dataset.companyId!==selectedDmsCompanyId||!picker.value)
+  return draftStatus('Select a previous version for the current company.',true);
+ if(!confirm('Restore the selected earlier Annual Return cloud version?\\n\\nUNICOSEC will preserve the current cloud version as another private backup. Verify all particulars before generating a PDF.'))return;
+ const button=$('cloud-history-restore');button.disabled=true;
+ try{
+  if(!flushDraft())return;
+  const ok=await cloudDraft.restoreHistory(picker.value);
+  if(ok){$('cloud-history-panel').hidden=true;
+   draftStatus('Previous Annual Return cloud version restored. Verify the contents before filing.');}
+ }finally{button.disabled=false;}
+});
 $('draft-picker').addEventListener('change',()=>{
  $('delete-draft').disabled=$('draft-picker').value.startsWith('cloud:');
 });
