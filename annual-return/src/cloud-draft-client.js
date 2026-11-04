@@ -179,9 +179,45 @@ export function createCloudDraftClient({getCompanyId,getScope,getDocument,applyD
    message('Cloud draft removed. The open form has not been changed.');
   }catch(error){message('Local draft deleted; cloud removal failed: '+error.message,true);}
  }
+ async function listHistory(){
+  const id=getCompanyId();
+  if(!isEmbedded()||!id||id!==activeId)throw Error('Open a company draft in UNICOSEC first.');
+  const result=await call('list-history',id);
+  return result.versions||[];
+ }
+ async function restoreHistory(filename){
+  const id=getCompanyId(),token=session;
+  if(!ready||conflict||id!==activeId){
+   message('Resolve any cloud draft conflict before restoring a previous version.',true);
+   return false;
+  }
+  if(timer){clearTimeout(timer);timer=null;}
+  if(dirty)await save();
+  if(token!==session||!ready||conflict||saving||dirty){
+   message('Please finish syncing this device draft before restoring an older cloud version.',true);
+   return false;
+  }
+  try{
+   const response=await call('restore-history',id,{filename,revision});
+   if(token!==session||getCompanyId()!==id)return false;
+   if(response.conflict){
+    conflict=true;ready=false;
+    message('Another device updated this draft. Review the current cloud version before restoring.',true);
+    return false;
+   }
+   // Remote restore was revision-checked and backed up. On reload the
+   // previous device copy is also kept in local draft backups.
+   await open({force:true,preferRemote:true});
+   return ready&&!conflict;
+  }catch(error){
+   if(token===session)message('Previous cloud version could not be restored: '+error.message,true);
+   return false;
+  }
+ }
  function reset(){
   session++;activeId=null;revision=0;ready=false;dirty=false;conflict=false;saving=false;
   if(timer){clearTimeout(timer);timer=null;}
  }
- return {receive,open,markEdited,syncNow,remove,reset,isReady:()=>ready&&!conflict};
+ return {receive,open,markEdited,syncNow,remove,reset,listHistory,restoreHistory,
+  isReady:()=>ready&&!conflict};
 }
