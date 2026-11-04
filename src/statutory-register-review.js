@@ -134,6 +134,9 @@ export function recordHasCessationDate(record){
 }
 function statusFor(fields){
  if(recordHasCessationDate({fields}))return 'former';
+ // A present but blank cessation column means the appointment remains Current.
+ // Keep historical "unknown" only where the source has no such field or status.
+ if(fields.some(f=>isCessationField(f.label)))return 'current';
  const status=fields.find(f=>/^(?:status|charge status|appointment status|active\/inactive)$/i.test(f.label));
  if(status){
   if(/(?:discharg|satisfi|releas|cease|resign|terminat|former|inactive|cancel)/i.test(status.value))return 'former';
