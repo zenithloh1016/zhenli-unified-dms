@@ -676,7 +676,10 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     sync?.changed?' Existing Annual Return cloud draft automatically updated ('+
      (sync.filled+sync.updated+sync.cleared)+' field changes).'+
      (sync.protectedRecords||sync.protectedFields?' Some manually edited particulars need review.':''):
-    sync?.found?' Annual Return draft checked; no register changes needed.':'';
+    sync?.found?(sync.protectedRecords||sync.protectedFields?
+     ' Annual Return has manually edited particulars that need review ('+
+      (sync.protectedRecords+sync.protectedFields)+' protected items).':
+     ' Annual Return draft checked; no register changes needed.') :'';
    status(savedMessage+arMessage,syncError);
   }catch(error){
    state.conflict=error?.code==='STATUTORY_REGISTER_CONFLICT';
