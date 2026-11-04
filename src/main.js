@@ -1,5 +1,6 @@
 import {createSupabaseSigning} from './signing-supabase.js';
 import {annualReturnCloudAction} from './annual-return-cloud.js';
+import {auditorFromMasterListing} from './master-listing-auditor.js';
 import { createClient } from '@supabase/supabase-js';
 import readExcelFile from 'read-excel-file/browser';
 import {openMasterListingWorkbook} from './master-listing-reader.js';
@@ -1159,6 +1160,35 @@ window.addEventListener('message',event=>{
    }catch(error){reply({ok:false,error:String(error.message||error).slice(0,300)});}
   })();
   return;
+ }
+ if(event.data.type==='ZHENLI_DMS_AR_AUDITOR_REQUEST'){
+   const requestId=event.data.id,requested=event.data.companyId;
+   if(typeof requestId!=='string'||!/^ar_auditor_[\\w-]{1,70}$/.test(requestId))return;
+   const source=frame.contentWindow,user=state.user;
+   const company=state.companies.find(c=>c.id===requested);
+   const reply=(ok,auditor,error='')=>source?.postMessage({
+     type:'ZHENLI_DMS_AR_AUDITOR_RESPONSE',id:requestId,companyId:requested,
+     ok,auditor:ok?auditor:null,error:ok?'':String(error).slice(0,240)
+   },window.location.origin);
+   if(!user||!company||company.user_id!==user.id||state.arSelectedCompanyId!==requested){
+     reply(false,null,'Selected company does not match the signed-in user.');return;
+   }
+   void (async()=>{
+     const key=user.id+'/master-listing/current.json';
+     const {data,error}=await db.storage.from(BUCKET).download(key);
+     if(error){
+       if(/not found|404|no such key/i.test(String(error.message||''))){reply(true,null);return;}
+       throw Error('Could not read the private Master Listing: '+error.message);
+     }
+     const model=JSON.parse(await data.text());
+     const auditor=auditorFromMasterListing(model,{
+       name:company.name,registrationNo:company.registration_no||''
+     });
+     if(state.user?.id!==user.id||state.arSelectedCompanyId!==requested||
+        state.tab!=='annual-return')return;
+     reply(true,auditor);
+   })().catch(error=>reply(false,null,error.message||error));
+   return;
  }
  if(event.data.type==='ZHENLI_DMS_AR_IMPORT_COMBINED_REQUEST'){
    const requestId=event.data.id,requested=event.data.companyId;
