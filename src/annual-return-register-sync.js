@@ -9,7 +9,7 @@ import {importCombinedRegisterSnapshot} from '../annual-return/src/register-impo
 import {combinedRegisterSnapshot} from './statutory-ar-bridge.js';
 import {annualReturnCloudAction} from './annual-return-cloud.js';
 
-const recordHeading=/^(?:DIRECTOR|MEMBER|BENEFICIAL OWNER|REGISTERED CHARGE) \d+$/i;
+const recordHeading=/^(?:(?:DIRECTOR|MEMBER|BENEFICIAL OWNER|REGISTERED CHARGE) \d+|COMPANY SECRETARY)$/i;
 const clean=v=>String(v??'').trim();
 const scope=(section,heading)=>section+'\u001f'+heading;
 const fieldKey=(group,name,index)=>group+'\u001f'+name+'\u001f'+index;
