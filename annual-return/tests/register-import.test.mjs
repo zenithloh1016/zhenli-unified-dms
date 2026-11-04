@@ -122,7 +122,6 @@ test('imports NRIC, passport and identification-number variants for current bene
   assert.equal(summary.records.bos,1,'former BO must not be imported');
   assert.ok(!document.particulars.some(x=>x.type==='field'&&x.value==='DO-NOT-IMPORT'));
   const draft=cloneBlank();
-  draft.particulars.find(x=>x.type==='section'&&/CURRENT BENEFICIAL OWNERS/.test(x.en));
   const existing=draft.particulars.slice(draft.particulars.findIndex(x=>x.en==='BENEFICIAL OWNER 1')+1)
    .find(x=>x.type==='field'&&x.en==='NRIC / Passport No.');
   existing.value='VERIFIED-EXISTING-ID';
