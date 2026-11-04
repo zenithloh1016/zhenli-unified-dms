@@ -111,6 +111,58 @@ export function reconcileAnnualReturnWithRegisters(document,previous,current){
  return {document:draft,changed,filled,updated,cleared,protectedFields,protectedRecords};
 }
 
+const historyPrefix=(uid,companyId)=>uid+'/annual-return/history/'+companyId+'-';
+async function backupAnnualReturnDraft(db,{user,company,record,bucket='dms-private',source}){
+ const path=historyPrefix(user.id,company.id)+Date.now()+'-'+crypto.randomUUID()+'.json';
+ const body=new Blob([JSON.stringify({
+  companyId:company.id,revision:record.revision,updatedAt:record.updatedAt,
+  document:record.document,source
+ })],{type:'application/json'});
+ const {error}=await db.storage.from(bucket).upload(path,body,{
+  upsert:false,contentType:'application/json',cacheControl:'0'
+ });
+ if(error)throw Error('Cannot back up the previous Annual Return cloud draft: '+error.message);
+ return path;
+}
+/** List and restore private auto-sync versions without exposing another user's files. */
+export async function annualReturnHistoryAction(db,{
+ user,company,operation,filename,revision,bucket='dms-private'
+}){
+ if(!user?.id||company?.user_id!==user.id||!company?.id)
+  throw Error('Sign in and select the matching company.');
+ const store=db.storage.from(bucket),prefix=historyPrefix(user.id,company.id);
+ if(operation==='list-history'){
+  const {data,error}=await store.list(user.id+'/annual-return/history',{
+   search:company.id+'-',sortBy:{column:'created_at',order:'desc'},limit:100
+  });
+  if(error)throw Error('Cannot list private Annual Return versions: '+error.message);
+  const versions=(data||[]).filter(x=>typeof x.name==='string'&&
+   x.name.startsWith(company.id+'-')&&
+   /^\d{13}-[a-f0-9-]{36}\.json$/i.test(x.name.slice(company.id.length+1)))
+   .map(x=>({filename:x.name,createdAt:x.created_at||x.updated_at||''}));
+  return {versions};
+ }
+ if(operation!=='restore-history')throw Error('Unknown Annual Return history operation.');
+ if(typeof filename!=='string'||!filename.startsWith(company.id+'-')||
+   !/^\d{13}-[a-f0-9-]{36}\.json$/i.test(filename.slice(company.id.length+1)))
+  throw Error('Invalid previous version selection.');
+ const {data,error}=await store.download(user.id+'/annual-return/history/'+filename);
+ if(error)throw Error('Cannot read the selected previous Annual Return version: '+error.message);
+ const backup=JSON.parse(await data.text());
+ if(backup.companyId!==company.id||!backup.document?.particulars)
+  throw Error('Saved Annual Return version does not belong to this company.');
+ const {record}=await annualReturnCloudAction(db,{user,company,operation:'load'});
+ if(!record)throw Error('The current cloud Annual Return draft no longer exists.');
+ if(record.revision!==Number(revision))return {conflict:true,record:{revision:record.revision}};
+ // An explicit restore also preserves the version it replaces.
+ await backupAnnualReturnDraft(db,{
+  user,company,record,bucket,source:'before-manual-history-restore'
+ });
+ return annualReturnCloudAction(db,{
+  user,company,operation:'save',document:backup.document,revision:record.revision
+ });
+}
+
 /** Only runs AFTER Statutory Registers are durably saved in private storage. */
 export async function syncAnnualReturnAfterRegisterSave(db,{
  user,company,previousBook,updatedBook,bucket='dms-private'
@@ -136,16 +188,9 @@ export async function syncAnnualReturnAfterRegisterSave(db,{
   if(!result.changed)return {found:true,...result};
   // Existing draft is backed up privately before the cloud revision changes.
   // Even concurrent attempts leave an intact, owner-only previous version.
-  const history=user.id+'/annual-return/history/'+company.id+'-'+Date.now()+
-   '-'+crypto.randomUUID()+'.json';
-  const body=new Blob([JSON.stringify({
-   companyId:company.id,revision:record.revision,updatedAt:record.updatedAt,
-   document:record.document,source:'statutory-register-auto-sync'
-  })],{type:'application/json'});
-  const {error:backupError}=await db.storage.from(bucket).upload(history,body,{
-   upsert:false,contentType:'application/json',cacheControl:'0'
+  const history=await backupAnnualReturnDraft(db,{
+   user,company,record,bucket,source:'statutory-register-auto-sync'
   });
-  if(backupError)throw Error('Automatic Annual Return update paused because its private backup failed: '+backupError.message);
   const outcome=await annualReturnCloudAction(db,{
    user,company,operation:'save',document:result.document,revision:record.revision
   });
