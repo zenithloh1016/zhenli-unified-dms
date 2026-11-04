@@ -469,12 +469,18 @@ export function latestRegisterRecords(book,indices){
   for(const record of desc.records||[]){
    const fields=record.fields||[];
    const id=fields.find(f=>/\b(?:nric|passport|identity|identification(?: no\.?| number)?|registration (?:no|number))\b/i.test(f.label)&&nonEmpty(f.value));
-   const person=fields.find(f=>/^(?:director name|full name|name|chargee|name of chargee|registered no\.?)$/i.test(f.label)&&nonEmpty(f.value));
+   const person=fields.find(f=>/^(?:director name|full name|name of (?:bo|beneficial owner)|(?:bo|beneficial owner)(?:'s)? name|name|chargee|name of chargee|registered no\.?)$/i.test(f.label)&&nonEmpty(f.value));
    const identity=String(id?.value||person?.value||record.title||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-   const event=fields.find(f=>/^(?:date of appointment|date of becoming (?:bo|a beneficial owner)|date of registration|date of creation)$/i.test(f.label)&&nonEmpty(f.value));
-   const key=(identity||'ROW'+sheetIndex+':'+record.row)+'|'+String(event?.value||'').trim();
+   const event=fields.find(f=>/^(?:date of appointment|effective date becoming bo|date becoming bo|date of becoming (?:bo|a beneficial owner)|date of registration|date of creation)$/i.test(f.label)&&nonEmpty(f.value));
+   const legacyEvent=referenceKind(sheet.name)==='beneficialOwners'?
+    fields.map(f=>isLegacyBoCombinedDateField(f.label)?extractBoBecomingDate(f.value):'').find(Boolean):'';
+   const key=(identity||'ROW'+sheetIndex+':'+record.row)+'|'+String(event?.value||legacyEvent||'').trim();
    const item={...record,sourceSheetIndex:sheetIndex,
     status:registerRecordStatus(book,sheetIndex,record)};
+   // Only the same BO appointment is deduplicated. An Excel cessation
+   // recorded in an earlier revision must survive a later blank snapshot.
+   if(referenceKind(sheet.name)==='beneficialOwners'&&
+      history.get(key)?.status==='former'&&item.status!=='former')continue;
    if(history.has(key))history.delete(key);
    history.set(key,item);
   }
