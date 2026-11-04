@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {cloneBlank} from '../annual-return/src/core.js';
 import {importCombinedRegisterSnapshot} from '../annual-return/src/register-import.js';
-import {reconcileAnnualReturnWithRegisters,syncAnnualReturnAfterRegisterSave}
+import {reconcileAnnualReturnWithRegisters,syncAnnualReturnAfterRegisterSave,annualReturnHistoryAction}
  from '../src/annual-return-register-sync.js';
 
 const field=(label,value)=>({type:'field',label,value});
@@ -100,12 +100,25 @@ function mockDb(initial){
   },
   storage:{from(bucket){
    assert.equal(bucket,'dms-private');
-   return {async upload(path,blob,options){
-    assert.ok(path.includes('/annual-return/history/company-1-'));
-    assert.equal(options.upsert,false);
-    state.uploads.push({path,body:JSON.parse(await blob.text())});
-    return {error:null};
-   }};
+   return {
+    async upload(path,blob,options){
+     assert.ok(path.includes('/annual-return/history/company-1-'));
+     assert.equal(options.upsert,false);
+     state.uploads.push({path,body:JSON.parse(await blob.text())});
+     return {error:null};
+    },
+    async list(folder){
+     assert.ok(folder.endsWith('/annual-return/history'));
+     return {data:state.uploads.map((x,i)=>({
+      name:x.path.split('/').at(-1),created_at:'2026-11-04T10:00:'+String(i).padStart(2,'0')+'Z'
+     })),error:null};
+    },
+    async download(path){
+     const item=state.uploads.find(x=>x.path===path);
+     if(!item)return {data:null,error:{message:'Not found'}};
+     return {data:new Blob([JSON.stringify(item.body)],{type:'application/json'}),error:null};
+    }
+   };
   }}
  };
 }
@@ -141,8 +154,33 @@ test('auto-sync backs up previous cloud revision and writes the new ID exactly o
  assert.equal(result.changed,true);
  assert.equal(db.state.writes,1);
  assert.equal(db.state.uploads.length,1);
- assert.equal(db.state.uploads[0].body.document.particulars.find(x=>x.en==='NRIC / Passport No.')?.value,'');
+ assert.equal(id(db.state.uploads[0].body.document),'A001');
  assert.equal(db.state.uploads[0].body.revision,2);
  assert.equal(db.state.row.revision,3);
  assert.equal(id(db.state.row.payload),'A002');
+});
+
+test('private previous versions can be listed and restored with an extra backup',async()=>{
+ const before=book([{name:'BO ALPHA',id:'A001'}]);
+ const after=book([{name:'BO ALPHA',id:'A002'}]);
+ const db=mockDb(draftFrom(source([{name:'BO ALPHA',id:'A001'}])));
+ await syncAnnualReturnAfterRegisterSave(db,{user,company,previousBook:before,updatedBook:after});
+ const listed=await annualReturnHistoryAction(db,{user,company,operation:'list-history'});
+ assert.equal(listed.versions.length,1);
+ const filename=listed.versions[0].filename;
+ const result=await annualReturnHistoryAction(db,{
+  user,company,operation:'restore-history',filename,revision:3
+ });
+ assert.equal(result.record.revision,4);
+ assert.equal(id(db.state.row.payload),'A001','restored version contains the old source ID');
+ assert.equal(db.state.uploads.length,2);
+ assert.equal(id(db.state.uploads[1].body.document),'A002','restore must back up the current draft first');
+ await assert.rejects(annualReturnHistoryAction(db,{
+  user,company,operation:'restore-history',filename:'../another-company.json',revision:4
+ }),/Invalid previous version/);
+ const stale=await annualReturnHistoryAction(db,{
+  user,company,operation:'restore-history',filename,revision:2
+ });
+ assert.equal(stale.conflict,true);
+ assert.equal(db.state.uploads.length,2,'stale restore must not create another backup');
 });
