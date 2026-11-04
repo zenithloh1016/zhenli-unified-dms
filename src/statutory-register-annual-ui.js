@@ -11,7 +11,7 @@ export function renderStatutoryRegisterDocument(book,sheetIndex,{showBlanks=fals
      ?'<span class="sr-field-actions"><button type="button" class="sr-edit-field" data-action="sr-set-consideration-rate" data-id="'+
       block.rateSheetIndex+':'+block.rateRow+'" title="Enter the verified RM per share">Set RM/share</button></span>'
      :'')+'</span>'+
-    '<span class="sr-ar-value"><strong>'+esc(block.value)+'</strong></span></div>';
+    '<span class="sr-ar-value"><strong>'+esc(empty(block.value)?'-':block.value)+'</strong></span></div>';
   if(block.type==='record'){
    const changesAllowed=/^Register of /i.test(section.title)&&
     !/^Register of (?:(?:Share )?Transfers|(?:Share )?Allotments)\b/i.test(section.title);
@@ -30,7 +30,7 @@ export function renderStatutoryRegisterDocument(book,sheetIndex,{showBlanks=fals
      block.sheetIndex+':'+block.row+':'+block.col+'" title="Edit field label">Edit Field</button>'+
     '<button type="button" class="sr-remove-field" data-action="sr-remove-field" data-id="'+
      block.sheetIndex+':'+block.row+':'+block.col+'" aria-label="Remove field '+esc(block.label)+'">Remove Field</button></span></span>'+
-   '<span class="sr-ar-value"><textarea class="rb-cell sr-ar-input" data-s="'+block.sheetIndex+
+   '<span class="sr-ar-value"><textarea class="rb-cell sr-ar-input" placeholder="-" data-s="'+block.sheetIndex+
     '" data-r="'+block.row+'" data-c="'+block.col+'"'+
     (block.numericKind?' data-numeric-kind="'+esc(block.numericKind)+'"':'')+
     (block.composite?' data-merge-address="true"':'')+
