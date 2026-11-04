@@ -7,13 +7,16 @@ import {formatStatutoryNumber,numericKind,parseStatutoryNumber} from './statutor
  * All edit coordinates map to privately stored statutory data; Excel's
  * sheet layout is never displayed and is never required for PDF export.
  */
-import {describeStatutorySheet,registerLabel,isManagerRegister,isMemberPersonalOrSharesLabel,registerGroupIndices,visibleRegisterIndices,getRegisterFieldOverrides,isChronologicalRegister,latestRegisterRecords,registerRecordStatus} from './statutory-register-review.js';
+import {describeStatutorySheet,registerLabel,isManagerRegister,isMemberPersonalOrSharesLabel,registerGroupIndices,visibleRegisterIndices,getRegisterFieldOverrides,isChronologicalRegister,latestRegisterRecords,registerRecordStatus,recordHasCessationDate} from './statutory-register-review.js';
 
 export const STATUTORY_DOCUMENT_COLORS={
  ink:'#243b4d',navy:'#193f64',blue:'#245f80',light:'#eaf3f8',
  label:'#f5f9fc',line:'#dbe6ee',muted:'#58748b',white:'#ffffff'
 };
 const hasText=v=>String(v??'').trim().length>0;
+// Hide appended MIA qualification numbers in secretary names, but retain the
+// original Excel text and the separate Membership No. field.
+const secretaryDisplayName=v=>String(v??'').replace(/\s*(?:\(\s*MIA\s*[-:#]?\s*\d{3,}\s*\)|[-–—,:]?\s+MIA\s*[-:#]?\s*\d{3,})\s*$/i,'').trim();
 function mappedField(item,sheetIndex){
  return {type:'field',sheetIndex,row:item.row,col:item.col,
   label:String(item.label||'Particulars').trim(),value:String(item.value??'')};
@@ -23,7 +26,8 @@ function recordsToBlocks(records,sheetIndex,showBlanks,{separateHistory=true,kin
  const renderRecord=record=>{
   const si=Number.isInteger(record.sourceSheetIndex)?record.sourceSheetIndex:sheetIndex;
   const rawStatus=record.status==='former'?'Former':record.status==='current'?'Current':'';
-  result.push({type:'record',title:record.title||'Record '+(result.length+1),
+  const isSecretary=referenceKind(title)==='secretaries';
+  result.push({type:'record',title:isSecretary?secretaryDisplayName(record.title):(record.title||'Record '+(result.length+1)),
    row:record.row,sheetIndex:si,status:separateHistory?rawStatus:''});
   const visible=sortReferenceFields(title,(record.fields||[]).filter(f=>
    !excludeRegisterField(title,f.label)&&
@@ -31,7 +35,9 @@ function recordsToBlocks(records,sheetIndex,showBlanks,{separateHistory=true,kin
     (kind==='charges'&&/^date of (?:discharge|satisfaction|release)$/i.test(f.label)))));
   if(visible.length)result.push(...visible.map(f=>({
    ...mappedField(f,si),
-   label:referenceDisplayLabel(referenceKind(title),f.label,f,record.fields||[])
+   label:referenceDisplayLabel(referenceKind(title),f.label,f,record.fields||[]),
+   value:isSecretary&&referenceDisplayLabel('secretaries',f.label,f,record.fields||[])==='Name'
+    ?secretaryDisplayName(f.value):String(f.value??'')
   })));
   else result.push({type:'note',text:'No particulars recorded.'});
  };
@@ -99,7 +105,8 @@ export function currentMemberRecords(book,indices){
   }
  }
  return [...latest.values()].filter(item=>
-  item.record.manualStatus==='current'||isCurrentMember(item.record));
+  item.record.status!=='former'&&
+  (item.record.manualStatus==='current'||isCurrentMember(item.record)));
 }
 /** Former records are derived from EACH imported member folio, not merely
  * from the most recent shareholder snapshot. This retains earlier cessation
@@ -112,7 +119,7 @@ export function formerMemberRecords(book,indices){
    const id=currentMemberKey(source,{sheetIndex});
    if(!id)continue;
    const manual=book?.recordStatuses?.[sheetIndex+':'+source.row];
-   if(manual==='current')continue;
+   if(manual==='current'&&!recordHasCessationDate(source))continue;
    const record={...source,status:registerRecordStatus(book,sheetIndex,source),
     manualStatus:manual==='former'?'former':null};
    if(record.status!=='former'&&
