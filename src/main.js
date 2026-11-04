@@ -1,5 +1,6 @@
 import {createSupabaseSigning} from './signing-supabase.js';
 import {annualReturnCloudAction} from './annual-return-cloud.js';
+import {syncAnnualReturnAfterRegisterSave} from './annual-return-register-sync.js';
 import {auditorFromMasterListing} from './master-listing-auditor.js';
 import { createClient } from '@supabase/supabase-js';
 import readExcelFile from 'read-excel-file/browser';
@@ -78,7 +79,17 @@ const masterListingUI=createMasterListingTab({
  notify:message=>{if(message)state.notice=message;}
 });
 masterListingUI.afterRender(()=>render());
-const registerBookUI=createRegisterBookTab({db,getUser:()=>state.user,getCompanies:()=>state.companies});
+const registerBookUI=createRegisterBookTab({
+ db,getUser:()=>state.user,getCompanies:()=>state.companies,
+ onSaved:async({companyId,previousBook,updatedBook})=>{
+  const user=state.user,company=state.companies.find(c=>c.id===companyId);
+  if(!user||!company||company.user_id!==user.id)
+   throw Error('Signed-in company context changed during statutory register save.');
+  return syncAnnualReturnAfterRegisterSave(db,{
+   user,company,previousBook,updatedBook,bucket:BUCKET
+  });
+ }
+});
 registerBookUI.afterRender(()=>{if(state.tab==='statutory-registers')render();});
 let deadlineLastCheck=0;
 async function reloadStatutoryDeadlines(force=false){
