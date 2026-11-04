@@ -249,20 +249,22 @@ export function createSupabaseSigning({db,getCompanies,update}) {
   }
   function deleteConfirmation(){
     if(!deleteIntent)return '';
-    const one=deleteIntent.kind==='one';
-    const phrase=one?'DELETE REQUEST':'DELETE ALL';
-    const item=one?'<b>'+e(deleteIntent.company)+'</b> — '+e(deleteIntent.subject)
+    const one=deleteIntent.kind==='one',pdf=deleteIntent.kind==='document';
+    const phrase=pdf?'DELETE DOCUMENT':one?'DELETE REQUEST':'DELETE ALL';
+    const item=pdf?'<b>'+e(deleteIntent.filename)+'</b>'
+      :one?'<b>'+e(deleteIntent.company)+'</b> — '+e(deleteIntent.subject)
       :'<b>'+e(deleteIntent.count)+'</b> signing request(s)';
     return '<section class="zs-panel" id="ns-delete-confirm-panel" aria-label="Confirm signing request deletion">'+
-      '<h2>Confirm '+(one?'individual':'bulk')+' signing request deletion</h2>'+
-      '<p>You are removing '+item+' from the active UNICOSEC signing list.</p>'+
-      '<p class="fineprint">Outstanding links will be revoked. Signed PDFs, original documents and audit evidence remain securely retained. This cannot be undone from UNICOSEC.</p>'+
+      '<h2>Confirm '+(pdf?'draft PDF':one?'individual':'bulk')+' deletion</h2>'+
+      '<p>You are removing '+item+(pdf?' from this unsigned signing draft.':' from the active UNICOSEC signing list.')+'</p>'+
+      '<p class="fineprint">'+(pdf?'Only this draft PDF and its signature boxes will be removed. Other PDFs stay intact. Deletion is unavailable after activation.':
+        'Outstanding links will be revoked. Signed PDFs, original documents and audit evidence remain securely retained. This cannot be undone from UNICOSEC.')+'</p>'+
       '<form id="ns-confirm-delete">'+
       '<label>Type <b>'+phrase+'</b> to confirm'+
       '<input id="ns-delete-confirm-input" name="confirm" autocomplete="off" spellcheck="false" required'+
       (busy?' disabled':'')+'></label>'+
       '<div class="zs-actions"><button class="btn danger" type="submit"'+(busy?' disabled':'')+'>'+
-      (one?'Delete selected request':'Delete all requests')+'</button> '+
+      (pdf?'Delete PDF':one?'Delete selected request':'Delete all requests')+'</button> '+
       b('Cancel','cancel-delete')+'</div></form></section>';
   }
   function listView(){
@@ -310,7 +312,8 @@ export function createSupabaseSigning({db,getCompanies,update}) {
       '</b> <small>'+e(d.pages)+' page(s) · '+
       (d.ready?'Signed PDF ready':r.status==='finalizing'?'Finalizing signed PDF':'Original PDF — awaiting final signatures')+
       '</small></span>'+
-      b(d.ready?'Download signed PDF':'Download original PDF','pdf',d.id)+'</div>').join('');
+      b(d.ready?'Download signed PDF':'Download original PDF','pdf',d.id)+
+      (draft?b('Delete PDF','delete-document',d.id,'danger'):'')+'</div>').join('');
     const signers=r.signers.map(s=>'<div class="zs-signer"><div><b>'+s.position+'. '+e(s.name)+
       '</b> <small>'+e(s.email)+' · '+(s.signedAt?'Signed '+stamp(s.signedAt):'Not signed')+
       ' · '+(s.signedAt?'Completed':r.status==='pending'?'Awaiting signature':'Not sent')+'</small></div>'+
