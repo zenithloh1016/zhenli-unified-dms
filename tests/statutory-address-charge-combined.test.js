@@ -87,7 +87,7 @@ test('Edit Field uses the in-app desktop dialog without altering source labels',
   const b=tab.state.book;
   assert.equal(b.fieldLabels['0:2:1'],'Registered Address (New)');
   assert.equal(b.sheets[0].rows[2][0],'Registered Office:');
-  assert.match(tab.render(),/Registered Address \\(New\\)/);
+  assert.match(tab.render(),/Registered Address \(New\)/);
   assert.equal(tab.command('sr-edit-field','1:0:1'),true);
   value='Member Name';
   assert.equal(tab.command('sr-text-apply'),true);
