@@ -12,8 +12,8 @@
  display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;
  background:#174968;color:#fff;border-radius:5px;font-size:17px;font-weight:900
 }
-.pdf-brand-name{font-size:16px;letter-spacing:1px;font-weight:900;color:#174968}
-.pdf-brand-note{font-size:10px;margin-left:auto;font-weight:700;color:#327b95;text-align:right}
+.pdf-brand-name{font-size:13px;letter-spacing:.15px;font-weight:900;color:#174968;white-space:nowrap}
+.pdf-brand-note{font-size:9.5px;margin-left:auto;font-weight:700;color:#327b95;text-align:right}
 .pdf-company-line{padding:11px 0 6px;line-height:1.28;font-size:16px;color:#173f5c;overflow-wrap:anywhere}
 .pdf-document-subline{display:flex;flex-wrap:wrap;gap:6px 18px;margin:0;font-size:9.7px;color:#4d6b80}
 .pdf-continued{font-size:9px;color:#13778d;font-weight:800;letter-spacing:.35px}
