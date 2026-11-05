@@ -8,7 +8,7 @@ import {savePdfToAndroidFiles} from './native-pdf-save.js';
 import {selectedBoCriteria} from './bo-criteria.js';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
-const blank=value=>String(value??'').trim()||'NOT PROVIDED / 未提供资料';
+const blank=value=>String(value??'').trim()||'Not provided / 尚未提供';
 let currentLink='';
 export function releaseDownload(){
   if(currentLink){URL.revokeObjectURL(currentLink);currentLink='';}
@@ -117,7 +117,7 @@ function tableRow(kind,english,chinese,value='',continuation=''){
    (chinese?'<span class="pdf-row-translation">'+pageEsc(chinese)+'</span>':'')+
    '</th><td class="pdf-criterion-cell">'+criteriaHtml+'</td>';
  }else{
-  const isBlank=value==='NOT PROVIDED / 未提供资料';
+  const isBlank=value==='Not provided / 尚未提供';
   row.innerHTML='<th scope="row"><span class="pdf-row-name">'+pageEsc(english||'Unnamed field')+'</span>'+
    (chinese?'<span class="pdf-row-translation">'+pageEsc(chinese)+'</span>':'')+
    (continuation?'<span class="pdf-row-continuation">'+pageEsc(continuation)+'</span>':'')+
@@ -132,10 +132,10 @@ export function renderPages(doc){
  const pages=[];
  let page=null,tableBody=null;
  const company=doc.company||{};
- const HEADER_EN='PARTICULARS / ITEM';
- const HEADER_CN='项目';
- const VALUE_EN='CURRENT INFORMATION / DETAILS';
- const VALUE_CN='现有资料';
+ const HEADER_EN='DETAILS FOR REVIEW';
+ const HEADER_CN='待核对项目';
+ const VALUE_EN='RECORDED INFORMATION';
+ const VALUE_CN='已记录资料';
  // Pixel dimensions correspond to an A4 sheet at 96 CSS pixels per inch.
  // Keep a gap above the footer; the bottommost table border is never clipped.
  const TABLE_BOTTOM=1033;
@@ -148,10 +148,10 @@ export function renderPages(doc){
   page.innerHTML=
    '<header class="pdf-page-head">'+
     '<div class="pdf-brandline"><span class="pdf-brand-name">ZHENLI CONSULTANCY SERVICES SDN. BHD.</span>'+
-     '<span class="pdf-brand-note">ANNUAL RETURN REVIEW / 周年申报资料审核</span></div>'+
+     '<span class="pdf-brand-note">ANNUAL RETURN REVIEW FORM / 周年申报资料审核表</span></div>'+
     '<div class="pdf-company-line"><strong>'+companyName+'</strong></div>'+
     '<div class="pdf-document-subline"><span>Registration No. / 注册号码: '+reg+'</span>'+
-     '<span>Annual Return Year / 年份: '+year+'</span>'+
+     '<span>Return Year / 申报年度: '+year+'</span>'+
      (continuation?'<span class="pdf-continued">CONTINUED / 续页</span>':'')+'</div>'+
    '</header>'+
    '<div class="pdf-flow"><table class="pdf-particulars-table">'+
@@ -159,7 +159,7 @@ export function renderPages(doc){
     '<thead><tr><th scope="col"><span>'+HEADER_EN+'</span><small>'+HEADER_CN+'</small></th>'+
     '<th scope="col"><span>'+VALUE_EN+'</span><small>'+VALUE_CN+'</small></th></tr></thead>'+
     '<tbody></tbody></table></div>'+
-   '<footer class="pdf-bottom"><span>ZHENLI CONSULTANCY SERVICES SDN. BHD. · ANNUAL RETURN PARTICULARS · CLIENT REVIEW ONLY / 仅供客户审核</span>'+
+   '<footer class="pdf-bottom"><span>ZHENLI CONSULTANCY SERVICES SDN. BHD. · ANNUAL RETURN PARTICULARS · FOR REVIEW ONLY / 仅供审核</span>'+
     '<span class="page-number"></span></footer>';
   stage.appendChild(page);
   pages.push(page);
@@ -212,8 +212,8 @@ export function renderPages(doc){
  // every other section. This also keeps it within the same pagination rules.
  appendRow(tableRow('section','DIRECTOR CONFIRMATION','董事确认'),75);
  appendRow(tableRow('note','','',
-  '<p class="pdf-declaration-en">I hereby confirm that the particulars stated above are true and correct to the best of my knowledge.</p>'+
-  '<p class="pdf-declaration-cn">本人谨此确认，据本人所知，上述资料属真实及正确。</p>'));
+  '<p class="pdf-declaration-en">I confirm that I have reviewed the above particulars and, to the best of my knowledge, they are true, complete and accurate.</p>'+
+  '<p class="pdf-declaration-cn">本人确认已核阅上述资料，并据本人所知，上述资料真实、完整及准确。</p>'));
  const signer=doc.signatureDirector||{};
  appendRow(tableRow('field','Name of Director','董事姓名',blank(signer.name)));
  appendRow(tableRow('field','NRIC / Passport No.','身份证／护照号码',blank(signer.nric)));
@@ -221,7 +221,7 @@ export function renderPages(doc){
  appendRow(tableRow('note','','',
   '<div class="pdf-signature-line"><span>Signature of Director / 董事签名:</span><span class="pdf-signature-space"></span></div>'));
  appendRow(tableRow('note','','',
-  '<p class="pdf-legal-note">This document is for client review and confirmation only. It does not replace the prescribed Annual Return lodged with SSM. / 本文件仅供客户审核与确认，不能代替向马来西亚公司委员会提交的法定周年申报。</p>'));
+  '<p class="pdf-legal-note">This document is prepared for the company’s review and confirmation. It is not the statutory Annual Return prescribed for lodgement with the Companies Commission of Malaysia (SSM). Please confirm missing particulars or indicate N/A where not applicable. / 本文件供公司审核及确认，并非向马来西亚公司委员会（SSM）提交的法定周年申报表。请确认缺漏资料；如不适用，请注明不适用。</p>'));
  pages.forEach((p,i)=>{
   const number=p.querySelector('.page-number');
   if(number)number.textContent='PAGE '+(i+1)+' / '+pages.length;

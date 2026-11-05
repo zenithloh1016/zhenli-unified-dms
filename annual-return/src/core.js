@@ -1,4 +1,5 @@
 import template from './template.json' with {type:'json'};
+import {preferredParticularLabel} from './wording.js';
 export const SCHEMA_VERSION=7;
 export const cloneBlank=()=>structuredClone(template);
 const safe=(s,n=20000)=>String(s??'').slice(0,n);
@@ -29,9 +30,7 @@ export function syncCompanyDetails(doc,{preferFields=true}={}){
  * displayEn/displayCn and remain editable in drafts and exported PDFs.
  */
 export function displayParticularLabel(item,language='en'){
- const property=language==='cn'?'displayCn':'displayEn';
- const fallback=language==='cn'?'cn':'en';
- return typeof item?.[property]==='string'?item[property]:String(item?.[fallback]??'');
+ return preferredParticularLabel(item,language);
 }
 export function updateParticularLabel(doc,index,en,cn=''){
  const items=doc?.particulars;
