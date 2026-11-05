@@ -147,7 +147,7 @@ export function renderPages(doc){
   const reg=pageEsc(company.no||'REGISTRATION NO. TO CONFIRM');
   page.innerHTML=
    '<header class="pdf-page-head">'+
-    '<div class="pdf-brandline"><span class="pdf-brand-mark">U</span><span class="pdf-brand-name">UNICOSEC</span>'+
+    '<div class="pdf-brandline"><span class="pdf-brand-name">ZHENLI CONSULTANCY SERVICES SDN. BHD.</span>'+
      '<span class="pdf-brand-note">ANNUAL RETURN REVIEW / 周年申报资料审核</span></div>'+
     '<div class="pdf-company-line"><strong>'+companyName+'</strong></div>'+
     '<div class="pdf-document-subline"><span>Registration No. / 注册号码: '+reg+'</span>'+
@@ -159,7 +159,7 @@ export function renderPages(doc){
     '<thead><tr><th scope="col"><span>'+HEADER_EN+'</span><small>'+HEADER_CN+'</small></th>'+
     '<th scope="col"><span>'+VALUE_EN+'</span><small>'+VALUE_CN+'</small></th></tr></thead>'+
     '<tbody></tbody></table></div>'+
-   '<footer class="pdf-bottom"><span>UNICOSEC · ANNUAL RETURN PARTICULARS · CLIENT REVIEW ONLY / 仅供客户审核</span>'+
+   '<footer class="pdf-bottom"><span>ZHENLI CONSULTANCY SERVICES SDN. BHD. · ANNUAL RETURN PARTICULARS · CLIENT REVIEW ONLY / 仅供客户审核</span>'+
     '<span class="page-number"></span></footer>';
   stage.appendChild(page);
   pages.push(page);
