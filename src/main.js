@@ -3,6 +3,7 @@ import {annualReturnCloudAction} from './annual-return-cloud.js';
 import {syncAnnualReturnAfterRegisterSave,annualReturnHistoryAction} from './annual-return-register-sync.js';
 import {auditorFromMasterListing} from './master-listing-auditor.js';
 import { createClient } from '@supabase/supabase-js';
+import {renderAccountSettings,requestAccountEmailChange,requestAccountPasswordChange} from './account-settings.js';
 import readExcelFile from 'read-excel-file/browser';
 import {openMasterListingWorkbook} from './master-listing-reader.js';
 import {createMasterListingTab} from './master-listing-tab.js';
@@ -680,12 +681,12 @@ function render() {
   document.body.classList.toggle('zh-ar-fullscreen-open',!!(state.user && state.tab==='annual-return' && state.arFullscreen));
   if (!db) { ROOT.innerHTML=`<div class="auth-page"><div class="auth-card"><div class="auth-logo">U</div><h1>Set up private workspace</h1><p>Connect a Supabase project to enable authenticated documents and synced company folders.</p><p class="muted">Follow START_HERE.md in the downloadable source package. The Task Hub and Signing code is already bundled.</p></div></div>`;return; }
   if (!state.user) {ROOT.innerHTML=renderAuth();return;}
-  const tabs = ['overview','documents','master-listing','statutory-registers','statutory-deadlines','tasks','annual-return','signing'];
-  const label = {overview:'Overview',documents:'Documents','master-listing':'Master Listing','statutory-registers':'Statutory Registers','statutory-deadlines':'Statutory Deadlines',tasks:'Tasks','annual-return':'Annual Return',signing:'Signing'};
+  const tabs = ['overview','documents','master-listing','statutory-registers','statutory-deadlines','tasks','annual-return','signing','account'];
+  const label = {overview:'Overview',documents:'Documents','master-listing':'Master Listing','statutory-registers':'Statutory Registers','statutory-deadlines':'Statutory Deadlines',tasks:'Tasks','annual-return':'Annual Return',signing:'Signing',account:'Account Settings'};
   ROOT.innerHTML = `<div class="app-shell"><header class="topbar"><div class="top-title">UNICOSEC - Company Secretarial Management System</div><div class="top-right"><span class="online-dot"></span> Private workspace</div></header>
     <nav class="tabbar" aria-label="Main workspace navigation">${tabs.map(t=>`<button type="button" class="tab ${state.tab===t?'current':''}" data-action="tab-${t}" ${state.tab===t?'aria-current="page"':''}>${label[t]}</button>`).join('')}</nav>
-    <main class="main-content">${state.tab==='documents'?(state.companyId?renderFolder():renderCompanies()):state.tab==='overview'?renderOverview():state.tab==='master-listing'?masterListingUI.render():state.tab==='statutory-registers'?registerBookUI.render():state.tab==='statutory-deadlines'?renderStatutoryDeadlines(masterListingUI.state.userId===state.user?.id?masterListingUI.model:null,{query:state.deadlineQuery,kind:state.deadlineKind,period:state.deadlinePeriod,loading:masterListingUI.state.loading,error:masterListingUI.state.error}):state.tab==='tasks'?renderTasks():state.tab==='annual-return'?renderAnnualReturn():renderSigning()}</main>
-    <footer class="app-footer"><span>UNICOSEC - Company Secretarial Management System · Web + Android</span><span>${esc(state.user.email || '')} · ${action('Sign out','sign-out')}</span></footer></div>
+    <main class="main-content">${state.tab==='documents'?(state.companyId?renderFolder():renderCompanies()):state.tab==='overview'?renderOverview():state.tab==='master-listing'?masterListingUI.render():state.tab==='statutory-registers'?registerBookUI.render():state.tab==='statutory-deadlines'?renderStatutoryDeadlines(masterListingUI.state.userId===state.user?.id?masterListingUI.model:null,{query:state.deadlineQuery,kind:state.deadlineKind,period:state.deadlinePeriod,loading:masterListingUI.state.loading,error:masterListingUI.state.error}):state.tab==='tasks'?renderTasks():state.tab==='annual-return'?renderAnnualReturn():state.tab==='account'?renderAccountSettings(state.user.email):renderSigning()}</main>
+    <footer class="app-footer"><span>UNICOSEC - Company Secretarial Management System · Web + Android</span><span>${esc(state.user.email || '')} · ${action('Account Settings','tab-account')} · ${action('Sign out','sign-out')}</span></footer></div>
   ${state.notice ? `<div class="toast" role="status">${esc(state.notice)} ${action('✕','dismiss')}</div>` : ''}
   ${state.busy ? '<div class="busy-bar">Working… please keep this page open</div>' : ''}
   ${modalHTML()}
@@ -1019,7 +1020,7 @@ ROOT.addEventListener('click', event=>{
 ROOT.addEventListener('submit',event=>{
   if(masterListingUI.onSubmit(event.target)){event.preventDefault();return;}
   if(signingSupabaseUI.submit(event.target)){event.preventDefault();return;}
-  if(!['auth-form','modal-form'].includes(event.target.id)) return;
+  if(!['auth-form','modal-form','account-email-form','account-password-form'].includes(event.target.id)) return;
   event.preventDefault(); if(state.busy) return;
   const form=new FormData(event.target);
   if(event.target.id==='auth-form'){
@@ -1033,6 +1034,27 @@ ROOT.addEventListener('submit',event=>{
         if(!data.session)toast('Account created. Check your email to confirm your address, then sign in.');
         else {state.user=data.user;await refresh();}
       }
+    });return;
+  }
+  if(event.target.id==='account-email-form'){
+    const user=state.user;if(!user)return;
+    const newEmail=String(form.get('newEmail')||'');
+    const confirmEmail=String(form.get('confirmEmail')||'');
+    busyDo(async()=>{
+      if(state.user?.id!==user.id)throw Error('Login account changed. Sign in again.');
+      state.notice=await requestAccountEmailChange(db.auth,{currentEmail:user.email,newEmail,confirmEmail});
+    });return;
+  }
+  if(event.target.id==='account-password-form'){
+    const user=state.user;if(!user)return;
+    const currentPassword=String(form.get('currentPassword')||'');
+    const newPassword=String(form.get('newPassword')||'');
+    const confirmPassword=String(form.get('confirmPassword')||'');
+    busyDo(async()=>{
+      if(state.user?.id!==user.id)throw Error('Login account changed. Sign in again.');
+      state.notice=await requestAccountPasswordChange(db.auth,{
+        userId:user.id,email:user.email,currentPassword,newPassword,confirmPassword
+      });
     });return;
   }
   const m=state.modal;if(!m)return;
@@ -1275,6 +1297,7 @@ async function init() {
     render();
     db.auth.onAuthStateChange((event,session)=>{
       if(event==='SIGNED_OUT'){masterListingUI.reset();registerBookUI.reset();state.user=null;state.companyId=null;state.companies=[];state.folders=[];state.documents=[];render();}
+      if(event==='USER_UPDATED' && session?.user && state.user?.id===session.user.id){state.user=session.user;if(state.tab==='account'&&!state.busy)render();}
       if(event==='SIGNED_IN' && session?.user && (!state.user || state.user.id!==session.user.id)){
         state.user=session.user;Promise.resolve().then(refresh).catch(showError);
       }
