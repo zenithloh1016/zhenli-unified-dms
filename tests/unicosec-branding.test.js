@@ -31,10 +31,11 @@ test('UNICOSEC is Android display name; package IDs do not change to preserve ex
  assert.match(workflow,/name: UNICOSEC-\$\{\{ github\.run_number \}\}/);
 });
 
-test('UNICOSEC branding appears in statutory and annual-return generated PDFs',()=>{
+test('UNICOSEC branding remains in statutory PDFs while Annual Return client-review PDFs use ZHENLI company branding',()=>{
  contains('src/statutory-register-pdf.js','UNICOSEC · STATUTORY REGISTERS');
  contains('src/statutory-register-annual-ui.js','UNICOSEC · COMPANY STATUTORY REGISTERS');
- contains('annual-return/src/pdf.js','UNICOSEC · ANNUAL RETURN PARTICULARS');
+ contains('annual-return/src/pdf.js','ZHENLI CONSULTANCY SERVICES SDN. BHD. · ANNUAL RETURN PARTICULARS');
+ contains('annual-return/src/pdf.js','class="pdf-brand-name">ZHENLI CONSULTANCY SERVICES SDN. BHD.');
 });
 
 test('technical bridges and legal company identity remain unchanged',()=>{
