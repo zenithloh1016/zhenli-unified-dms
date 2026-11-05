@@ -1,0 +1,29 @@
+name: Verify UNICOSEC Account Settings
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/account-settings.js'
+      - 'src/main.js'
+      - 'src/style.css'
+      - 'tests/account-settings.test.js'
+      - '.github/workflows/account-settings-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - name: Run all DMS tests, including account security
+        run: npm run test:import
+      - name: Compile UNICOSEC website and app assets
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: test-public-key
+        run: npm run build
