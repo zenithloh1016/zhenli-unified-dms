@@ -45,5 +45,5 @@ test('login screens do not pre-populate email or password from a prior visit',()
   const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
   const hub=readFileSync(new URL('../src/task-hub-cloud.js',import.meta.url),'utf8');
   assert.match(main,/id="auth-form"[^\n]*autocomplete="off"/);
-  assert.match(hub,/id=\\"zh-cloud-login\\"[^\n]*autocomplete=\\"off\\"/);
+  assert.match(hub,/id="zh-cloud-login"[^\n]*autocomplete="off"/);
 });
