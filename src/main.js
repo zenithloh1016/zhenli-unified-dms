@@ -3,6 +3,7 @@ import {annualReturnCloudAction} from './annual-return-cloud.js';
 import {syncAnnualReturnAfterRegisterSave,annualReturnHistoryAction} from './annual-return-register-sync.js';
 import {auditorFromMasterListing} from './master-listing-auditor.js';
 import { createClient } from '@supabase/supabase-js';
+import {freshLoginAuthOptions,clearLegacyAuthSession} from './fresh-login-auth.js';
 import {renderAccountSettings,requestAccountEmailChange,requestAccountPasswordChange} from './account-settings.js';
 import readExcelFile from 'read-excel-file/browser';
 import {openMasterListingWorkbook} from './master-listing-reader.js';
@@ -56,8 +57,10 @@ const rawSupabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || '').trim().re
 const parsedSupabaseUrl = rawSupabaseUrl ? new globalThis.URL(rawSupabaseUrl) : null;
 const URL = parsedSupabaseUrl?.protocol === 'https:' && parsedSupabaseUrl.hostname.endsWith('.supabase.co') ? parsedSupabaseUrl.origin : '';
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// A new UNICOSEC window or page refresh always starts with a fresh login.
+if(URL && KEY)clearLegacyAuthSession(URL);
 const db = URL && KEY ? createClient(URL, KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+  auth: freshLoginAuthOptions()
 }) : null;
 
 const state = {
@@ -418,8 +421,8 @@ function modalHTML() {
 function renderAuth() {
   return `<div class="auth-page"><div class="auth-card"><div class="auth-logo">U</div><p class="eyebrow">UNICOSEC - Company Secretarial Management System</p><h1>Your company files, organized.</h1><p class="muted">Private, synchronized cloud storage accessible from your laptop and Android phone.</p>
   <div class="switcher">${action('Sign in', 'auth-login', '', state.authMode==='login'?'active':'quiet')}${action('Create account', 'auth-signup', '', state.authMode==='signup'?'active':'quiet')}</div>
-  <form id="auth-form"><label class="input-label">Email<input name="email" type="email" autocomplete="email" required placeholder="you@company.com"></label><label class="input-label">Password<input name="password" type="password" minlength="6" autocomplete="${state.authMode==='login'?'current-password':'new-password'}" required></label><button class="btn primary full" type="submit">${state.authMode==='login'?'Sign in':'Create account'}</button></form>
-  <p class="fineprint">Each account has a separate private portfolio. Sign in with the <b>same account</b> on both devices.</p>${state.notice ? `<div class="notice">${esc(state.notice)}</div>` : ''}</div></div>`;
+  <form id="auth-form" autocomplete="off"><label class="input-label">Email<input name="email" type="email" autocomplete="off" required placeholder="you@company.com"></label><label class="input-label">Password<input name="password" type="password" minlength="6" autocomplete="off" required></label><button class="btn primary full" type="submit">${state.authMode==='login'?'Sign in':'Create account'}</button></form>
+  <p class="fineprint">Enter your email and password whenever you open or refresh UNICOSEC. Your login session is not saved on this device. Each account has a separate private portfolio.</p>${state.notice ? `<div class="notice">${esc(state.notice)}</div>` : ''}</div></div>`;
 }
 
 function renderCompanyCard(company) {
