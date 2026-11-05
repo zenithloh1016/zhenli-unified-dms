@@ -5,6 +5,7 @@ import {auditorFromMasterListing} from './master-listing-auditor.js';
 import { createClient } from '@supabase/supabase-js';
 import {freshLoginAuthOptions,clearLegacyAuthSession} from './fresh-login-auth.js';
 import {requestRecoveryEmail} from './password-recovery-helpers.js';
+import {resendEmailChangeConfirmation} from './email-change-verification.js';
 import {renderAccountSettings,requestAccountEmailChange,requestAccountPasswordChange} from './account-settings.js';
 import readExcelFile from 'read-excel-file/browser';
 import {openMasterListingWorkbook} from './master-listing-reader.js';
@@ -421,17 +422,23 @@ function modalHTML() {
 
 function renderAuth() {
   const isReset=state.authMode==='reset';
-  const form=isReset?
+  const isEmailChange=state.authMode==='email-change';
+  const form=isEmailChange?
+   '<form id="resend-email-change-form" autocomplete="off">'+
+   '<label class="input-label">New email awaiting verification<input name="email" type="email" autocomplete="off" required placeholder="new@company.com"></label>'+
+   '<button class="btn primary full" type="submit">Resend verification email</button></form>'+
+   '<p class="fineprint">Check both your NEW and PREVIOUS inboxes. If the message does not arrive, ask the administrator to review the mail delivery settings; do not create a new account.</p>':
+   isReset?
    '<form id="password-reset-request-form" autocomplete="off">'+
    '<label class="input-label">Previously confirmed login email<input name="email" type="email" autocomplete="off" required placeholder="you@company.com"></label>'+
    '<button class="btn primary full" type="submit">Send password reset link</button></form>'+
    '<p class="fineprint">Use your PREVIOUS confirmed email if you recently requested an email change. Check your old inbox, new inbox, and spam folder for confirmation messages.</p>':
    `<form id="auth-form" autocomplete="off"><label class="input-label">Email<input name="email" type="email" autocomplete="off" required placeholder="you@company.com"></label><label class="input-label">Password<input name="password" type="password" minlength="6" autocomplete="off" required></label><button class="btn primary full" type="submit">${state.authMode==='login'?'Sign in':'Create account'}</button></form>`;
-  return `<div class="auth-page"><div class="auth-card"><div class="auth-logo">U</div><p class="eyebrow">UNICOSEC - Company Secretarial Management System</p><h1>${isReset?'Recover account access':'Your company files, organized.'}</h1><p class="muted">${isReset?'Use a secure email verification link to reset your UNICOSEC password, without making a new account.':'Private, synchronized cloud storage accessible from your laptop and Android phone.'}</p>
+  return `<div class="auth-page"><div class="auth-card"><div class="auth-logo">U</div><p class="eyebrow">UNICOSEC - Company Secretarial Management System</p><h1>${isEmailChange?'Confirm your new email':isReset?'Recover account access':'Your company files, organized.'}</h1><p class="muted">${isEmailChange?'Request a new email-change confirmation link for your existing UNICOSEC account.':isReset?'Use a secure email verification link to reset your UNICOSEC password, without making a new account.':'Private, synchronized cloud storage accessible from your laptop and Android phone.'}</p>
   <div class="switcher">${action('Sign in', 'auth-login', '', state.authMode==='login'?'active':'quiet')}${action('Create account', 'auth-signup', '', state.authMode==='signup'?'active':'quiet')}</div>
   ${form}
-  ${state.authMode==='login'?'<p class="fineprint">Recently changed email? You must verify the new address before it becomes your login.</p>'+action('Forgot password?','auth-reset','','secondary'):''}
-  ${isReset?action('Back to sign in','auth-login','','secondary'):''}
+  ${state.authMode==='login'?'<p class="fineprint">Recently changed email? You must verify the new address before it becomes your login.</p>'+action('Resend verification email','auth-email-change','','secondary')+' '+action('Forgot password?','auth-reset','','secondary'):''}
+  ${(isReset||isEmailChange)?action('Back to sign in','auth-login','','secondary'):''}
   <p class="fineprint">Enter your email and password whenever you open or refresh UNICOSEC. Your login session is not saved on this device. Each account has a separate private portfolio.</p>${state.notice ? `<div class="notice">${esc(state.notice)}</div>` : ''}</div></div>`;
 }
 
@@ -960,7 +967,7 @@ ROOT.addEventListener('click', event=>{
     else window.open(TASK_HUB_CLOUD,'_blank','noopener,noreferrer');
     return;
   }
-  if(a==='auth-login'||a==='auth-signup'||a==='auth-reset'){state.authMode=a==='auth-login'?'login':a==='auth-signup'?'signup':'reset';state.notice='';render();return;}
+  if(a==='auth-login'||a==='auth-signup'||a==='auth-reset'||a==='auth-email-change'){state.authMode=a==='auth-login'?'login':a==='auth-signup'?'signup':a==='auth-email-change'?'email-change':'reset';state.notice='';render();return;}
   if(a==='sign-out'){busyDo(async()=>{check((await db.auth.signOut()).error);masterListingUI.reset();registerBookUI.reset();state.user=null;state.companies=[];state.companyId=null;state.notice='';state.signingFullscreen=false;state.arFullscreen=false;});return;}
   if(a==='home'){state.tab='documents';state.companyId=null;state.folderId=null;state.search='';render();return;}
   if(a==='open-company'){openCompany(id);return;}
@@ -1033,9 +1040,13 @@ ROOT.addEventListener('click', event=>{
 ROOT.addEventListener('submit',event=>{
   if(masterListingUI.onSubmit(event.target)){event.preventDefault();return;}
   if(signingSupabaseUI.submit(event.target)){event.preventDefault();return;}
-  if(!['auth-form','password-reset-request-form','modal-form','account-email-form','account-password-form'].includes(event.target.id)) return;
+  if(!['auth-form','password-reset-request-form','resend-email-change-form','modal-form','account-email-form','account-password-form'].includes(event.target.id)) return;
   event.preventDefault(); if(state.busy) return;
   const form=new FormData(event.target);
+  if(event.target.id==='resend-email-change-form'){
+    const email=norm(form.get('email'));
+    busyDo(async()=>{state.notice=await resendEmailChangeConfirmation(db.auth,email);});return;
+  }
   if(event.target.id==='password-reset-request-form'){
     const email=norm(form.get('email'));
     busyDo(async()=>{state.notice=await requestRecoveryEmail(db.auth,email);});return;
