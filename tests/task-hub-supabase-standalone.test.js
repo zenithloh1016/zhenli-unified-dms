@@ -50,10 +50,11 @@ test('task create, edit, checklists, recurring tasks, calendar and backup remain
   assert.match(bridge,/event\.source!==child\.contentWindow/);
   assert.match(taskHtml,/window\.parent === window/);
 });
-test('standalone redirect cannot replace embedded Task Hub and same credentials are reused',()=>{
+test('standalone redirect is secure and Task Hub requires fresh credentials on every opening',()=>{
   assert.match(taskHtml,/new URL\('\.\.\/task-hub-cloud\/index\.html',window\.location\.href\)/);
-  assert.match(cloud,/persistSession:true/);
-  assert.match(cloud,/detectSessionInUrl:false/);
+  assert.match(cloud,/auth:freshLoginAuthOptions\(\)/);
+  assert.match(cloud,/clearLegacyAuthSession\(endpoint\)/);
+  assert.doesNotMatch(cloud,/persistSession:true/);
   assert.match(cloud,/db\.auth\.signOut/);
 });
 

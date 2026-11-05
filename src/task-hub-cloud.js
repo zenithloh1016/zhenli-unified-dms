@@ -2,6 +2,7 @@
 // This page is hosted on GitHub Pages and loads all private task state from
 // Supabase using the SAME authenticated account as the DMS.
 import {createClient} from '@supabase/supabase-js';
+import {freshLoginAuthOptions,clearLegacyAuthSession} from './fresh-login-auth.js';
 import {installHubBridge} from './integrated-modules.js';
 
 const root=document.getElementById('zh-task-cloud');
@@ -13,8 +14,10 @@ try{parsed=new URL(rawUrl);}catch{ /* Show safe configuration message */ }
 const endpoint=parsed?.protocol==='https:'&&parsed.hostname.endsWith('.supabase.co')?
   parsed.origin:'';
 const publishableKey=String(import.meta.env.VITE_SUPABASE_ANON_KEY||'');
+// Standalone Task Hub never restores an earlier browser login.
+if(endpoint&&publishableKey)clearLegacyAuthSession(endpoint);
 const db=endpoint&&publishableKey?createClient(endpoint,publishableKey,{
-  auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}
+  auth:freshLoginAuthOptions()
 }):null;
 const shellUrl=new URL('../task-hub/index.html',window.location.href).href + '?v=20261030-ten-status-v1';
 const dmsUrl=new URL('../index.html',window.location.href).href;
@@ -30,12 +33,13 @@ function info(message){
   else{lastError=String(message||'');render();}
 }
 function authPage(){
-  return '<main class="zh-login"><form id="zh-cloud-login" autocomplete="on">'+
+  return '<main class="zh-login"><form id="zh-cloud-login" autocomplete="off">'+
     '<h1>UNICOSEC Task Hub</h1><p>Private Supabase workspace. Use the same login as UNICOSEC - Company Secretarial Management System. All tasks and companies use your private Supabase workspace.</p>'+
     (lastError?'<p class="zh-error" role="alert">'+escapeHtml(lastError)+'</p>':'')+
-    '<label>Email<input name="email" type="email" required autocomplete="username"></label>'+
-    '<label>Password<input name="password" type="password" required autocomplete="current-password"></label>'+
+    '<label>Email<input name="email" type="email" required autocomplete="off"></label>'+
+    '<label>Password<input name="password" type="password" required autocomplete="off"></label>'+
     '<button class="zh-btn primary" type="submit"'+(busyAuth?' disabled':'')+'>Sign in to Task Hub</button>'+
+    '<p class="zh-help">Enter your email and password every time you open UNICOSEC Task Hub.</p>'+ 
     '<p><a href="'+escapeHtml(dmsUrl)+'">Back to DMS</a></p>'+
     '</form></main>';
 }
