@@ -100,23 +100,73 @@ test('each statutory register opens independently without Annual Return or Excel
  assert.equal(tab.state.sheetIndex,2);
  assert.doesNotMatch(html,/Annual Return Layout|Original Worksheet|rb-grid/);
 });
-test('add statutory entries and fields using register controls',async()=>{
- const {tab}=fixture();
+test('desktop Add Entry and Add Field show a local dialog and can save changes without window.prompt',async()=>{
+ const {tab,blobs}=fixture();
  await tab.openCompany('c1');
- const previousPrompt=globalThis.window;
- globalThis.window={prompt:()=> 'NEW DIRECTOR'};
+ const oldDocument=globalThis.document;
+ let typed='';
+ globalThis.document={getElementById:id=>id==='sr-text-value'?{value:typed,focus(){},select(){}}:null};
  try{
   tab.command('sr-sheet','0');
-  const starting=tab.state.book.sheets[0].rows.length;
+  const sheet=tab.state.book.sheets[0];
+  const initial=sheet.rows.length;
   tab.command('sr-add-row');
-  assert.equal(tab.state.book.sheets[0].rows.length,starting+1);
+  assert.equal(sheet.rows.length,initial,'opening a dialog must not modify records');
+  assert.match(tab.render(),/id="sr-text-value"/);
+  assert.match(tab.render(),/Add Entry/);
+  typed='';
+  tab.command('sr-text-apply');
+  assert.equal(sheet.rows.length,initial,'blank input must not add a record');
+  assert.match(tab.render(),/Enter the required information/);
+  tab.command('sr-text-cancel');
+  assert.equal(tab.state.inputDialog,null);
+  assert.equal(sheet.rows.length,initial);
+  tab.command('sr-add-row');
+  typed='NEW DIRECTOR';
+  tab.command('sr-text-apply');
+  assert.equal(sheet.rows.length,initial+1);
   assert.match(tab.render(),/NEW DIRECTOR/);
-  globalThis.window.prompt=()=> 'Passport No.';
   tab.command('sr-add-col');
-  assert.match(tab.render(),/Passport No./);
+  assert.equal(tab.state.inputDialog.action,'sr-add-col');
+  typed='Passport No.';
+  tab.command('sr-text-apply');
+  assert.match(tab.render(),/Passport No\./);
   assert.equal(tab.state.dirty,true);
- }finally{globalThis.window=previousPrompt;}
+  assert.equal(blobs.has('u1/statutory-registers/c1.json'),false,'no cloud write before Save Changes');
+  await tab.save();
+  assert.equal(tab.state.dirty,false);
+  assert.equal(blobs.has('u1/statutory-registers/c1.json'),true);
+ }finally{globalThis.document=oldDocument;}
 });
+test('desktop input is protected against switching registers mid-dialog',async()=>{
+ const {tab}=fixture();
+ await tab.openCompany('c1');
+ const oldDocument=globalThis.document;
+ globalThis.document={getElementById:id=>id==='sr-text-value'?{value:'STALE ENTRY',focus(){},select(){}}:null};
+ try{
+  tab.command('sr-add-row');
+  const initial=tab.state.book.sheets[0].rows.length;
+  tab.state.sheetIndex=1;
+  tab.command('sr-text-apply');
+  assert.equal(tab.state.inputDialog,null);
+  assert.equal(tab.state.book.sheets[0].rows.length,initial);
+  assert.equal(tab.state.dirty,false);
+ }finally{globalThis.document=oldDocument;}
+});
+test('desktop text dialog escapes typed labels before rendering HTML',async()=>{
+ const {tab}=fixture();
+ await tab.openCompany('c1');
+ const oldDocument=globalThis.document;
+ globalThis.document={getElementById:()=>null};
+ try{
+  tab.command('sr-rename-sheet');
+  tab.state.inputDialog.value='<img src=x onerror=alert(1)>';
+  const html=tab.render();
+  assert.doesNotMatch(html,/<img src=/);
+  assert.match(html,/&lt;img src=x onerror=alert\(1\)&gt;/);
+ }finally{globalThis.document=oldDocument;}
+});
+
 test('saves edited register privately and reloads it',async()=>{
  const {tab,blobs,written}=fixture();
  await tab.openCompany('c1');
