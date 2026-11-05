@@ -31,7 +31,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:true,
   importPreview:null,importFilename:'',importing:false,originalDocs:[],
   historyOpen:false,historyItems:[],historyPreview:null,historyPreviewName:'',
-  historyLoading:false,historyLoaded:false,rateEditor:null
+  historyLoading:false,historyLoaded:false,rateEditor:null,inputDialog:null,inputError:''
  };
  let renderHook=null;
  const afterRender=fn=>{renderHook=fn;};
@@ -44,7 +44,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    dirty:false,sheetIndex:0,rowPage:0,reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:true,
     importPreview:null,importFilename:'',importing:false,originalDocs:[],
     historyOpen:false,historyItems:[],historyPreview:null,historyPreviewName:'',
-    historyLoading:false,historyLoaded:false,rateEditor:null});
+    historyLoading:false,historyLoaded:false,rateEditor:null,inputDialog:null,inputError:''});
  }
  function canLeave(){
   return !state.dirty||window.confirm('Your Statutory Registers have unsaved edits. Leave without saving?');
@@ -190,6 +190,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     state.baseBook=structuredClone(saved||book);state.conflict=false;state.originalDocs=originalDocs;
    state.historyOpen=false;state.historyItems=[];state.historyPreview=null;
    state.historyPreviewName='';state.historyLoaded=false;state.historyLoading=false;
+   state.inputDialog=null;state.inputError='';
    state.dirty=!!changed;
    state.sheetIndex=visibleRegisterIndices(book)[0]??0;
    state.showBlankFields=true; // Always display the reference particulars, including blanks.
@@ -202,6 +203,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   if(!canLeave())return;
   state.selectedId=null;state.book=null;state.originalDocs=[];state.dirty=false;state.message='';
   state.baseBook=null;state.conflict=false;state.originalUpdatedAt=null;
+  state.inputDialog=null;state.inputError='';
   state.historyOpen=false;state.historyItems=[];state.historyPreview=null;
   state.historyPreviewName='';state.historyLoaded=false;notify();
  }
@@ -240,7 +242,15 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
      '<div class="rb-help">Select Add Register to begin.</div>')+
    (state.originalDocs.length?'<details class="rb-originals"><summary>Preserved original Register Book files ('+state.originalDocs.length+')</summary><p class="muted">Original files remain securely archived, even though their former Documents folders are hidden.</p>'+state.originalDocs.map(d=>'<div class="rb-original-row"><span>'+esc(d.name)+'</span>'+act('Download Original','sr-original',d.id)+'</div>').join('')+'</details>':'')+
    '<p class="rb-footnote muted">Working statutory register particulars. Verify information against SSM filings and the original documents before relying on these records. Changes are saved privately.</p>'+ 
-   (state.rateEditor?'<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="Set share consideration rate">'+
+   (state.inputDialog?'<div class="modal-backdrop sr-text-dialog-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="sr-text-title">'+
+     '<div class="modal-heading"><h3 id="sr-text-title">'+esc(state.inputDialog.title)+'</h3>'+act('✕','sr-text-cancel')+'</div>'+
+     '<label class="input-label" for="sr-text-value">'+esc(state.inputDialog.label)+
+     '<input id="sr-text-value" type="text" maxlength="300" autocomplete="off" value="'+esc(state.inputDialog.value)+'" placeholder="Enter information" /></label>'+
+     (state.inputError?'<p class="error" role="alert">'+esc(state.inputError)+'</p>':'')+
+     '<div class="modal-actions">'+act('Cancel','sr-text-cancel')+
+     act(state.inputDialog.action==='sr-add-row'?'Add Entry':state.inputDialog.action==='sr-add-col'?'Add Field':state.inputDialog.action==='sr-add-sheet'?'Add Register':'Apply','sr-text-apply','','primary')+
+     '</div></section></div>':'')+
+    (state.rateEditor?'<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="Set share consideration rate">'+
      '<div class="modal-heading"><h3>Set RM per share</h3>'+act('✕','sr-cancel-consideration-rate')+'</div>'+
      '<p class="muted">'+esc(state.rateEditor.title)+' · Enter the documented consideration paid per share. Current shares held × RM/share determines the displayed total.</p>'+
      '<label class="input-label" for="sr-rate-input">Consideration per share (RM)<input id="sr-rate-input" type="text" inputmode="decimal" autocomplete="off" value="'+esc(state.rateEditor.rate)+'" placeholder="e.g. 1.00"></label>'+
@@ -370,12 +380,46 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   const marker=document.getElementById('sr-dirty');if(marker)marker.textContent='Unsaved changes';
   return true;
  }
- function command(action,id=''){
+ /** Browser prompts are often blocked by desktop Electron WebViews.
+  * Keep entry editing in the app and commit only on explicit Apply.
+  */
+ function dialogText(action,id,title,label,initial='',submitted){
+  if(submitted!==undefined)return normValue(String(submitted).trim()).slice(0,300);
+  if(!state.book||!state.selectedId)return null;
+  state.inputDialog={action,id,title,label,value:String(initial||''),
+   companyId:state.selectedId,sheetIndex:state.sheetIndex,
+   sheetName:String(state.book.sheets[state.sheetIndex]?.name||'')};
+  state.inputError='';notify();
+  document.getElementById('sr-text-value')?.focus();
+  document.getElementById('sr-text-value')?.select();
+  return null;
+ }
+ function command(action,id='',submitted){
+  if(action==='sr-text-cancel'){
+   state.inputDialog=null;state.inputError='';notify();return true;
+  }
+  if(action==='sr-text-apply'){
+   const pending=state.inputDialog;
+   if(!pending)return true;
+   const input=document.getElementById('sr-text-value');
+   if(!input)return true;
+   const value=String(input.value||'').trim();
+   if(!value){state.inputError='Enter the required information before applying.';notify();return true;}
+   if(pending.companyId!==state.selectedId||pending.sheetIndex!==state.sheetIndex||
+      pending.sheetName!==state.book?.sheets?.[state.sheetIndex]?.name){
+    state.inputDialog=null;state.inputError='';
+    status('Company or register selection changed. Reopen Add Entry or Add Field.',
+      'No entry was added to a different register.');
+    return true;
+   }
+   state.inputDialog=null;state.inputError='';
+   return command(pending.action,pending.id,value);
+  }
   if(action==='rb-prev'||action==='rb-next'){state.page=Math.max(0,state.page+(action==='rb-next'?1:-1));notify();return true;}
   if(action==='sr-sheet'){
    const n=Number(id);
    if(Number.isInteger(n)&&n>=0&&n<(state.book?.sheets?.length||0)&&!isManagerRegister(state.book.sheets[n].name)){
-    state.sheetIndex=n;notify(); // Keep the user's field visibility choice across tabs.
+    state.sheetIndex=n;state.inputDialog=null;state.inputError='';notify(); // Keep the user's field visibility choice across tabs.
    }return true;
   }
   if(action==='sr-set-status'){
@@ -444,7 +488,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    const shown=projected.blocks.find(block=>block.type==='field'&&
     block.sheetIndex===si&&block.row===ri&&block.col===ci);
    const current=state.book.fieldLabels?.[key]||shown?.label||'';
-   const label=window.prompt('Edit the statutory field label:',current);
+   const label=dialogText(action,id,'Edit Field Label','Statutory field label',current,submitted);
    if(label===null)return true;
    if(!label.trim())throw Error('Field label must not be blank.');
    if(!state.book.fieldLabels)state.book.fieldLabels={};
@@ -533,11 +577,11 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    if(sheet.rows.length>=12000)throw Error('Maximum 12,000 entries in a register.');
    const kind=registerKind(sheet.name);
    if(kind==='profile'){
-    const label=window.prompt('Name of the new company particular (for example, Business Address):');
+    const label=dialogText(action,id,'Add Entry','Company particular (for example, Business Address)','',submitted);
     if(!label?.trim())return true;
     sheet.rows.push([label.trim().replace(/:$/,'')+':','']);
    }else if(kind==='text'){
-    const value=window.prompt('New statutory record text:');
+    const value=dialogText(action,id,'Add Entry','New statutory record text','',submitted);
     if(value===null)return true;
     sheet.rows.push([normValue(value||'New entry')]);
    }else if(kind==='table'){
@@ -554,7 +598,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
      beneficialOwners:['Full Name','Name of beneficial owner:']
     };
     const [target,prompt]=prompts[rk]||['','Name or reference for the new register entry:'];
-    const value=window.prompt(prompt);
+    const value=dialogText(action,id,'Add Entry',prompt,'',submitted);
     if(!value?.trim())return true;
     const width=Math.max(1,...sheet.rows.map(r=>r.length));
     const record=Array.from({length:Math.min(250,width)},()=> '');
@@ -565,7 +609,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
     sheet.rows.push(record);
     if(description.headerRow===-1)state.showBlankFields=true;
    }else{
-    const value=window.prompt('New register entry or description:');
+    const value=dialogText(action,id,'Add Entry','New register entry or description','',submitted);
     if(!value?.trim())return true;
     sheet.rows.push([normValue(value)]);
    }
@@ -573,7 +617,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   }
   if(action==='sr-add-col'){
    const sheet=state.book?.sheets?.[state.sheetIndex];if(!sheet)return true;
-   const label=window.prompt('Field label (for example, Date of Appointment):');
+   const label=dialogText(action,id,'Add Field','Field label (for example, Date of Appointment)','',submitted);
    if(!label?.trim())return true;
    const kind=registerKind(sheet.name);
    if(kind==='profile'||kind==='member'){
@@ -600,7 +644,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   }
   if(action==='sr-add-sheet'){
    if(state.book.sheets.length>=100)throw Error('Maximum 100 statutory registers.');
-   const name=window.prompt('New statutory register name (for example, Register of Charges):');
+   const name=dialogText(action,id,'Add Register','New statutory register name (for example, Register of Charges)','',submitted);
    if(!name?.trim())return true;
    const clean=normalizeRegisterName(name.trim());
    if(state.book.sheets.some(s=>registerLabel(s.name).toLowerCase()===clean.toLowerCase()))throw Error('A register with this name already exists.');
@@ -609,7 +653,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   }
   if(action==='sr-rename-sheet'){
    const sheet=state.book.sheets[state.sheetIndex];
-   const name=window.prompt('Register name:',sheet.name);
+   const name=dialogText(action,id,'Rename Register','Register name',sheet.name,submitted);
    if(name?.trim()){sheet.name=normalizeRegisterName(name.trim());state.dirty=true;notify();}
    return true;
   }
