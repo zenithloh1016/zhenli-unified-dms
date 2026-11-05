@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/><meta name="theme-color" content="#173e64"/><title>Reset Password | UNICOSEC</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:20px;background:linear-gradient(135deg,#173e64,#376b9b);color:#192838;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+main{width:min(100%,460px);padding:32px;border-radius:17px;background:white;box-shadow:0 16px 45px #09234250}
+h1{margin:0 0 10px;font-size:27px;color:#173e64}p{font-size:14px;color:#536b81;line-height:1.6}
+label{display:block;margin:18px 0;font-size:13px;font-weight:700;color:#365874}
+input{display:block;margin-top:7px;padding:12px;border:1px solid #cbd9e8;border-radius:9px;width:100%;font:inherit;font-size:15px}
+button{background:#173e64;color:white;padding:13px;border:0;border-radius:9px;font-size:14px;font-weight:700;width:100%;cursor:pointer}
+button:disabled{opacity:.55;cursor:not-allowed}a{color:#17598e;font-weight:600}
+#message{margin-top:18px;white-space:pre-wrap;overflow-wrap:anywhere}
+</style></head><body><main><h1>UNICOSEC password recovery</h1>
+<p>This secure page can only update your password after you open a valid password recovery email link.</p>
+<form id="recovery-form" hidden>
+<label>New password<input type="password" name="newPassword" autocomplete="new-password" minlength="12" required></label>
+<label>Confirm new password<input type="password" name="confirmPassword" autocomplete="new-password" minlength="12" required></label>
+<button type="submit">Set new password</button>
+</form><p id="message" role="status">Checking the recovery link…</p>
+<p><a href="../index.html">Back to UNICOSEC sign in</a></p>
+</main><script type="module" src="/src/password-recovery.js"></script></body></html>

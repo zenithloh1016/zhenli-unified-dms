@@ -4,6 +4,7 @@ import {syncAnnualReturnAfterRegisterSave,annualReturnHistoryAction} from './ann
 import {auditorFromMasterListing} from './master-listing-auditor.js';
 import { createClient } from '@supabase/supabase-js';
 import {freshLoginAuthOptions,clearLegacyAuthSession} from './fresh-login-auth.js';
+import {requestRecoveryEmail} from './password-recovery-helpers.js';
 import {renderAccountSettings,requestAccountEmailChange,requestAccountPasswordChange} from './account-settings.js';
 import readExcelFile from 'read-excel-file/browser';
 import {openMasterListingWorkbook} from './master-listing-reader.js';
@@ -419,9 +420,18 @@ function modalHTML() {
 }
 
 function renderAuth() {
-  return `<div class="auth-page"><div class="auth-card"><div class="auth-logo">U</div><p class="eyebrow">UNICOSEC - Company Secretarial Management System</p><h1>Your company files, organized.</h1><p class="muted">Private, synchronized cloud storage accessible from your laptop and Android phone.</p>
+  const isReset=state.authMode==='reset';
+  const form=isReset?
+   '<form id="password-reset-request-form" autocomplete="off">'+
+   '<label class="input-label">Previously confirmed login email<input name="email" type="email" autocomplete="off" required placeholder="you@company.com"></label>'+
+   '<button class="btn primary full" type="submit">Send password reset link</button></form>'+
+   '<p class="fineprint">Use your PREVIOUS confirmed email if you recently requested an email change. Check your old inbox, new inbox, and spam folder for confirmation messages.</p>':
+   `<form id="auth-form" autocomplete="off"><label class="input-label">Email<input name="email" type="email" autocomplete="off" required placeholder="you@company.com"></label><label class="input-label">Password<input name="password" type="password" minlength="6" autocomplete="off" required></label><button class="btn primary full" type="submit">${state.authMode==='login'?'Sign in':'Create account'}</button></form>`;
+  return `<div class="auth-page"><div class="auth-card"><div class="auth-logo">U</div><p class="eyebrow">UNICOSEC - Company Secretarial Management System</p><h1>${isReset?'Recover account access':'Your company files, organized.'}</h1><p class="muted">${isReset?'Use a secure email verification link to reset your UNICOSEC password, without making a new account.':'Private, synchronized cloud storage accessible from your laptop and Android phone.'}</p>
   <div class="switcher">${action('Sign in', 'auth-login', '', state.authMode==='login'?'active':'quiet')}${action('Create account', 'auth-signup', '', state.authMode==='signup'?'active':'quiet')}</div>
-  <form id="auth-form" autocomplete="off"><label class="input-label">Email<input name="email" type="email" autocomplete="off" required placeholder="you@company.com"></label><label class="input-label">Password<input name="password" type="password" minlength="6" autocomplete="off" required></label><button class="btn primary full" type="submit">${state.authMode==='login'?'Sign in':'Create account'}</button></form>
+  ${form}
+  ${state.authMode==='login'?'<p class="fineprint">Recently changed email? You must verify the new address before it becomes your login.</p>'+action('Forgot password?','auth-reset','','secondary'):''}
+  ${isReset?action('Back to sign in','auth-login','','secondary'):''}
   <p class="fineprint">Enter your email and password whenever you open or refresh UNICOSEC. Your login session is not saved on this device. Each account has a separate private portfolio.</p>${state.notice ? `<div class="notice">${esc(state.notice)}</div>` : ''}</div></div>`;
 }
 
@@ -950,7 +960,7 @@ ROOT.addEventListener('click', event=>{
     else window.open(TASK_HUB_CLOUD,'_blank','noopener,noreferrer');
     return;
   }
-  if(a==='auth-login'||a==='auth-signup'){state.authMode=a==='auth-login'?'login':'signup';state.notice='';render();return;}
+  if(a==='auth-login'||a==='auth-signup'||a==='auth-reset'){state.authMode=a==='auth-login'?'login':a==='auth-signup'?'signup':'reset';state.notice='';render();return;}
   if(a==='sign-out'){busyDo(async()=>{check((await db.auth.signOut()).error);masterListingUI.reset();registerBookUI.reset();state.user=null;state.companies=[];state.companyId=null;state.notice='';state.signingFullscreen=false;state.arFullscreen=false;});return;}
   if(a==='home'){state.tab='documents';state.companyId=null;state.folderId=null;state.search='';render();return;}
   if(a==='open-company'){openCompany(id);return;}
@@ -1023,14 +1033,21 @@ ROOT.addEventListener('click', event=>{
 ROOT.addEventListener('submit',event=>{
   if(masterListingUI.onSubmit(event.target)){event.preventDefault();return;}
   if(signingSupabaseUI.submit(event.target)){event.preventDefault();return;}
-  if(!['auth-form','modal-form','account-email-form','account-password-form'].includes(event.target.id)) return;
+  if(!['auth-form','password-reset-request-form','modal-form','account-email-form','account-password-form'].includes(event.target.id)) return;
   event.preventDefault(); if(state.busy) return;
   const form=new FormData(event.target);
+  if(event.target.id==='password-reset-request-form'){
+    const email=norm(form.get('email'));
+    busyDo(async()=>{state.notice=await requestRecoveryEmail(db.auth,email);});return;
+  }
   if(event.target.id==='auth-form'){
     const email=norm(form.get('email')),password=String(form.get('password')||'');
     busyDo(async()=>{
       if(state.authMode==='login'){
-        const {data,error}=await db.auth.signInWithPassword({email,password});check(error);
+        const {data,error}=await db.auth.signInWithPassword({email,password});
+        if(error?.code==='invalid_credentials'||/invalid login credentials/i.test(error?.message||''))
+          throw Error('Email or password was not accepted. If you changed your email recently, sign in with the PREVIOUS confirmed email until the new email is verified. You can also use Forgot password.');
+        check(error);
         state.user=data.user;await refresh();state.notice='';
       }else{
         const {data,error}=await db.auth.signUp({email,password});check(error);
