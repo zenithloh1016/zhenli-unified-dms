@@ -78,9 +78,9 @@ test('RSSH saved draft performs one-time correction, with an explicit manual opt
 });
 test('PDF Director Confirmation omits the verification qualification in both languages',()=>{
  const pdf=readFileSync(new URL('../src/pdf.js',import.meta.url),'utf8');
- assert.match(pdf,/I hereby confirm that the particulars stated above are true and correct to the best of my knowledge\./);
+ assert.match(pdf,/I confirm that I have reviewed the above particulars and, to the best of my knowledge, they are true, complete and accurate\./);
  assert.doesNotMatch(pdf,/subject to verification of any missing or noted information/i);
- assert.match(pdf,/本人谨此确认，据本人所知，上述资料属真实及正确。/);
+ assert.match(pdf,/本人确认已核阅上述资料，并据本人所知，上述资料真实、完整及准确。/);
  assert.doesNotMatch(pdf,/未提供或待核实之资料仍须另行确认/);
  assert.match(pdf,/DIRECTOR CONFIRMATION/);
 });
