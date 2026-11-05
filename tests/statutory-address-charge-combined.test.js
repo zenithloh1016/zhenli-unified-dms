@@ -74,21 +74,26 @@ test('Company Details inline address edit consolidates old continuation cells',a
  assert.deepEqual(tab.state.book.sheets[0].rows.slice(3,6).map(x=>x[1]),['','','']);
  assert.equal(buildIndependentRegister(tab.state.book,0).blocks.find(x=>x.label==='Registered Address').value,'NO. 12, NEW ADDRESS\nIPOH, PERAK');
 });
-test('Edit Field works in different statutory registers and in PDFs without changing source label cells',async()=>{
+test('Edit Field uses the in-app desktop dialog without altering source labels',async()=>{
  const {tab}=fixture();await tab.openCompany('co1');
- const prior=globalThis.window;
- globalThis.window={prompt:()=> 'Registered Address (New)'};
+ const prior=globalThis.document;
+ let value='';
+ globalThis.document={getElementById:id=>id==='sr-text-value'?{value,focus(){},select(){}}:null};
  try{
   assert.equal(tab.command('sr-edit-field','0:2:1'),true);
+  assert.match(tab.render(),/id="sr-text-value"/);
+  value='Registered Address (New)';
+  assert.equal(tab.command('sr-text-apply'),true);
   const b=tab.state.book;
   assert.equal(b.fieldLabels['0:2:1'],'Registered Address (New)');
   assert.equal(b.sheets[0].rows[2][0],'Registered Office:');
-  assert.match(tab.render(),/Registered Address \(New\)/);
-  globalThis.window.prompt=()=> 'Member Name';
+  assert.match(tab.render(),/Registered Address \\(New\\)/);
   assert.equal(tab.command('sr-edit-field','1:0:1'),true);
+  value='Member Name';
+  assert.equal(tab.command('sr-text-apply'),true);
   tab.command('sr-sheet','1');
   assert.match(tab.render(),/Member Name/);
- }finally{globalThis.window=prior;}
+ }finally{globalThis.document=prior;}
 });
 test('one unified Members tab groups multiple folios and preserves individual edit mapping',async()=>{
  const b=book();
