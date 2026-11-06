@@ -28,8 +28,8 @@ export function recoveryLinkKind(url){
 export function isRecoveryLink(url){return recoveryLinkKind(url)!==null;}
 
 /** Move an unexpectedly root-directed recovery callback to the actual reset UI.
- * This is a same-origin navigation: query strings and URL fragments never go to
- * Supabase, another host, logging, or application analytics here.
+ * This keeps the recovery callback on the same approved site origin rather
+ * than forwarding tokens to an unrelated host or external application.
  */
 export function recoveryRedirectFromAppRoot(url){
  const parsed=new URL(String(url));
