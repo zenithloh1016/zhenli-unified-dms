@@ -33,7 +33,7 @@ export function isRecoveryLink(url){return recoveryLinkKind(url)!==null;}
  */
 export function recoveryRedirectFromAppRoot(url){
  const parsed=new URL(String(url));
- if(/\\/password-recovery(?:\\/|\\/index\\.html)?$/i.test(parsed.pathname))return '';
+ if(/\/password-recovery(?:\/|\/index\.html)?$/i.test(parsed.pathname))return '';
  if(!recoveryLinkKind(parsed.href))return '';
  const target=new URL('./password-recovery/',parsed.href);
  return target.href;
