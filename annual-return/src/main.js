@@ -69,7 +69,6 @@ const cloudDraft=createCloudDraftClient({
  applyDocument:document=>{
   doc=document;generated=null;$('download-box').hidden=true;
   resetView();draftOptions();
-mountMbrsPreparation(()=>doc);
  },
  onStatus:(message,error=false)=>{
   const el=$('cloud-sync-status');
@@ -79,6 +78,9 @@ mountMbrsPreparation(()=>doc);
    window.parent.postMessage({type:'ZHENLI_AR_CLOUD_DRAFT_LIST_REFRESH'},window.location.origin);
  }
 });
+// Install MBRS preparation controls immediately, including on blank/local-only drafts.
+// The getter always uses the current in-memory document when a company/draft changes.
+mountMbrsPreparation(()=>doc);
 // Fill only blank secretary particulars after the current cloud draft is loaded.
 function requestSecretaryRegisterImport(companyId){
  if(window.parent===window||!companyId||companyId!==selectedDmsCompanyId||

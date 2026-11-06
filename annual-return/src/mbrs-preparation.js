@@ -123,7 +123,7 @@ async function saveText(filename,content,mime){
 
 export function mountMbrsPreparation(getDocument){
  const root=document.getElementById('mbrs-preparation');
- if(!root)return;
+ if(!root||root.dataset.mbrsMounted==='true')return;
  const type=root.querySelector('#mbrs-type');
  const confirmation=root.querySelector('#mbrs-ar4-confirmation');
  const verify=root.querySelector('#mbrs-check');
@@ -138,13 +138,18 @@ export function mountMbrsPreparation(getDocument){
  });
  const show=(text,error=false)=>{status.textContent=text;status.setAttribute('data-error',String(error));};
  const refresh=()=>{
-  ar4Label.hidden=type.value!=='AR4';
-  const w=snapshot();
-  const missing=w.checks.filter(x=>x.level==='missing');
-  checklist.textContent=mbrsPreparationSummary(w);
-  checklist.hidden=false;
-  show(missing.length?missing.length+' issue(s) need attention before MBRS preparation.':
-    'Preparation review completed. '+w.populatedFields+' populated particulars. Official mTool validation remains required.',!!missing.length);
+  try{
+   ar4Label.hidden=type.value!=='AR4';
+   const w=snapshot();
+   const missing=w.checks.filter(x=>x.level==='missing');
+   checklist.textContent=mbrsPreparationSummary(w);
+   checklist.hidden=false;
+   show(missing.length?missing.length+' issue(s) need attention before MBRS preparation.':
+     'Preparation review completed. '+w.populatedFields+' populated particulars. Official mTool validation remains required.',!!missing.length);
+  }catch(error){
+   checklist.hidden=true;
+   show('MBRS preparation check failed: '+String(error?.message||error),true);
+  }
  };
  type.addEventListener('change',refresh);
  confirmation.addEventListener('change',refresh);

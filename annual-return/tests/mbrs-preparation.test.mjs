@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {extractMbrsWorkspace,mbrsWorksheetCsv,mbrsPreparationSummary} from '../src/mbrs-preparation.js';
+import {extractMbrsWorkspace,mbrsWorksheetCsv,mbrsPreparationSummary,mountMbrsPreparation} from '../src/mbrs-preparation.js';
+import {readFileSync} from 'node:fs';
 
 const annualReturn=()=>({
  company:{name:'',no:'',arYear:'',arDate:''},
@@ -57,4 +58,53 @@ test('exported CSV quotes values, prevents Excel formula injection and is explic
 });
 test('invalid filing types are not silently accepted',()=>{
  assert.throws(()=>extractMbrsWorkspace(annualReturn(),{filingType:'EA2'}),/Choose AR1 or AR4/);
+});
+
+test('MBRS check button responds immediately, updates with the current draft and avoids duplicate handlers',()=>{
+ const makeElement=()=>{
+  const listeners=new Map();
+  return {
+   listeners,dataset:{},hidden:false,value:'',checked:false,textContent:'',attributes:{},
+   addEventListener(event,callback){
+    if(!listeners.has(event))listeners.set(event,[]);
+    listeners.get(event).push(callback);
+   },
+   setAttribute(name,value){this.attributes[name]=value;},
+   fire(event){for(const callback of listeners.get(event)||[])callback();}
+  };
+ };
+ const ids=['mbrs-type','mbrs-ar4-confirmation','mbrs-check','mbrs-csv',
+  'mbrs-json','mbrs-copy','mbrs-status','mbrs-checklist',
+  'mbrs-ar4-confirm-row','mbrs-ssm-guide'];
+ const elements=Object.fromEntries(ids.map(id=>[id,makeElement()]));
+ elements['mbrs-type'].value='AR1';
+ const root={dataset:{},querySelector:selector=>elements[selector.slice(1)]};
+ const previousDocument=globalThis.document;
+ globalThis.document={getElementById:id=>id==='mbrs-preparation'?root:null};
+ let current=annualReturn();
+ try{
+  mountMbrsPreparation(()=>current);
+  mountMbrsPreparation(()=>current);
+  assert.equal(elements['mbrs-check'].listeners.get('click').length,1);
+  elements['mbrs-check'].fire('click');
+  assert.match(elements['mbrs-status'].textContent,/Preparation review completed/);
+  assert.match(elements['mbrs-checklist'].textContent,/EXAMPLE SDN. BHD./);
+  assert.equal(elements['mbrs-checklist'].hidden,false);
+  current=annualReturn();
+  current.particulars.find(row=>row.en==='Company Name').value='UPDATED COMPANY SDN. BHD.';
+  elements['mbrs-check'].fire('click');
+  assert.match(elements['mbrs-checklist'].textContent,/UPDATED COMPANY SDN. BHD./);
+ }finally{
+  if(previousDocument===undefined)delete globalThis.document;
+  else globalThis.document=previousDocument;
+ }
+});
+test('MBRS controls mount during initial page boot rather than only after cloud draft load',()=>{
+ const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ const applyStart=main.indexOf('applyDocument:document=>{');
+ const statusStart=main.indexOf('onStatus:',applyStart);
+ const readyStart=main.indexOf('// Fill only blank secretary particulars',statusStart);
+ assert.ok(applyStart>=0&&statusStart>applyStart&&readyStart>statusStart);
+ assert.doesNotMatch(main.slice(applyStart,statusStart),/mountMbrsPreparation/);
+ assert.match(main.slice(statusStart,readyStart),/mountMbrsPreparation\(\(\)=>doc\);/);
 });
