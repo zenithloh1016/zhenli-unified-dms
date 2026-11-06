@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {requestRecoveryEmail,RECOVERY_REDIRECT,completeRecovery,isRecoveryLink} from '../src/password-recovery-helpers.js';
+import {requestRecoveryEmail,recoveryDeliveryError,RECOVERY_REDIRECT,completeRecovery,isRecoveryLink} from '../src/password-recovery-helpers.js';
 
 test('recovery email targets the published UNICOSEC Site URL, with original email if unconfirmed',async()=>{
  const calls=[];
@@ -39,4 +39,21 @@ test('recovery is a separately built page; normal login never stores session',()
  assert.match(vite,/passwordRecovery:resolve\('password-recovery\/index.html'\)/);
  assert.match(main,/password-reset-request-form/);
  assert.match(helper,/persistSession:false/);
+});
+
+test('Supabase built-in email cap gets a usable explanation without changing existing accounts',async()=>{
+ const original=Object.assign(new Error('email rate limit exceeded'),{code:'over_email_send_rate_limit',status:429});
+ const auth={resetPasswordForEmail:async()=>({error:original})};
+ await assert.rejects(requestRecoveryEmail(auth,'someone@example.com'),/custom SMTP/);
+ const displayed=recoveryDeliveryError(original);
+ assert.match(displayed.message,/Do not keep retrying/);
+ assert.doesNotMatch(displayed.message,/someone@example.com/);
+});
+test('auth delivery failures distinguish unauthorised destinations from generic throttling',async()=>{
+ const unauthorised=recoveryDeliveryError({code:'email_address_not_authorized',status:400,message:'address not authorized'});
+ assert.match(unauthorised.message,/custom SMTP/);
+ const throttled=recoveryDeliveryError({code:'over_request_rate_limit',status:429,message:'over request'});
+ assert.match(throttled.message,/Too many recovery requests/);
+ const generic=recoveryDeliveryError(new Error('Network failure'));
+ assert.equal(generic.message,'Network failure');
 });
