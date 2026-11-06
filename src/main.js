@@ -4,7 +4,7 @@ import {syncAnnualReturnAfterRegisterSave,annualReturnHistoryAction} from './ann
 import {auditorFromMasterListing} from './master-listing-auditor.js';
 import { createClient } from '@supabase/supabase-js';
 import {freshLoginAuthOptions,clearLegacyAuthSession} from './fresh-login-auth.js';
-import {requestRecoveryEmail} from './password-recovery-helpers.js';
+import {requestRecoveryEmail,recoveryRedirectFromAppRoot} from './password-recovery-helpers.js';
 import {resendEmailChangeConfirmation} from './email-change-verification.js';
 import {renderAccountSettings,requestAccountEmailChange,requestAccountPasswordChange} from './account-settings.js';
 import readExcelFile from 'read-excel-file/browser';
@@ -50,6 +50,10 @@ function browserDownload(blob,filename){
  return {filename:safeName};
 }
 
+// If Supabase sends the reset callback to the app's Site URL, recover it
+// before the normal login client (which deliberately ignores auth URL tokens).
+const resetCallbackTarget=recoveryRedirectFromAppRoot(window.location.href);
+if(resetCallbackTarget)window.location.replace(resetCallbackTarget);
 const ROOT = document.getElementById('app');
 const BUCKET = 'dms-private';
 const TASK_HUB_BUNDLED = new globalThis.URL('./task-hub/index.html', document.baseURI).href + '?v=20261030-ten-status-v1';
