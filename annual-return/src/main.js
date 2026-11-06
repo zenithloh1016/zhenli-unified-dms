@@ -11,7 +11,6 @@ import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCo
 import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,removeAnnualReturnDraft,draftIdOfKey} from './drafts.js';
 import {BO_CRITERIA_DESCRIPTIONS,selectedBoCriteria} from './bo-criteria.js';
 import {createCloudDraftClient} from './cloud-draft-client.js';
-import {mountMbrsPreparation} from './mbrs-preparation.js';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
@@ -78,9 +77,6 @@ const cloudDraft=createCloudDraftClient({
    window.parent.postMessage({type:'ZHENLI_AR_CLOUD_DRAFT_LIST_REFRESH'},window.location.origin);
  }
 });
-// Install MBRS preparation controls immediately, including on blank/local-only drafts.
-// The getter always uses the current in-memory document when a company/draft changes.
-mountMbrsPreparation(()=>doc);
 // Fill only blank secretary particulars after the current cloud draft is loaded.
 function requestSecretaryRegisterImport(companyId){
  if(window.parent===window||!companyId||companyId!==selectedDmsCompanyId||

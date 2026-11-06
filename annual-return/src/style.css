@@ -239,16 +239,3 @@ details.ar-section.ar-section-drop-after{outline:2px dashed #187ab1;outline-offs
  .section-header .ar-section-title{flex-basis:100%}
  .section-header .ar-section-order-tools{margin-left:0}
 }
-
-
-/* MBRS preparation handover (not the official SSM mTool). */
-#mbrs-preparation .mbrs-control-row{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin:14px 0}
-#mbrs-preparation .mbrs-control-row .field-label{min-width:240px;max-width:100%;display:grid;gap:8px}
-#mbrs-preparation .mbrs-unchanged{display:flex;align-items:flex-start;gap:8px;line-height:1.5;max-width:550px}
-#mbrs-preparation .mbrs-unchanged[hidden]{display:none}
-#mbrs-preparation .mbrs-unchanged input{width:18px;height:18px;flex:0 0 auto;margin-top:3px}
-#mbrs-preparation .mbrs-checklist{background:#f4f8fb;border:1px solid #cbdde8;border-radius:12px;
- font:inherit;white-space:pre-wrap;overflow-wrap:anywhere;max-height:340px;overflow:auto;padding:15px;line-height:1.6}
-#mbrs-preparation .mbrs-checklist[hidden]{display:none}
-#mbrs-status[data-error="true"]{color:#a72b36;font-weight:600}
-@media(max-width:600px){#mbrs-preparation .actions .button{width:100%;text-align:center}}
