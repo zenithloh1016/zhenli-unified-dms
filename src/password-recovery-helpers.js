@@ -1,6 +1,8 @@
 // Recovery links are handled by a separate, credential-free page. The DMS
 // itself still requires manual email + password on every new login.
-// Use the published Site URL as the Supabase callback. Valid recovery tokens\n// are routed to the dedicated reset form on the same origin.\nexport const RECOVERY_REDIRECT='https://zenithloh1016.github.io/zhenli-unified-dms/';
+// Use the published Site URL as the Supabase callback. Valid recovery tokens
+// are routed to the dedicated reset form on the same origin.
+export const RECOVERY_REDIRECT='https://zenithloh1016.github.io/zhenli-unified-dms/';
 
 export async function requestRecoveryEmail(auth,email){
  const address=String(email||'').trim();
