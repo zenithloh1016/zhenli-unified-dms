@@ -11,6 +11,7 @@ import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCo
 import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,removeAnnualReturnDraft,draftIdOfKey} from './drafts.js';
 import {BO_CRITERIA_DESCRIPTIONS,selectedBoCriteria} from './bo-criteria.js';
 import {createCloudDraftClient} from './cloud-draft-client.js';
+import {mountMbrsPreparation} from './mbrs-preparation.js';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
@@ -68,6 +69,7 @@ const cloudDraft=createCloudDraftClient({
  applyDocument:document=>{
   doc=document;generated=null;$('download-box').hidden=true;
   resetView();draftOptions();
+mountMbrsPreparation(()=>doc);
  },
  onStatus:(message,error=false)=>{
   const el=$('cloud-sync-status');
