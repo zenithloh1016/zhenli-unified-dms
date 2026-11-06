@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {requestRecoveryEmail,RECOVERY_REDIRECT,completeRecovery,isRecoveryLink} from '../src/password-recovery-helpers.js';
 
-test('recovery email targets hosted recovery page, with original email if unconfirmed',async()=>{
+test('recovery email targets the published UNICOSEC Site URL, with original email if unconfirmed',async()=>{
  const calls=[];
  const result=await requestRecoveryEmail({resetPasswordForEmail:async (...args)=>{calls.push(args);return {error:null};}},' old@company.com ');
+ assert.equal(RECOVERY_REDIRECT,'https://zenithloh1016.github.io/zhenli-unified-dms/');
  assert.deepEqual(calls,[['old@company.com',{redirectTo:RECOVERY_REDIRECT}]]);
  assert.match(result,/PREVIOUS confirmed email/);
 });
