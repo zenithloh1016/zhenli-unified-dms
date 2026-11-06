@@ -1,6 +1,6 @@
 // Recovery links are handled by a separate, credential-free page. The DMS
 // itself still requires manual email + password on every new login.
-// Use the app's published Site URL as the Supabase callback. Main routes\n// valid recovery tokens to the dedicated reset form at the same origin.\nexport const RECOVERY_REDIRECT='https://zenithloh1016.github.io/zhenli-unified-dms/';
+// Use the published Site URL as the Supabase callback. Valid recovery tokens\n// are routed to the dedicated reset form on the same origin.\nexport const RECOVERY_REDIRECT='https://zenithloh1016.github.io/zhenli-unified-dms/';
 
 export async function requestRecoveryEmail(auth,email){
  const address=String(email||'').trim();
@@ -36,6 +36,10 @@ export function recoveryRedirectFromAppRoot(url){
  if(/\/password-recovery(?:\/|\/index\.html)?$/i.test(parsed.pathname))return '';
  if(!recoveryLinkKind(parsed.href))return '';
  const target=new URL('./password-recovery/',parsed.href);
+ // URL resolution drops the original search and fragment: explicitly retain
+ // both, otherwise the one-time recovery credentials are lost.
+ target.search=parsed.search;
+ target.hash=parsed.hash;
  return target.href;
 }
 
