@@ -4,11 +4,28 @@
 // are routed to the dedicated reset form on the same origin.
 export const RECOVERY_REDIRECT='https://zenithloh1016.github.io/zhenli-unified-dms/';
 
+/** Explain hosted Supabase Auth delivery limits without disclosing account existence.
+ * SMTP credentials must be configured in Supabase's Auth dashboard, never in
+ * this public frontend repository or a browser bundle.
+ */
+export function recoveryDeliveryError(error){
+ const code=String(error?.code||'').toLowerCase();
+ const message=String(error?.message||'');
+ if(code==='over_email_send_rate_limit'||/email rate limit exceeded/i.test(message))
+  return new Error('Password-reset emails are temporarily limited by Supabase. Do not keep retrying. Wait for the hourly allowance to reset, or ask the UNICOSEC administrator to configure custom SMTP in Supabase Authentication → Email → SMTP Settings.');
+ if(code==='email_address_not_authorized')
+  return new Error('The built-in Supabase email service is restricted to authorised project team addresses. The UNICOSEC administrator must configure custom SMTP for normal account emails.');
+ if(code==='over_request_rate_limit'||error?.status===429)
+  return new Error('Too many recovery requests. Wait before trying again. Do not repeatedly press Send password reset link.');
+ if(error instanceof Error)return error;
+ return new Error(message||'Unable to send password-reset email. Check your network or contact the UNICOSEC administrator.');
+}
+
 export async function requestRecoveryEmail(auth,email){
  const address=String(email||'').trim();
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))throw Error('Enter a valid email address.');
  const {error}=await auth.resetPasswordForEmail(address,{redirectTo:RECOVERY_REDIRECT});
- if(error)throw error;
+ if(error)throw recoveryDeliveryError(error);
  // No account enumeration: Supabase may respond identically for unknown users.
  return 'If this email belongs to an account, a password reset link will be sent. If your login email change is still pending, use your PREVIOUS confirmed email. Check your inbox and spam folder.';
 }
