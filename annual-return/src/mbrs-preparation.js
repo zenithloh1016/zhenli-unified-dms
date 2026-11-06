@@ -136,7 +136,7 @@ export function mountMbrsPreparation(getDocument){
  const snapshot=()=>extractMbrsWorkspace(getDocument(),{
   filingType:type.value,unchangedConfirmed:confirmation.checked
  });
- const show=text,error=false)=>{status.textContent=text;status.setAttribute('data-error',String(error));};
+ const show=(text,error=false)=>{status.textContent=text;status.setAttribute('data-error',String(error));};
  const refresh=()=>{
   ar4Label.hidden=type.value!=='AR4';
   const w=snapshot();
