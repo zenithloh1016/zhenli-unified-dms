@@ -18,6 +18,21 @@ export function formatMSICCodes(rows){
  if(new Set(rows.map(x=>x.code)).size!==rows.length)throw Error('Duplicate MSIC codes cannot be selected.');
  return rows.map(x=>x.code+' — '+x.en).join('\n');
 }
+/** Fill missing business descriptions using the official catalogue.
+ * Preserve existing verified descriptions and unrelated nature-of-business text.
+ * Unknown codes are left untouched for manual verification, never guessed.
+ */
+export function completeMSICDescriptions(value,catalogue=[]){
+ const descriptions=new Map((catalogue||[]).filter(row=>row?.code&&String(row.en||'').trim())
+  .map(row=>[String(row.code).toLowerCase(),String(row.en).trim()]));
+ return String(value??'').split(/\r?\n/).map(line=>{
+  const match=line.match(/^(\s*)(\d{5}[abeiu]?)\s*(?:[—–:|\-]\s*|\s{2,})(.*)$/i);
+  if(!match||match[3].trim())return line;
+  const description=descriptions.get(match[2].toLowerCase());
+  return description?match[1]+match[2].toLowerCase()+' — '+description:line;
+ }).join('\n');
+}
+
 export function matchesMSIC(list,q,max=16){
  const term=String(q||'').trim().toLowerCase();
  if(term.length<2)return [];
