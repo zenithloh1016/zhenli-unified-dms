@@ -350,6 +350,7 @@ if(window.parent!==window){
      status('Master Listing: '+result.filled+' blank Annual Return fields filled ('+
       result.listingFields+' company/capital, '+result.peopleFields+' current-person, '+
       result.secretaryFields+' secretary, '+result.auditorFields+' auditor). '+
+      (result.defaults?.capital?'RM1/share estimates require verification. ':'')+
       (result.secretaryConflict?'Company secretary differs from the register; the registered secretary was retained. ':'')+
       'Existing entries retained; verify before filing.');
     }
@@ -1165,6 +1166,8 @@ $('particulars').addEventListener('input',e=>{
  const index=e.target.dataset.item;
  if(index!==undefined&&doc.particulars[+index]){
   doc.particulars[+index].value=e.target.value;
+  // A user's typed correction is verified/manual, never an RM1 estimate.
+  delete doc.particulars[+index].autoAssumedRate;
   setCompanyDetail(doc,Number(index),e.target.value);
   e.target.closest('.field-entry')?.classList.toggle('blank',!e.target.value.trim());
   fieldStatus();queueDraftSave();
@@ -1228,7 +1231,7 @@ $('add-heading').addEventListener('click',()=>addReviewHeading());
 $('clear-values').addEventListener('click',()=>{
  if(!confirm('Clear every field and signatory value? Your last saved draft remains until new information is entered.'))return;
  if(!flushDraft())return;
- doc.particulars.forEach(x=>{if(x.type==='field')x.value='';});
+ doc.particulars.forEach(x=>{if(x.type==='field'){x.value='';delete x.autoAssumedRate;}});
  for(const k of Object.keys(doc.company))doc.company[k]='';
  for(const k of Object.keys(doc.signatureDirector))doc.signatureDirector[k]='';
  resetView({preserveHistory:true});queueDraftSave();status('All values cleared; bilingual labels preserved.');
