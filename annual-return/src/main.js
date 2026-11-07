@@ -369,10 +369,17 @@ if(window.parent!==window){
       doc=result.document;
       generated=null;$('download-box').hidden=true;
       renderSections();queueDraftSave();
-      status('Statutory Register particulars populated ('+
-       result.summary.filled+' blank secretary, share-capital or shareholding fields). Existing values kept; verify before filing.');
+      const capitalCount=result.summary.capitalFromCurrentHoldings?.length||0;
+      status('Statutory Registers: '+result.summary.filled+
+       ' blank fields filled'+(capitalCount?' ('+capitalCount+
+       ' share-capital quantities based on current members’ holdings)':'')+
+       '. Existing values kept. '+(result.summary.capitalNotice||'Verify particulars before filing.'));
+     }else if(result.summary.capitalNotice){
+      status('No new blank fields populated. '+result.summary.capitalNotice);
+     }else{
+      status('No new share-capital fields populated. The saved registers may lack explicit capital values or complete member holdings. Enter verified capital in Statutory Registers → Company Details, save, and reopen this draft.');
      }
-    }catch(error){status('Secretary pre-population could not be applied: '+error.message,true);}
+    }catch(error){status('Statutory Register pre-population could not be applied: '+error.message,true);}
     return;
    }
    pendingRegisterImport='';
@@ -394,7 +401,8 @@ if(window.parent!==window){
      .map(([key,n])=>n+' '+key).join(', ');
     status('Combined registers imported: '+count.filled+' fields populated'+
      (breakdown?' ('+breakdown+')':'')+'. '+count.kept+
-     ' existing values retained. Review all particulars and verify against SSM before generating the PDF.');
+     ' existing values retained. '+(count.capitalNotice||'')+
+     ' Review all particulars and verify against SSM before generating the PDF.');
    }catch(error){status('Combined register import could not be applied: '+error.message,true);}
    return;
   }

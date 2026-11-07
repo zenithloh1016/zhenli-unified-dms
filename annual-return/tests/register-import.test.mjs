@@ -70,7 +70,7 @@ test('imports real combined statutory particulars into bilingual Annual Return s
  assert.equal(value(d,'Member Type'),'Individual');
  assert.equal(recordValue(d,'BENEFICIAL OWNER 1','NRIC / Passport No.'),'444444-08-4444');
  assert.equal(value(d,'Criteria of Beneficial Ownership'),'Criteria A');
- assert.equal(value(d,'Total Number of Issued Shares (all classes)'),'');
+ assert.equal(value(d,'Total Number of Issued Shares (all classes)'),'100,000');
  assert.equal(value(d,'Percentage of Own Share Class'),'');
  assert(!d.particulars.some(p=>p.type==='field'&&p.value==='FORMER DIRECTOR'));
  assert(!d.particulars.some(p=>p.type==='field'&&p.value==='FORMER MEMBER'));
