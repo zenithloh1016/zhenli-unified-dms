@@ -79,7 +79,7 @@ export function prepopulateAnnualReturnFromMasterListing(document,listing,audito
  if(!listing||typeof listing!=='object') {
   const result=prepopulateAuditorFromMasterListing(input,auditor);
   return {document:result.document,filled:result.filled,kept:result.kept,
-   listingFields:0,peopleFields:0,auditorFields:result.filled};
+   listingFields:0,peopleFields:0,secretaryFields:0,auditorFields:result.filled};
  }
  const fields=listing.fields&&typeof listing.fields==='object'?listing.fields:{};
  let filled=0,kept=0,listingFields=0,peopleFields=0;
@@ -96,9 +96,30 @@ export function prepopulateAnnualReturnFromMasterListing(document,listing,audito
   const added=fillPeople(input,kind,people[kind]);
   filled+=added;peopleFields+=added;
  }
+ const secretary=listing.secretary||{};
+ const secretaryName=txt(secretary['Secretary Name']);
+ const secretaryBlocks=input.particulars;
+ const secretaryStart=secretaryBlocks.findIndex(x=>x.type==='heading'&&x.en==='COMPANY SECRETARY');
+ let secretaryFields=0,secretaryConflict=false;
+ if(secretaryStart>=0&&exists(secretaryName)){
+  let end=secretaryStart+1;
+  while(end<secretaryBlocks.length&&secretaryBlocks[end].type==='field')end++;
+  const fields=secretaryBlocks.slice(secretaryStart+1,end);
+  const recordedName=txt(fields.find(x=>x.en==='Secretary Name')?.value);
+  const sameName=value=>txt(value).toUpperCase().replace(/[^A-Z0-9]+/g,'')===
+   secretaryName.toUpperCase().replace(/[^A-Z0-9]+/g,'');
+  if(exists(recordedName)&&!sameName(recordedName))secretaryConflict=true;
+  else for(const [key,value] of Object.entries(secretary)){
+   const cell=fields.find(x=>x.type==='field'&&x.en===key);
+   if(!cell||!exists(value))continue;
+   if(exists(cell.value)){kept++;continue;}
+   cell.value=txt(value).slice(0,1400);
+   filled++;secretaryFields++;
+  }
+ }
  syncCompanyDetails(input);
  const audited=prepopulateAuditorFromMasterListing(input,auditor);
  filled+=audited.filled;kept+=audited.kept;
- return {document:audited.document,filled,kept,listingFields,
-  peopleFields,auditorFields:audited.filled};
+ return {document:audited.document,filled,kept,listingFields,secretaryFields,
+  secretaryConflict,peopleFields,auditorFields:audited.filled};
 }
