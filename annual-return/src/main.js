@@ -349,7 +349,9 @@ if(window.parent!==window){
      renderSections();queueDraftSave();
      status('Master Listing: '+result.filled+' blank Annual Return fields filled ('+
       result.listingFields+' company/capital, '+result.peopleFields+' current-person, '+
-      result.auditorFields+' auditor). Existing entries retained; verify before filing.');
+      result.secretaryFields+' secretary, '+result.auditorFields+' auditor). '+
+      (result.secretaryConflict?'Company secretary differs from the register; the registered secretary was retained. ':'')+
+      'Existing entries retained; verify before filing.');
     }
    }catch(error){status('Master Listing pre-population could not be applied: '+error.message,true);}
    return;
