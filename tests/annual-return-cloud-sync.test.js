@@ -84,7 +84,12 @@ test('website Windows APK use same parent auth relay and one editor cloud client
  assert.match(editorSource,/cloudDraft\.receive\(event\.data\)/);
  assert.match(editorSource,/cloudDraft\.syncNow\(\)/);
  assert.match(childSource,/cloud draft/i);
- assert.match(childSource,/updatedAt:cloud\.updatedAt/);
+ // Unchanged cloud drafts retain their server timestamp. When the editor
+ // safely fills previously blank linked Annual Return fields, cache the actual
+ // displayed draft with a fresh timestamp and sync it using revision checks.
+ assert.match(childSource,/const displayed=normalizeDocument\(getDocument\(\)\)/);
+ assert.match(childSource,/updatedAt:prefilled\?new Date\(\)\.toISOString\(\):cloud\.updatedAt/);
+ assert.match(childSource,/if\(prefilled\)dirty=true/);
  assert.match(childSource,/if\(response\.conflict\)/);
  assert.match(uiSource,/id="cloud-sync-now"/);
  assert.match(uiSource,/id="cloud-sync-status"/);
