@@ -64,7 +64,7 @@ const members={
  'Company Registration No. (per Members Register)':[/^company registration (?:no|number)$/i,/^registration (?:no|number)$/i],
  'Registered / Correspondence Address':[/^registered address$/i],
  'Number of Shares Held':[/^current number of shares held$/i,/^total shares held$/i,/^shares held$/i],
- 'Class of Shares':[/^class of shares$/i],
+ 'Class of Shares':[/^class of shares$/i,/^share class$/i,/^class$/i],
  // A "Percentage of Recorded Current Holdings" is not necessarily the
  // percentage of a specific share class; never map it to that AR field.
  'Percentage of Own Share Class':[/^percentage of own share class$/i]
@@ -107,6 +107,27 @@ const secretaries={
  'Service / Business Address':[/^service address$/i,/^service \/ business address$/i,
   /^business address$/i]
 };
+// A per-class percentage is safe only if ALL current shareholders have a
+// verified single share class and a positive integer holding. A percentage
+// of all recorded holdings is NOT necessarily a percentage of a share class.
+function memberClassPercentages(entries){
+ const rows=entries.map(({fields})=>{
+  const classification=select(fields,/^class of shares$/i,/^share class$/i,/^class$/i)
+   .toLowerCase().replace(/\s+shares?$/i,'').trim();
+  const className=/^ordinary$/i.test(classification)?'Ordinary':
+   /^preference$/i.test(classification)?'Preference':'';
+  const raw=select(fields,/^current number of shares held$/i,/^total shares held$/i,/^shares held$/i)
+   .replace(/,/g,'').trim();
+  const held=/^\d+$/.test(raw)?Number(raw):NaN;
+  return {className,held};
+ });
+ if(!rows.length||rows.some(row=>!row.className||!Number.isSafeInteger(row.held)||row.held<=0))
+  return null;
+ const totals=new Map();
+ for(const row of rows)totals.set(row.className,(totals.get(row.className)||0)+row.held);
+ if([...totals.values()].some(n=>!Number.isSafeInteger(n)||n<=0))return null;
+ return rows.map(row=>(row.held/totals.get(row.className)*100).toFixed(2)+'%');
+}
 function addMissingBlocks(items,template,sectionRe,headingRe,count,limit=1200){
  const indexes=[];
  for(let i=0;i<items.length;i++)if(items[i].type==='heading'&&headingRe.test(items[i].en))indexes.push(i);
@@ -139,7 +160,7 @@ function blocksOf(items,headingRe){
  }
  return result;
 }
-export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=false,secretaryOnly=false}={}){
+export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=false,secretaryOnly=false,shareholdingOnly=false}={}){
  if(snapshot?.version!==1||!Array.isArray(snapshot.sections)||
     snapshot.sections.length>100||!snapshot.companyId||!snapshot.companyName)
   throw Error('Invalid combined statutory register data.');
@@ -157,7 +178,7 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
   if(!overwrite&&exists(cell.value)){changes.kept++;return;}
   cell.value=cleanValue(value);changes.filled++;
  };
- if(!secretaryOnly){
+ if(!secretaryOnly&&!shareholdingOnly){
   write(doc.particulars,'Company Name',snapshot.companyName);
   write(doc.particulars,'Company Registration No.',snapshot.registrationNo||'');
  }
@@ -173,7 +194,7 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
    write(secretaryFields,target,/^Date /.test(target)?safeDate(value):value);
   }
  };
- if(secretaryOnly){
+ if(secretaryOnly&&!shareholdingOnly){
   populateSecretary();
   return {document:doc,summary:changes};
  }
@@ -187,21 +208,59 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
   'Address Where Financial Records Are Kept':[/^address where financial records are kept$/i],
   'Nature of Business / MSIC Code':[/^(?:nature of business|msic code)$/i]
  };
- for(const [key,patterns] of Object.entries(profileMap)){
-  let value=select(profile,...patterns);
-  if(/Date of Incorporation/i.test(key))value=safeDate(value);
-  write(doc.particulars,key,value);
+ if(!shareholdingOnly){
+  for(const [key,patterns] of Object.entries(profileMap)){
+   let value=select(profile,...patterns);
+   if(/Date of Incorporation/i.test(key))value=safeDate(value);
+   write(doc.particulars,key,value);
+  }
  }
+ // Share capital must come from EXPRESS capital particulars, not from a
+ // sum of members' holdings or transfer/allotment consideration.
+ const capitalMap={
+  'Type of Shares Issued':[/^type of shares issued$/i],
+  'Currency':[/^currency$/i,/^share capital currency$/i,/^currency of share capital$/i],
+  'Classes of Shares Issued':[/^classes of shares issued$/i,/^share classes issued$/i],
+  'Number of Ordinary Shares':[/^(?:number of |issued )?ordinary shares(?: issued)?$/i],
+  'Number of Preference Shares':[/^(?:number of |issued )?preference shares(?: issued)?$/i],
+  'Total Number of Issued Shares (all classes)':[
+   /^total number of issued shares(?: \(all classes\))?$/i,
+   /^total issued shares(?: \(all classes\))?$/i,
+   /^number of issued shares(?: \(all classes\))?$/i
+  ],
+  'Ordinary Share Capital (recorded amount paid)':[
+   /^ordinary share capital(?: \(recorded amount paid\))?$/i,
+   /^paid[- ]?up ordinary share capital$/i
+  ],
+  'Preference Share Capital (recorded amount paid)':[
+   /^preference share capital(?: \(recorded amount paid\))?$/i,
+   /^paid[- ]?up preference share capital$/i
+  ],
+  'Aggregate Amount Paid on Allotments (verify share capital)':[
+   /^aggregate amount paid on allotments(?: \(verify share capital\))?$/i,
+   /^total amount paid on allotments$/i
+  ],
+  'Shares Issued for Cash (ordinary)':[/^shares issued for cash \(ordinary\)$/i],
+  'Shares Issued Otherwise Than in Cash':[/^shares issued otherwise than in cash$/i],
+  'Amount Considered Paid on Non-Cash Allotment':[/^amount considered paid on non-cash allotment$/i],
+  'Amount of Shares Partly Unpaid':[/^amount of shares partly unpaid$/i],
+  'Total Calls Called Up / Received':[/^total calls called up \/ received$/i]
+ };
+ for(const [key,patterns] of Object.entries(capitalMap))
+  write(doc.particulars,key,select(profile,...patterns));
  function transfer(sectionRegex,headingRe,fieldMap,kind){
   const section=findSection(sectionRegex);if(!section)return;
   const entries=getRecords(section);
   if(!entries.length)return;
+  const classPercentages=kind==='members'?memberClassPercentages(entries):null;
   addMissingBlocks(doc.particulars,cloneBlank().particulars,sectionRegex,headingRe,entries.length);
   const targets=blocksOf(doc.particulars,headingRe);
   for(let i=0;i<Math.min(entries.length,targets.length);i++){
    const source=entries[i].fields;
    for(const [target,patterns] of Object.entries(fieldMap)){
     let value=select(source,...patterns);
+    if(kind==='members'&&target==='Percentage of Own Share Class'&&!value&&classPercentages)
+     value=classPercentages[i];
     if(/^Date /.test(target))value=safeDate(value);
     if(target==='Member Type'&&!value&&kind==='members'){
      value=select(source,/^corporate name$/i,/^company registration (?:no|number)$/i)?'Body Corporate':'Individual';
@@ -216,15 +275,18 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
   }
   changes.records[kind]=Math.min(entries.length,targets.length);
  }
- transfer(/^register of directors$/i,/^DIRECTOR \d+$/i,directors,'directors');
+ if(!shareholdingOnly)
+  transfer(/^register of directors$/i,/^DIRECTOR \d+$/i,directors,'directors');
  transfer(/^register of members$/i,/^MEMBER \d+$/i,members,'members');
- transfer(/^register of beneficial owners$/i,/^BENEFICIAL OWNER \d+$/i,bos,'bos');
- transfer(/^register of charges$/i,/^REGISTERED CHARGE \d+$/i,charges,'charges');
+ if(!shareholdingOnly){
+  transfer(/^register of beneficial owners$/i,/^BENEFICIAL OWNER \d+$/i,bos,'bos');
+  transfer(/^register of charges$/i,/^REGISTERED CHARGE \d+$/i,charges,'charges');
+ }
  // Charge headings and details are transferred individually above. The retired
  // Number of Registered Charges field must not be recreated from an import.
  populateSecretary();
- // No guesswork about total issued shares, capital amounts, AR year, BO
- // ownership criteria, outstanding debt, issued class, or MSIC codes.
+ // No guesswork about share capital, missing class totals, AR year, BO
+ // ownership criteria, outstanding debt, or MSIC codes.
  doc.company.name=txt(doc.particulars.find(p=>p.en==='Company Name')?.value)||snapshot.companyName;
  doc.company.no=txt(doc.particulars.find(p=>p.en==='Company Registration No.')?.value)||snapshot.registrationNo;
  return {document:doc,summary:changes};

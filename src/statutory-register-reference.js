@@ -5,7 +5,15 @@
  */
 export const COMPANY_DETAILS_FIELDS=[
  'Company Name','Company No.','Last update','Date of Incorporation',
- 'Date of Cosec Appointment','Registered Address'
+ 'Date of Cosec Appointment','Registered Address',
+ // These are explicitly entered statutory capital particulars. Never
+ // synthesise issued capital from members' ledgers or transfer values.
+ 'Type of Shares Issued','Currency','Classes of Shares Issued',
+ 'Number of Ordinary Shares','Number of Preference Shares',
+ 'Total Number of Issued Shares (all classes)',
+ 'Ordinary Share Capital (recorded amount paid)',
+ 'Preference Share Capital (recorded amount paid)',
+ 'Aggregate Amount Paid on Allotments (verify share capital)'
 ];
 export function createCompanyDetailsSheet(company){
  return {name:'Company Details',rows:COMPANY_DETAILS_FIELDS.map((label,i)=>[
@@ -214,7 +222,16 @@ export function companyDetailIndex(label){
   ['last update','last updated','date of last update'],
   ['date of incorporation','incorporation date','date of registration','registration date'],
   ['date of cosec appointment','date of co sec appointment','date of company secretary appointment','date of secretary appointment'],
-  ['registered address','registered office','registered office address']
+  ['registered address','registered office','registered office address'],
+  ['type of shares issued'],
+  ['currency','share capital currency','currency of share capital'],
+  ['classes of shares issued','share classes issued'],
+  ['number of ordinary shares','ordinary shares','issued ordinary shares'],
+  ['number of preference shares','preference shares','issued preference shares'],
+  ['total number of issued shares all classes','total issued shares','total number of issued shares','number of issued shares'],
+  ['ordinary share capital recorded amount paid','ordinary share capital','paid up ordinary share capital'],
+  ['preference share capital recorded amount paid','preference share capital','paid up preference share capital'],
+  ['aggregate amount paid on allotments verify share capital','aggregate amount paid on allotments','total amount paid on allotments']
  ];
  return aliases.findIndex(xs=>xs.includes(x));
 }
