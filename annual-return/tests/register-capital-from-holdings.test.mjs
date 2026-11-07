@@ -49,8 +49,8 @@ test('derives unentered share capital counts from existing complete member recor
  assert.equal(value(document,'Number of Shares Held','MEMBER 1'),'20,000');
  assert.equal(value(document,'Percentage of Own Share Class','MEMBER 1'),'40.00%');
  assert.equal(value(document,'Percentage of Own Share Class','MEMBER 3'),'100.00%');
- assert.equal(value(document,'Ordinary Share Capital (recorded amount paid)'),'50,000.00');
- assert.equal(value(document,'Preference Share Capital (recorded amount paid)'),'5,000.00');
+ assert.equal(value(document,'Ordinary Share Capital (recorded amount paid)'),'RM50,000.00');
+ assert.equal(value(document,'Preference Share Capital (recorded amount paid)'),'RM5,000.00');
  assert.equal(document.particulars.find(x=>x.en==='Ordinary Share Capital (recorded amount paid)').autoAssumedRate,1,
   'RM1/share amounts must retain an explicit estimate marker');
  assert(summary.capitalFromCurrentHoldings.length>=3);
@@ -76,7 +76,7 @@ test('uses explicit sole class and paid-up amount from Company Details without g
  const {document}=auto(blank(),data);
  assert.equal(value(document,'Number of Ordinary Shares'),'100');
  assert.equal(value(document,'Classes of Shares Issued'),'Ordinary');
- assert.equal(value(document,'Ordinary Share Capital (recorded amount paid)'),'75,000.00');
+ assert.equal(value(document,'Ordinary Share Capital (recorded amount paid)'),'RM75,000.00');
  assert.equal(value(document,'Class of Shares','MEMBER 1'),'Ordinary');
  assert.equal(value(document,'Percentage of Own Share Class','MEMBER 1'),'60.00%');
 });
