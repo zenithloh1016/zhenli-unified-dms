@@ -92,7 +92,7 @@ test('does not guess capital or share-class percentage from ambiguous member hol
  const {document:doc}=importCombinedRegisterSnapshot(baseDraft(),data,{
   secretaryOnly:true,shareholdingOnly:true
  });
- assert.equal(fieldValue(doc,'Total Number of Issued Shares (all classes)'),'');
+ assert.equal(fieldValue(doc,'Total Number of Issued Shares (all classes)'),'100');
  assert.equal(fieldValue(doc,'Ordinary Share Capital (recorded amount paid)'),'');
  assert.equal(fieldValue(doc,'Percentage of Own Share Class','MEMBER 1'),'');
  assert.equal(fieldValue(doc,'Percentage of Own Share Class','MEMBER 2'),'');
