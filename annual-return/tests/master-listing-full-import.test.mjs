@@ -34,7 +34,7 @@ test('prefills all available matched listing fields, secretary, auditor and pers
  assert.equal(field(document,'Company Name'),'EXAMPLE SDN BHD');
  assert.equal(document.company.no,'202601000001');
  assert.equal(field(document,'Nature of Business / MSIC Code'),'CONSTRUCTION\n41001 — ');
- assert.equal(field(document,'Ordinary Share Capital (recorded amount paid)'),'100,000');
+ assert.equal(field(document,'Ordinary Share Capital (recorded amount paid)'),'RM100,000.00');
  assert.equal(scoped(document,'DIRECTOR 5','Full Name'),'DIRECTOR E');
  assert.equal(scoped(document,'MEMBER 1','Individual Full Name'),'MEMBER A');
  assert.equal(scoped(document,'MEMBER 2','Corporate Name'),'PARENT HOLDING SDN BHD');
