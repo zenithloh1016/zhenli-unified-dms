@@ -113,5 +113,23 @@ export function annualReturnParticularsFromMasterListing(listing,company){
   members:splitNames(select(/^(?:current members|members current|current shareholder names|current shareholders)$/)),
   bos:splitNames(select(/^(?:current beneficial owners|beneficial owners current|current bo names)$/))
  };
- return {fields,people};
+ // Company secretary has a single dedicated AR block. Do not treat generic
+ // "secretary" contact/fee columns as evidence of statutory particulars.
+ const secretary={
+  'Secretary Name':select(/^(?:company secretary|company secretary name|secretary name|co sec name|cosec name|current secretary)$/),
+  'Secretary NRIC':select(/^(?:company secretary nric|secretary nric(?: no)?|secretary identification (?:no|number)|secretary passport (?:no|number))$/),
+  'Date of Birth':select(/^(?:secretary date of birth|company secretary date of birth|secretary dob)$/),
+  'Gender':select(/^(?:secretary gender|company secretary gender)$/),
+  'Professional Membership':select(/^(?:secretary membership (?:no|number)|company secretary membership (?:no|number)|secretary professional membership|cosec membership no|mia membership no)$/),
+  'Practising Certificate Number':select(/^(?:secretary ssm (?:practising|practicing) certificate (?:no|number)|ssm (?:practising|practicing) certificate (?:no|number)|company secretary pc no|secretary pc no|cosec pc no)$/),
+  'Nationality / Race':select(/^(?:secretary nationality|company secretary nationality|secretary nationality race)$/),
+  'Secretary Residential Address':select(/^(?:secretary residential address|company secretary residential address)$/),
+  'Service / Business Address':select(/^(?:secretary service address|company secretary service address|secretary business address)$/)
+ };
+ // The listing's "secretaries" column can contain multiple current officers.
+ // Never silently choose a person for a one-secretary AR heading.
+ const soleName=splitNames(secretary['Secretary Name']);
+ if(soleName.length===1)secretary['Secretary Name']=soleName[0];
+ else if(soleName.length>1)for(const key of Object.keys(secretary))secretary[key]='';
+ return {fields,people,secretary};
 }
