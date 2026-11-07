@@ -103,6 +103,11 @@ export function reconcileAnnualReturnWithRegisters(document,previous,current){
   if(!after&&!before)continue;
   if(existing===after)continue;
   item.value=after;
+  // Keep source attribution intact when a calculated share capital estimate
+  // changes, and remove that flag when a documented register value replaces it.
+  if(nextMap.fields.get(key)?.item.autoAssumedRate===1)
+   item.autoAssumedRate=1;
+  else delete item.autoAssumedRate;
   if(!existing)filled++;
   else if(!after)cleared++;
   else updated++;
