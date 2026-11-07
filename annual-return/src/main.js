@@ -77,7 +77,8 @@ const cloudDraft=createCloudDraftClient({
    window.parent.postMessage({type:'ZHENLI_AR_CLOUD_DRAFT_LIST_REFRESH'},window.location.origin);
  }
 });
-// Fill only blank secretary particulars after the current cloud draft is loaded.
+// Fill blank secretary, documented capital and current shareholding fields
+// only after the correct company's cloud draft has finished loading.
 function requestSecretaryRegisterImport(companyId){
  if(window.parent===window||!companyId||companyId!==selectedDmsCompanyId||
     !cloudDraft.isReady()||pendingRegisterImport||pendingSecretaryImport)return;
@@ -360,14 +361,16 @@ if(window.parent!==window){
     try{
      const payload=event.data.payload;
      if(payload?.companyId!==selectedDmsCompanyId)return;
-     const result=importCombinedRegisterSnapshot(doc,payload,{secretaryOnly:true});
+     const result=importCombinedRegisterSnapshot(doc,payload,{
+      secretaryOnly:true,shareholdingOnly:true
+     });
      if(result.summary.filled>0){
       if(!flushDraft())throw Error('Current draft could not be backed up.');
       doc=result.document;
       generated=null;$('download-box').hidden=true;
       renderSections();queueDraftSave();
-      status('Company Secretary particulars populated from the saved Register of Secretaries ('+
-       result.summary.filled+' blank fields). Existing values kept; verify before filing.');
+      status('Statutory Register particulars populated ('+
+       result.summary.filled+' blank secretary, share-capital or shareholding fields). Existing values kept; verify before filing.');
      }
     }catch(error){status('Secretary pre-population could not be applied: '+error.message,true);}
     return;
@@ -1051,7 +1054,7 @@ $('import-combined-register').addEventListener('click',()=>{
  if(window.parent===window)return status('Open Annual Return inside UNICOSEC to import its private statutory records.',true);
  if(pendingRegisterImport)return;
  if(!selectedDmsCompanyId)return status('Select the company in Company Details before importing combined registers.',true);
- if(!confirm('Import matching fields from this company’s saved Combined Statutory Registers?\n\nExisting non-blank Annual Return values will be kept. Current directors, members, beneficial owners and registered charges will be imported where supported. Verify everything before generating.'))return;
+ if(!confirm('Import matching fields from this company’s saved Combined Statutory Registers?\n\nExisting non-blank Annual Return values will be kept. Documented share capital and current directors, members, beneficial owners and registered charges will be imported where supported. Verify everything before generating.'))return;
  pendingRegisterImport='ar_register_'+Date.now().toString(36);
  $('import-combined-register').disabled=true;
  status('Loading saved combined statutory registers for this company…');
