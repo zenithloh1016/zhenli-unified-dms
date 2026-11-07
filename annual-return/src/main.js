@@ -8,7 +8,7 @@ import {importCombinedRegisterSnapshot} from './register-import.js';
 import {prepopulateAnnualReturnFromMasterListing} from './master-listing-import.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC,mergeMSICCatalogues,completeMSICDescriptions} from './msic.js';
-import {formatRinggitAmount} from './derived-defaults.js';
+import {applyAnnualReturnDefaults} from './derived-defaults.js';
 import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,removeAnnualReturnDraft,draftIdOfKey} from './drafts.js';
 import {BO_CRITERIA_DESCRIPTIONS,selectedBoCriteria} from './bo-criteria.js';
 import {createCloudDraftClient} from './cloud-draft-client.js';
@@ -444,22 +444,13 @@ function signingInputs(){
 
 
 let msicCatalogue=[],msicState='Loading DOSM MSIC and SSM ROC codes…';
-/** Normalize only confirmed MYR class capital and add official descriptions to
- * imported MSIC codes. Never change the underlying amount or verified wording.
+/** Apply the same verified-source-priority address, class capital and MSIC
+ * defaults to saved drafts as well as newly imported data. This runs before
+ * PDF export, so an older draft cannot silently omit blank linked fields.
  */
 function normalizeReviewValues(){
- let changed=false;
- const field=key=>doc.particulars.find(item=>item.type==='field'&&item.en===key);
- const currency=String(field('Currency')?.value||'').trim();
- if(!currency||/^(?:RM|MYR|ringgit|malaysian ringgit)$/i.test(currency)){
-  for(const key of ['Ordinary Share Capital (recorded amount paid)','Preference Share Capital (recorded amount paid)']){
-   const cell=field(key);
-   if(!cell)continue;
-   const normalized=formatRinggitAmount(cell.value);
-   if(cell.value!==normalized){cell.value=normalized;changed=true;}
-  }
- }
- const msic=field('Nature of Business / MSIC Code');
+ let changed=applyAnnualReturnDefaults(doc).filled>0;
+ const msic=doc.particulars.find(item=>item.type==='field'&&item.en==='Nature of Business / MSIC Code');
  if(msic&&msicCatalogue.length){
   const enriched=completeMSICDescriptions(msic.value,msicCatalogue);
   if(msic.value!==enriched){msic.value=enriched;changed=true;}
