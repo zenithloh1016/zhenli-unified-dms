@@ -30,7 +30,21 @@ jobs:
           test -n "$VITE_SUPABASE_ANON_KEY" || (echo 'Missing repository variable VITE_SUPABASE_ANON_KEY' && exit 1)
       - run: npm install --no-audit --no-fund
       - name: Test DMS import and statutory folder logic
-        run: npm run test:import
+        shell: bash
+        run: |
+          # Keep the existing test suite and failure status intact, but surface
+          # the exact failed subtest near the END of long Android/mobile logs.
+          set +e
+          npm run test:import 2>&1 | tee /tmp/unicosec-root-tests.log
+          result=${PIPESTATUS[0]}
+          if [ "$result" -ne 0 ]; then
+            echo ""
+            echo "===== UNICOSEC FAILED TEST DETAILS ====="
+            grep -n -A 32 -E '^not ok [0-9]+ - ' /tmp/unicosec-root-tests.log | tail -n 160 || true
+            failed="$(grep -m 1 -E '^not ok [0-9]+ - ' /tmp/unicosec-root-tests.log | sed -E 's/^not ok [0-9]+ - //' || true)"
+            echo "::error title=UNICOSEC test failed::${failed:-Test suite failed; review log above}"
+          fi
+          exit "$result"
       - name: Build website
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
