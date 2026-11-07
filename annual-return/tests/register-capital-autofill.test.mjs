@@ -67,7 +67,8 @@ test('automatically fills documented capital and current member details without 
  assert.equal(fieldValue(doc,'Number of Ordinary Shares'),'MANUALLY VERIFIED');
  assert.equal(fieldValue(doc,'Number of Preference Shares'),'50');
  assert.equal(fieldValue(doc,'Total Number of Issued Shares (all classes)'),'150');
- assert.equal(fieldValue(doc,'Ordinary Share Capital (recorded amount paid)'),'100,000.00');
+ assert.equal(fieldValue(doc,'Ordinary Share Capital (recorded amount paid)'),'RM100,000.00');
+ assert.equal(fieldValue(doc,'Preference Share Capital (recorded amount paid)'),'RM50,000.00');
  assert.equal(fieldValue(doc,'Currency'),'MYR');
  assert.equal(fieldValue(doc,'Secretary Name','COMPANY SECRETARY'),'SECRETARY A');
  assert.equal(fieldValue(doc,'Number of Shares Held','MEMBER 1'),'60');
