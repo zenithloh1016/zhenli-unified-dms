@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {MAX_MSIC_CODES,extractMSICCodes,formatMSICCodes,matchesMSIC,mergeMSICCatalogues,SSM_MSIC_LOOKUP} from '../src/msic.js';
+import {MAX_MSIC_CODES,extractMSICCodes,formatMSICCodes,matchesMSIC,mergeMSICCatalogues,SSM_MSIC_LOOKUP,completeMSICDescriptions} from '../src/msic.js';
 test('MSIC picker is limited to 3 entries and preserves official 5-digit leading zero codes',()=>{
  assert.equal(MAX_MSIC_CODES,3);
  const codes=[{code:'01111',en:'Growing of maize'}, {code:'62010',en:'Computer programming activities'}, {code:'68100',en:'Real estate activities with own or leased property'}];
@@ -43,4 +43,19 @@ test('preserves multiple SSM ROC descriptions published under one business code'
  const list=mergeMSICCatalogues([],[{code:'01466e',en:'Export of chicken eggs'}, {code:'01466e',en:'Export of duck eggs'}]);
  assert.equal(list.length,1);
  assert.match(list[0].en,/Export of chicken eggs \/ Export of duck eggs/);
+});
+
+test('fills missing MSIC business descriptions from official catalogue without changing confirmed text',()=>{
+ const official=[
+  {code:'64923',en:'Licensed money lending activities'},
+  {code:'64929',en:'Other credit granting n.e.c.'}
+ ];
+ const input='Business activities\n64923 — \n64929 — Custom verified description\n66192 — ';
+ const result=completeMSICDescriptions(input,official);
+ assert.equal(result,'Business activities\n64923 — Licensed money lending activities\n64929 — Custom verified description\n66192 — ');
+ assert.equal(completeMSICDescriptions(result,official),result,'idempotent');
+ assert.deepEqual(extractMSICCodes(result).map(x=>x.code),['64923','64929','66192']);
+});
+test('preserves an unknown code for verification rather than fabricating its business description',()=>{
+ assert.equal(completeMSICDescriptions('12345 — ',[]),'12345 — ');
 });
