@@ -55,7 +55,7 @@ const natureAliases=[
  /^(?:nature of business|business nature|principal activities|principal business activities|business activities|nature of principal activities|business description)$/,
  /^(?:nature of business msic code|nature of business msic|business nature and msic)$/
 ];
-const msicAlias=/^(?:msic(?: code)?(?: [1-3])?|msic [1-3] code|business msic(?: code)?(?: [1-3])?|malaysian standard industrial classification(?: code)?(?: [1-3])?)$/;
+const msicAlias=/^(?:msic(?: codes?)?(?: [1-3])?|msic [1-3] codes?|business msic(?: codes?)?(?: [1-3])?|malaysian standard industrial classification(?: codes?)?(?: [1-3])?)$/;
 
 function splitNames(source){
  if(!useful(source))return [];
@@ -87,15 +87,20 @@ export function annualReturnParticularsFromMasterListing(listing,company){
   if(value)fields[target]=value;
  }
  const nature=select(...natureAliases);
- const msicValues=cells.filter(c=>msicAlias.test(c.label))
-  .flatMap(c=>c.value.split(/[,;\n]+/).map(x=>x.trim()))
-  .filter(useful).filter((x,i,a)=>a.indexOf(x)===i).slice(0,3);
- if(nature){
-  fields['Nature of Business / MSIC Code']=msicValues.length&&!msicValues.every(c=>nature.includes(c))
-   ?nature+' | MSIC: '+msicValues.join(', '):nature;
- }else if(msicValues.length){
-  fields['Nature of Business / MSIC Code']='MSIC: '+msicValues.join(', ');
+ const msicValues=[];
+ for(const cell of cells.filter(c=>msicAlias.test(c.label))){
+  // Extract only MSIC-labelled values. Preserve valid SSM ROC suffixes,
+  // and never guess a code from a company registration number or postcode.
+  for(const match of cell.value.matchAll(/(?:^|[^0-9a-z])(\d{5}[abeiu]?)(?![0-9a-z])/gi)){
+   const code=match[1].toLowerCase();
+   if(!msicValues.includes(code))msicValues.push(code);
+   if(msicValues.length===3)break;
+  }
+  if(msicValues.length===3)break;
  }
+ const msicLines=msicValues.map(code=>code+' — ');
+ if(nature||msicLines.length)
+  fields['Nature of Business / MSIC Code']=[nature,...msicLines].filter(Boolean).join('\n');
  // A generic paid-up total does not prove the amount of each share class.
  const soleClass=label(fields['Classes of Shares Issued']);
  if(soleClass==='ordinary'||soleClass==='ordinary shares'){
@@ -131,5 +136,5 @@ export function annualReturnParticularsFromMasterListing(listing,company){
  const soleName=splitNames(secretary['Secretary Name']);
  if(soleName.length===1)secretary['Secretary Name']=soleName[0];
  else if(soleName.length>1)for(const key of Object.keys(secretary))secretary[key]='';
- return {fields,people,secretary};
+ return {fields,people,secretary,msicCodes:msicValues};
 }
