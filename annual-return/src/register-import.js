@@ -52,7 +52,7 @@ const directors={
  'Service / Business Address':[/^service address$/i,/^business address$/i]
 };
 const members={
- 'Member Folio':[/^folio(?: no\\.?| number)?$/i],
+ 'Member Folio':[/^folio(?: no\.?| number)?$/i],
  'Member Type':[/^member type$/i,/individual\/corporate/i],
  'Individual Full Name':[/^shareholder name$/i,/^name$/i,/^full name$/i],
  'Individual NRIC / Passport No.':[/^identification no\.?$/i,/^nric(?: \/ passport)?(?: no\.?)?$/i,/passport no/i],
@@ -62,7 +62,7 @@ const members={
  'Individual Gender':[/^gender$/i],
  'Individual Residential / Correspondence Address':[/^address$/i,/^residential address$/i,/^correspondence address$/i],
  'Corporate Name':[/^corporate name$/i,/^company name$/i],
- 'Company Registration No. (per Members Register)':[/^company registration (?:no|number)$/i,/^registration (?:no|number)$/i],
+ 'Company Registration No. (per Members Register)':[/^company registration (?:no\.?|number)$/i,/^registration (?:no\.?|number)$/i],
  'Country of Incorporation':[/^country of incorporation$/i,/^country incorporated$/i],
  'Registered / Correspondence Address':[/^registered address$/i,/^registered office$/i,/^correspondence address$/i],
  'Number of Shares Held':[/^current number of shares held$/i,/^total shares held$/i,/^shares held$/i,/^shareholding$/i],
