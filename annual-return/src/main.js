@@ -171,7 +171,7 @@ function resumeLocalDraft(key){
    if(!confirm('Restore this older device backup as the active Annual Return? The existing device copy will be replaced. The cloud version remains protected by revision checks.'))return false;
    saveAnnualReturnDraft(localStorage,draftScope,companyId,draft.data);
   }
-  doc=draft.data;
+  doc=draft.data;normalizeReviewValues();
   selectedDmsCompanyId=match?.id||null;
   if(!match)newDraftId=id;
   if(match&&window.parent!==window)
@@ -297,6 +297,7 @@ function applyDmsCompany(company){
  try{previous=readAnnualReturnDraft(localStorage,draftScope,company.id);}
  catch(err){draftStatus('Saved draft could not be loaded: '+err.message,true);}
  if(previous&&previous.data.company.name===name&&previous.data.company.no===registrationNo)doc=previous.data;
+ normalizeReviewValues();
  resetView();draftOptions();
  const restored=restoreRsshSavedDraftOnce();
  const chargeRemoved=removeRsshChargeTwoOnce();
