@@ -19,8 +19,6 @@ const msicCode=v=>{
  const raw=txt(v).toLowerCase();
  return /^\d{5}[abeiu]?$/.test(raw)?raw:'';
 };
-const hasMSICCode=(value,code)=>
- new RegExp('(^|[^0-9a-z])'+code+'(?![0-9a-z])','i').test(txt(value));
 
 /** Only pull codes from explicitly labelled MSIC fields, not unrelated IDs. */
 export function msicCodesFromProfileFields(fields){
@@ -92,7 +90,7 @@ export function applyAnnualReturnDefaults(document,{msicCodes=[]}={}){
    const raw=typeof proposed==='string'?proposed:proposed?.code;
    const code=msicCode(raw);
    if(!code||present.has(code))continue;
-   if(present.size+accepted.length>=MAX_MSIC_CODES)break;
+   if(present.size>=MAX_MSIC_CODES)break;
    const description=typeof proposed==='object'?txt(proposed?.en):'';
    accepted.push(code+' — '+description);
    present.add(code);
