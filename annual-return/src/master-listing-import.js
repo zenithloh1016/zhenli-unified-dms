@@ -6,6 +6,7 @@
  */
 import {cloneBlank,syncCompanyDetails} from './core.js';
 import {prepopulateAuditorFromMasterListing} from './auditor-import.js';
+import {applyAnnualReturnDefaults} from './derived-defaults.js';
 
 const txt=v=>String(v??'').trim();
 const exists=v=>txt(v)&&!/^(?:-|–|—|n\/?a|nil|none|not applicable|not provided|unknown)$/i.test(txt(v));
@@ -78,8 +79,10 @@ export function prepopulateAnnualReturnFromMasterListing(document,listing,audito
  const input=structuredClone(document||cloneBlank());
  if(!listing||typeof listing!=='object') {
   const result=prepopulateAuditorFromMasterListing(input,auditor);
-  return {document:result.document,filled:result.filled,kept:result.kept,
-   listingFields:0,peopleFields:0,secretaryFields:0,auditorFields:result.filled};
+  const defaults=applyAnnualReturnDefaults(result.document);
+  return {document:result.document,filled:result.filled+defaults.filled,kept:result.kept,
+   listingFields:0,peopleFields:0,secretaryFields:0,auditorFields:result.filled,
+   defaults};
  }
  const fields=listing.fields&&typeof listing.fields==='object'?listing.fields:{};
  let filled=0,kept=0,listingFields=0,peopleFields=0;
@@ -87,8 +90,11 @@ export function prepopulateAnnualReturnFromMasterListing(document,listing,audito
   if(!companyKeys.has(key)||!exists(raw))continue;
   const cell=input.particulars.find(x=>x.type==='field'&&x.en===key);
   if(!cell)continue; // A user-deleted field is not recreated.
-  if(exists(cell.value)){kept++;continue;}
+  if(exists(cell.value)&&cell.autoAssumedRate!==1){kept++;continue;}
   cell.value=txt(raw).slice(0,1400);
+  // A documented class amount from Master Listing supersedes an earlier
+  // estimated RM1/share amount created from register holdings.
+  delete cell.autoAssumedRate;
   filled++;listingFields++;
  }
  const people=listing.people||{};
@@ -117,9 +123,11 @@ export function prepopulateAnnualReturnFromMasterListing(document,listing,audito
    filled++;secretaryFields++;
   }
  }
+ const defaults=applyAnnualReturnDefaults(input,{msicCodes:listing.msicCodes||[]});
+ filled+=defaults.filled;
  syncCompanyDetails(input);
  const audited=prepopulateAuditorFromMasterListing(input,auditor);
  filled+=audited.filled;kept+=audited.kept;
  return {document:audited.document,filled,kept,listingFields,secretaryFields,
-  secretaryConflict,peopleFields,auditorFields:audited.filled};
+  secretaryConflict,peopleFields,auditorFields:audited.filled,defaults};
 }
