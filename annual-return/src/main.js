@@ -7,7 +7,8 @@ import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populated
 import {importCombinedRegisterSnapshot} from './register-import.js';
 import {prepopulateAnnualReturnFromMasterListing} from './master-listing-import.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
-import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC,mergeMSICCatalogues} from './msic.js';
+import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC,mergeMSICCatalogues,completeMSICDescriptions} from './msic.js';
+import {formatRinggitAmount} from './derived-defaults.js';
 import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,removeAnnualReturnDraft,draftIdOfKey} from './drafts.js';
 import {BO_CRITERIA_DESCRIPTIONS,selectedBoCriteria} from './bo-criteria.js';
 import {createCloudDraftClient} from './cloud-draft-client.js';
@@ -66,7 +67,7 @@ const cloudDraft=createCloudDraftClient({
  getScope:()=>draftScope,
  getDocument:()=>doc,
  applyDocument:document=>{
-  doc=document;generated=null;$('download-box').hidden=true;
+  doc=document;normalizeReviewValues();generated=null;$('download-box').hidden=true;
   resetView();draftOptions();
  },
  onStatus:(message,error=false)=>{
@@ -345,7 +346,7 @@ if(window.parent!==window){
      doc,event.data.particulars,event.data.auditor);
     if(result.filled>0){
      if(!flushDraft())throw Error('Current draft could not be backed up.');
-     doc=result.document;generated=null;$('download-box').hidden=true;
+     doc=result.document;normalizeReviewValues();generated=null;$('download-box').hidden=true;
      renderSections();queueDraftSave();
      status('Master Listing: '+result.filled+' blank Annual Return fields filled ('+
       result.listingFields+' company/capital, '+result.peopleFields+' current-person, '+
@@ -375,7 +376,7 @@ if(window.parent!==window){
      const result=importCombinedRegisterSnapshot(doc,payload);
      if(result.summary.filled>0){
       if(!flushDraft())throw Error('Current draft could not be backed up.');
-      doc=result.document;
+      doc=result.document;normalizeReviewValues();
       generated=null;$('download-box').hidden=true;
       renderSections();queueDraftSave();
       const capitalCount=result.summary.capitalFromCurrentHoldings?.length||0;
@@ -405,7 +406,7 @@ if(window.parent!==window){
     if(payload?.companyId!==selectedDmsCompanyId)throw Error('Company changed. Import cancelled.');
     if(!flushDraft())throw Error('Current draft could not be backed up.');
     const result=importCombinedRegisterSnapshot(doc,payload);
-    doc=result.document;
+    doc=result.document;normalizeReviewValues();
     generated=null;$('download-box').hidden=true;
     resetView({preserveHistory:true});queueDraftSave();
     const count=result.summary;
@@ -442,6 +443,32 @@ function signingInputs(){
 
 
 let msicCatalogue=[],msicState='Loading DOSM MSIC and SSM ROC codes…';
+/** Normalize only confirmed MYR class capital and add official descriptions to
+ * imported MSIC codes. Never change the underlying amount or verified wording.
+ */
+function normalizeReviewValues(){
+ let changed=false;
+ const field=key=>doc.particulars.find(item=>item.type==='field'&&item.en===key);
+ const currency=String(field('Currency')?.value||'').trim();
+ if(!currency||/^(?:RM|MYR|ringgit|malaysian ringgit)$/i.test(currency)){
+  for(const key of ['Ordinary Share Capital (recorded amount paid)','Preference Share Capital (recorded amount paid)']){
+   const cell=field(key);
+   if(!cell)continue;
+   const normalized=formatRinggitAmount(cell.value);
+   if(cell.value!==normalized){cell.value=normalized;changed=true;}
+  }
+ }
+ const msic=field('Nature of Business / MSIC Code');
+ if(msic&&msicCatalogue.length){
+  const enriched=completeMSICDescriptions(msic.value,msicCatalogue);
+  if(msic.value!==enriched){msic.value=enriched;changed=true;}
+ }
+ return changed;
+}
+function incompleteMsicDescriptions(){
+ const item=doc.particulars.find(x=>x.type==='field'&&MSIC_FIELD.test(x.en));
+ return item?extractMSICCodes(item.value).filter(row=>!row.en).map(row=>row.code):[];
+}
 function msicControl(item,index){
  const selected=extractMSICCodes(item.value);
  const imported=String(item.value||'').trim()&&!selected.length?String(item.value):'';
@@ -476,6 +503,7 @@ async function loadMSIC(){
  }catch(err){
   msicState='Official MSIC catalogue could not load ('+err.message+'). Use the SSM links or verified manual entry.';
  }
+ if(normalizeReviewValues()&&draftScope!=='dms:pending')queueDraftSave();
  renderSections();
 }
 function refreshMSICResults(input){
@@ -1054,6 +1082,9 @@ async function generate(){
  if(rsshCorrection)status(rsshCorrection);
  if(!String(doc.company.name).trim()||!String(doc.company.no).trim())
   return status('Enter company name and registration number first.',true);
+ if(normalizeReviewValues()){renderSections();queueDraftSave();}
+ const missingDescriptions=incompleteMsicDescriptions();
+ if(missingDescriptions.length)return status('Business description is required for MSIC code(s): '+missingDescriptions.join(', ')+'. Select the verified SSM/DOSM description before generating the PDF.',true);
  if(!confirm('Generate a CLIENT REVIEW PDF? Verify company details and statutory particulars before sending.'))return;
  setBusy(true);
  try{
@@ -1181,6 +1212,9 @@ $('particulars').addEventListener('change',e=>{
   return;
  }
  if(el.dataset.item!==undefined&&doc.particulars[Number(el.dataset.item)]?.en==='Member Type'){queueDraftSave();renderSections();return;}
+ if(el.dataset.item!==undefined&&/^(?:Ordinary|Preference) Share Capital \(recorded amount paid\)$/.test(doc.particulars[Number(el.dataset.item)]?.en||'')){
+  if(normalizeReviewValues()){renderSections();queueDraftSave();}return;
+ }
  if(el.dataset.criteria!==undefined){
   const i=Number(el.dataset.criteria);
   const values=[...$('particulars').querySelectorAll('input[data-criteria="'+i+'"]:checked')].map(x=>x.value);
@@ -1246,6 +1280,9 @@ $('print').addEventListener('click',()=>{
  const rsshCorrection=removeRsshChargeTwoOnce();
  if(rsshCorrection)status(rsshCorrection);
  if(!doc.company.name.trim())return status('Enter company name first.',true);
+ if(normalizeReviewValues()){renderSections();queueDraftSave();}
+ const missingDescriptions=incompleteMsicDescriptions();
+ if(missingDescriptions.length)return status('Business description is required for MSIC code(s): '+missingDescriptions.join(', ')+'. Complete the MSIC descriptions before printing.',true);
  renderPages(doc);window.print();setTimeout(()=>{$('pdf-stage').textContent='';},5000);
 });
 window.addEventListener('afterprint',()=>{$('pdf-stage').textContent='';});
