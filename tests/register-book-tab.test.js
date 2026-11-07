@@ -55,8 +55,10 @@ test('initializes only missing company statutory registers with the same editabl
  assert(created.sheets.find(s=>s.name==='Register of Charges').rows[0].includes('Date of Discharge'));
  assert(created.sheets.filter(s=>s.name!=='Company Details').every(s=>s.rows.length===1),'do not invent any statutory particulars');
  const info=created.sheets.find(s=>s.name==='Company Details');
- assert.deepEqual(info.rows.map(r=>r[0]),['Company Name:','Company No.:','Last update:',
+ assert.deepEqual(info.rows.slice(0,6).map(r=>r[0]),['Company Name:','Company No.:','Last update:',
   'Date of Incorporation:','Date of Cosec Appointment:','Registered Address:']);
+ assert(info.rows.some(r=>r[0]==='Number of Ordinary Shares:'&&r[1]===''));
+ assert(info.rows.some(r=>r[0]==='Ordinary Share Capital (recorded amount paid):'&&r[1]===''));
  assert.equal(info.rows[0][1],'BETA SDN BHD');
  assert.equal(info.rows[1][1],'202609876543');
  assert(info.rows.slice(2).every(row=>row[1]===''));
