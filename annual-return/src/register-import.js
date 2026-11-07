@@ -128,6 +128,93 @@ function memberClassPercentages(entries){
  if([...totals.values()].some(n=>!Number.isSafeInteger(n)||n<=0))return null;
  return rows.map(row=>(row.held/totals.get(row.className)*100).toFixed(2)+'%');
 }
+/**
+ * A current Register of Members already contains the recorded share quantities,
+ * even when new "Company Details > share capital" fields have never been filled.
+ * Calculate count-based share capital from that existing evidence, never its
+ * monetary amount. Unrecorded, zero or invalid holdings prohibit a derived
+ * "issued share" total; verified profile particulars always take precedence.
+ */
+function recordedShareQuantities(sections,profile){
+ const source=sections.find(x=>/^register of members$/i.test(txt(x.title)));
+ const entries=source?getRecords(source):[];
+ const result={values:{},fromHoldings:[],notice:'',classFallback:''};
+ if(!entries.length)return result;
+ const rows=entries.map(entry=>{
+  const shares=select(entry.fields,/^current number of shares held$/i,
+   /^total shares held$/i,/^shares held$/i,/^shareholding$/i);
+  const quantity=shares.replace(/,/g,'').trim();
+  const count=/^\d+$/.test(quantity)?Number(quantity):NaN;
+  const rawClass=select(entry.fields,/^class of shares$/i,
+   /^share class$/i,/^class$/i);
+  const group=rawClass.toLowerCase().replace(/\s+shares?$/,'').trim();
+  const classification=group==='ordinary'?'Ordinary':
+   group==='preference'?'Preference':'';
+  return {count,classification,rawClass};
+ });
+ if(rows.some(row=>!Number.isSafeInteger(row.count)||row.count<=0)){
+  result.notice='Some current members have missing or invalid recorded holdings. Issued-share totals were not inferred.';
+  return result;
+ }
+ const total=rows.reduce((n,row)=>n+row.count,0);
+ if(!Number.isSafeInteger(total)||total<=0)return result;
+ const statedTotal=select(profile,
+  /^total number of issued shares(?: \(all classes\))?$/i,
+  /^total issued shares(?: \(all classes\))?$/i,
+  /^number of issued shares(?: \(all classes\))?$/i,
+  /^total shares issued$/i);
+ if(statedTotal){
+  const recorded=Number(statedTotal.replace(/,/g,''));
+  if(!Number.isSafeInteger(recorded)||recorded!==total){
+   result.notice='Current members’ holdings differ from the explicit issued-share total. Counts were not inferred; review the Statutory Registers.';
+   return result;
+  }
+ }
+ // Only infer the sole share class from an explicit company record or
+ // a complete, agreeing allotment register, never from the company's legal type.
+ let uniform='';
+ const declared=select(profile,/^classes of shares issued$/i,/^share classes issued$/i);
+ if(/^(?:ordinary|ordinary shares)$/i.test(declared))uniform='Ordinary';
+ else if(/^(?:preference|preference shares)$/i.test(declared))uniform='Preference';
+ else if(!rows.some(row=>row.classification)){
+  const allocations=sections.find(x=>/^register of (?:share )?allotments?$/i.test(txt(x.title)));
+  const allots=allocations?getRecords(allocations):[];
+  if(allots.length){
+   const classes=allots.map(x=>{
+    const cls=select(x.fields,/^class$/i,/^class of shares$/i,/^share class$/i)
+     .toLowerCase().replace(/\s+shares?$/,'').trim();
+    const units=select(x.fields,/^number of shares$/i,/^no\.? of shares$/i,
+     /^shares$/i).replace(/,/g,'');
+    return {cls,units:/^\d+$/.test(units)?Number(units):NaN};
+   });
+   if(classes.every(x=>['ordinary','preference'].includes(x.cls)&&
+    Number.isSafeInteger(x.units)&&x.units>0)&&
+    classes.every(x=>x.cls===classes[0].cls)&&
+    classes.reduce((n,x)=>n+x.units,0)===total)
+    uniform=classes[0].cls==='ordinary'?'Ordinary':'Preference';
+  }
+ }
+ const distinct=new Set(rows.map(row=>row.classification).filter(Boolean));
+ if(uniform&&rows.some(row=>row.classification&&row.classification!==uniform)){
+  result.notice='Member share classes conflict with the company/allotment class. Review class particulars.';
+  return result;
+ }
+ if(uniform&&distinct.size===0)result.classFallback=uniform;
+ const resolved=rows.map(row=>row.classification||uniform);
+ // Conflicting or partially specified member classes cannot prove a class sum.
+ if(resolved.every(Boolean)){
+  const totals={Ordinary:0,Preference:0};
+  for(let i=0;i<rows.length;i++)totals[resolved[i]]+=rows[i].count;
+  if(totals.Ordinary)result.values['Number of Ordinary Shares']=totals.Ordinary.toLocaleString('en-US');
+  if(totals.Preference)result.values['Number of Preference Shares']=totals.Preference.toLocaleString('en-US');
+  result.values['Classes of Shares Issued']=totals.Ordinary&&totals.Preference?
+   'Ordinary & Preference':totals.Ordinary?'Ordinary':'Preference';
+ }
+ result.values['Total Number of Issued Shares (all classes)']=total.toLocaleString('en-US');
+ result.fromHoldings=Object.keys(result.values);
+ result.notice='Share quantities above are derived from all recorded current members’ holdings; confirm issued-share totals with the latest SSM return before filing. No paid-up capital was assumed.';
+ return result;
+}
 function addMissingBlocks(items,template,sectionRe,headingRe,count,limit=1200){
  const indexes=[];
  for(let i=0;i<items.length;i++)if(items[i].type==='heading'&&headingRe.test(items[i].en))indexes.push(i);
@@ -226,7 +313,8 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
   'Total Number of Issued Shares (all classes)':[
    /^total number of issued shares(?: \(all classes\))?$/i,
    /^total issued shares(?: \(all classes\))?$/i,
-   /^number of issued shares(?: \(all classes\))?$/i
+   /^number of issued shares(?: \(all classes\))?$/i,
+   /^total shares issued$/i
   ],
   'Ordinary Share Capital (recorded amount paid)':[
    /^ordinary share capital(?: \(recorded amount paid\))?$/i,
@@ -248,17 +336,45 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
  };
  for(const [key,patterns] of Object.entries(capitalMap))
   write(doc.particulars,key,select(profile,...patterns));
+ const calculated=recordedShareQuantities(sections,profile);
+ changes.capitalFromCurrentHoldings=[];
+ changes.capitalNotice=calculated.notice;
+ for(const [key,value] of Object.entries(calculated.values)){
+  // Never replace a documented capital amount with holdings-derived counts.
+  const current=doc.particulars.find(x=>x.type==='field'&&x.en===key);
+  if(current&&!exists(current.value)){
+   write(doc.particulars,key,value);
+   changes.capitalFromCurrentHoldings.push(key);
+  }
+ }
+ // An explicitly stated paid-up amount can only map to the sole known class.
+ // Acquisition or share-transfer consideration is NOT paid-up share capital.
+ const onlyClass=select(profile,/^classes of shares issued$/i,
+  /^share classes issued$/i)||calculated.classFallback;
+ if(/^(?:ordinary|ordinary shares)$/i.test(onlyClass))
+  write(doc.particulars,'Ordinary Share Capital (recorded amount paid)',
+   select(profile,/^paid[ -]?up (?:share )?capital$/i,
+    /^issued and paid[ -]?up share capital$/i));
+ else if(/^(?:preference|preference shares)$/i.test(onlyClass))
+  write(doc.particulars,'Preference Share Capital (recorded amount paid)',
+   select(profile,/^paid[ -]?up (?:share )?capital$/i,
+    /^issued and paid[ -]?up share capital$/i));
  function transfer(sectionRegex,headingRe,fieldMap,kind){
   const section=findSection(sectionRegex);if(!section)return;
   const entries=getRecords(section);
   if(!entries.length)return;
-  const classPercentages=kind==='members'?memberClassPercentages(entries):null;
+  const classPercentages=kind==='members'?
+   memberClassPercentages(entries.map(entry=>calculated.classFallback?
+    {...entry,fields:[...entry.fields,{label:'Class of Shares',
+     value:calculated.classFallback}]}:entry)):null;
   addMissingBlocks(doc.particulars,cloneBlank().particulars,sectionRegex,headingRe,entries.length);
   const targets=blocksOf(doc.particulars,headingRe);
   for(let i=0;i<Math.min(entries.length,targets.length);i++){
    const source=entries[i].fields;
    for(const [target,patterns] of Object.entries(fieldMap)){
     let value=select(source,...patterns);
+    if(kind==='members'&&target==='Class of Shares'&&!value)
+     value=calculated.classFallback;
     if(kind==='members'&&target==='Percentage of Own Share Class'&&!value&&classPercentages)
      value=classPercentages[i];
     if(/^Date /.test(target))value=safeDate(value);
