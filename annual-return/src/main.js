@@ -5,7 +5,7 @@ import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
 import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord,displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading,moveParticularField,moveParticularSection,insertParticularHeading,restoreRsshAuditorHeading,removeRsshRegisteredCharge2,isRetiredAnnualReturnField} from './core.js';
 import {importCombinedRegisterSnapshot} from './register-import.js';
-import {prepopulateAuditorFromMasterListing} from './auditor-import.js';
+import {prepopulateAnnualReturnFromMasterListing} from './master-listing-import.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC,mergeMSICCatalogues} from './msic.js';
 import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,removeAnnualReturnDraft,draftIdOfKey} from './drafts.js';
@@ -77,8 +77,9 @@ const cloudDraft=createCloudDraftClient({
    window.parent.postMessage({type:'ZHENLI_AR_CLOUD_DRAFT_LIST_REFRESH'},window.location.origin);
  }
 });
-// Fill blank secretary, documented capital and current shareholding fields
-// only after the correct company's cloud draft has finished loading.
+// Fill all applicable current statutory particulars, then complete missing
+// fields from the exact matched private Master Listing. This order prevents
+// listing-only names from taking precedence over verified register records.
 function requestSecretaryRegisterImport(companyId){
  if(window.parent===window||!companyId||companyId!==selectedDmsCompanyId||
     !cloudDraft.isReady()||pendingRegisterImport||pendingSecretaryImport)return;
@@ -100,7 +101,7 @@ function loadCloudThenSecretary(options={}){
  const companyId=selectedDmsCompanyId;
  void cloudDraft.open(options).then(()=>{
   if(companyId===selectedDmsCompanyId&&cloudDraft.isReady())
-   {requestSecretaryRegisterImport(companyId);requestAuditorMasterListing(companyId);}
+   requestSecretaryRegisterImport(companyId);
  }).catch(error=>console.warn('Annual Return cloud load:',error));
 }
 function currentDraftId(){return selectedDmsCompanyId||newDraftId;}
@@ -340,15 +341,19 @@ if(window.parent!==window){
    pendingAuditorImport='';
    if(!event.data.ok||!cloudDraft.isReady()||event.data.companyId!==selectedDmsCompanyId)return;
    try{
-    const result=prepopulateAuditorFromMasterListing(doc,event.data.auditor);
+    const result=prepopulateAnnualReturnFromMasterListing(
+     doc,event.data.particulars,event.data.auditor);
     if(result.filled>0){
      if(!flushDraft())throw Error('Current draft could not be backed up.');
      doc=result.document;generated=null;$('download-box').hidden=true;
      renderSections();queueDraftSave();
-     status('Auditor particulars populated from the Master Listing ('+
-      result.filled+' blank fields). Existing entries retained; verify before filing.');
+     status('Master Listing: '+result.filled+' blank Annual Return fields filled ('+
+      result.listingFields+' company/capital, '+result.peopleFields+' current-person, '+
+      result.secretaryFields+' secretary, '+result.auditorFields+' auditor). '+
+      (result.secretaryConflict?'Company secretary differs from the register; the registered secretary was retained. ':'')+
+      'Existing entries retained; verify before filing.');
     }
-   }catch(error){status('Auditor pre-population could not be applied: '+error.message,true);}
+   }catch(error){status('Master Listing pre-population could not be applied: '+error.message,true);}
    return;
   }
   if(event.data?.type==='ZHENLI_DMS_AR_IMPORT_COMBINED_RESPONSE'){
@@ -356,30 +361,36 @@ if(window.parent!==window){
    if(!automatic&&(!pendingRegisterImport||event.data.id!==pendingRegisterImport))return;
    if(automatic){
     pendingSecretaryImport='';
-    // Newly created companies can have no saved register; leave drafts alone.
-    if(!event.data.ok||!cloudDraft.isReady())return;
+    // A newly created company may have no saved register. Still load its
+    // private Master Listing after the register attempt, if cloud-ready.
+    if(!cloudDraft.isReady())return;
+    if(!event.data.ok){
+     requestAuditorMasterListing(selectedDmsCompanyId);
+     return;
+    }
     try{
      const payload=event.data.payload;
      if(payload?.companyId!==selectedDmsCompanyId)return;
-     const result=importCombinedRegisterSnapshot(doc,payload,{
-      secretaryOnly:true,shareholdingOnly:true
-     });
+     const result=importCombinedRegisterSnapshot(doc,payload);
      if(result.summary.filled>0){
       if(!flushDraft())throw Error('Current draft could not be backed up.');
       doc=result.document;
       generated=null;$('download-box').hidden=true;
       renderSections();queueDraftSave();
       const capitalCount=result.summary.capitalFromCurrentHoldings?.length||0;
+      const named=Object.entries(result.summary.records).filter(([,n])=>n>0)
+       .map(([key,n])=>n+' '+key).join(', ');
       status('Statutory Registers: '+result.summary.filled+
-       ' blank fields filled'+(capitalCount?' ('+capitalCount+
-       ' share-capital quantities based on current members’ holdings)':'')+
+       ' blank fields filled'+(named?' ('+named+')':'')+
+       (capitalCount?' including '+capitalCount+' share-capital quantities':'')+
        '. Existing values kept. '+(result.summary.capitalNotice||'Verify particulars before filing.'));
      }else if(result.summary.capitalNotice){
-      status('No new blank fields populated. '+result.summary.capitalNotice);
+      status('No new blank fields populated from registers. '+result.summary.capitalNotice);
      }else{
-      status('No new share-capital fields populated. The saved registers may lack explicit capital values or complete member holdings. Enter verified capital in Statutory Registers → Company Details, save, and reopen this draft.');
+      status('Statutory Registers checked; no new Annual Return fields found. Missing items may not be recorded in the saved registers.');
      }
     }catch(error){status('Statutory Register pre-population could not be applied: '+error.message,true);}
+    finally{if(cloudDraft.isReady())requestAuditorMasterListing(selectedDmsCompanyId);}
     return;
    }
    pendingRegisterImport='';
