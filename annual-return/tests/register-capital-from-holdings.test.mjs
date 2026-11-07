@@ -49,8 +49,10 @@ test('derives unentered share capital counts from existing complete member recor
  assert.equal(value(document,'Number of Shares Held','MEMBER 1'),'20,000');
  assert.equal(value(document,'Percentage of Own Share Class','MEMBER 1'),'40.00%');
  assert.equal(value(document,'Percentage of Own Share Class','MEMBER 3'),'100.00%');
- assert.equal(value(document,'Ordinary Share Capital (recorded amount paid)'),'');
- assert.equal(value(document,'Preference Share Capital (recorded amount paid)'),'');
+ assert.equal(value(document,'Ordinary Share Capital (recorded amount paid)'),'50,000.00');
+ assert.equal(value(document,'Preference Share Capital (recorded amount paid)'),'5,000.00');
+ assert.equal(document.particulars.find(x=>x.en==='Ordinary Share Capital (recorded amount paid)').autoAssumedRate,1,
+  'RM1/share amounts must retain an explicit estimate marker');
  assert(summary.capitalFromCurrentHoldings.length>=3);
  assert.match(summary.capitalNotice,/verify|confirm/i);
  assert.deepEqual(data,copied,'source remains unchanged');

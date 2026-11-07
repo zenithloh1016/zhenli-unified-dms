@@ -411,7 +411,13 @@ export function normalizeDocument(raw){
         cn:oldNonCash?'以非现金方式发行的股份':oldPaid?'非现金配发视为已缴金额':safe(x.cn,350),
         ...(typeof x.displayEn==='string'?{displayEn:safe(x.displayEn,350)}:{}),
         ...(typeof x.displayCn==='string'?{displayCn:safe(x.displayCn,350)}:{}),
-        value:x.type==='field'?safe(x.value,15000):''
+        value:x.type==='field'?safe(x.value,15000):'',
+        // Retain only the explicit review-estimate provenance across local
+        // backups and cloud synchronization. Never turn it into a verified
+        // share capital record by stripping its provenance flag.
+        ...(x.type==='field'&&x.autoAssumedRate===1&&
+          /^(?:Ordinary|Preference) Share Capital \(recorded amount paid\)$/.test(x.en||'')
+          ?{autoAssumedRate:1}:{})
       };
     })
   };

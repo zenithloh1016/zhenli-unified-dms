@@ -5,6 +5,7 @@
  * invent dates, unpaid capital, issued share totals or SSM-verified balances.
  */
 import {cloneBlank,setCompanyDetail} from './core.js';
+import {applyAnnualReturnDefaults,msicCodesFromProfileFields} from './derived-defaults.js';
 const txt=v=>String(v??'').trim();
 const exists=v=>txt(v)&&!/^(?:-|n\/a|na|nil|none|not provided)$/i.test(txt(v));
 const norm=v=>txt(v).toLowerCase().replace(/[\W_]+/g,' ');
@@ -265,8 +266,11 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
  const write=(fields,key,value)=>{
   if(!exists(value))return;
   const cell=fields.find(x=>x.en===key&&x.type==='field');if(!cell)return;
-  if(!overwrite&&exists(cell.value)){changes.kept++;return;}
-  cell.value=cleanValue(value);changes.filled++;
+  if(!overwrite&&exists(cell.value)&&cell.autoAssumedRate!==1){changes.kept++;return;}
+  cell.value=cleanValue(value);
+  // A confirmed source value supersedes an earlier RM1/share estimate.
+  delete cell.autoAssumedRate;
+  changes.filled++;
  };
  if(!secretaryOnly&&!shareholdingOnly){
   write(doc.particulars,'Company Name',snapshot.companyName);
@@ -417,8 +421,16 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
  // Charge headings and details are transferred individually above. The retired
  // Number of Registered Charges field must not be recreated from an import.
  populateSecretary();
- // No guesswork about share capital, missing class totals, AR year, BO
- // ownership criteria, outstanding debt, or MSIC codes.
+ // Address defaults, labelled MSIC codes, and the user's RM1/share
+ // review-only convention apply after explicit registered values have won.
+ const defaults=applyAnnualReturnDefaults(doc,{
+  msicCodes:msicCodesFromProfileFields(profile)
+ });
+ changes.filled+=defaults.filled;
+ changes.defaults={addresses:defaults.addresses,capital:defaults.capital,msic:defaults.msic};
+ if(defaults.capital)changes.capitalNotice=
+  [changes.capitalNotice,'RM1/share was used only as a working assumption for blank paid-up capital fields. Verify actual issue prices and paid-up amounts against SSM before filing.']
+  .filter(Boolean).join(' ');
  doc.company.name=txt(doc.particulars.find(p=>p.en==='Company Name')?.value)||snapshot.companyName;
  doc.company.no=txt(doc.particulars.find(p=>p.en==='Company Registration No.')?.value)||snapshot.registrationNo;
  return {document:doc,summary:changes};

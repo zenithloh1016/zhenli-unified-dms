@@ -34,7 +34,8 @@ test('all matching Annual Return company, capital, activity, current person and 
  assert.equal(data.fields['Anniversary Date'],'01.01.2026');
  assert.equal(data.fields['Number of Ordinary Shares'],'100,000');
  assert.equal(data.fields['Ordinary Share Capital (recorded amount paid)'],'RM 100,000.00');
- assert.equal(data.fields['Nature of Business / MSIC Code'],'Construction | MSIC: 41001, 41002');
+ assert.equal(data.fields['Nature of Business / MSIC Code'],'Construction\n41001 — \n41002 — ');
+ assert.deepEqual(data.msicCodes,['41001','41002']);
  assert.deepEqual(data.people.directors,['DIRECTOR A','DIRECTOR B']);
  assert.deepEqual(data.people.members,['MEMBER A','HOLDING SDN BHD']);
  assert.deepEqual(data.people.bos,['BO A']);
