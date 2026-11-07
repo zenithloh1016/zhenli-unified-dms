@@ -52,22 +52,25 @@ const directors={
  'Service / Business Address':[/^service address$/i,/^business address$/i]
 };
 const members={
- 'Member Folio':[/^folio(?: no)?$/i],
+ 'Member Folio':[/^folio(?: no\\.?| number)?$/i],
  'Member Type':[/^member type$/i,/individual\/corporate/i],
  'Individual Full Name':[/^shareholder name$/i,/^name$/i,/^full name$/i],
  'Individual NRIC / Passport No.':[/^identification no\.?$/i,/^nric(?: \/ passport)?(?: no\.?)?$/i,/passport no/i],
  'Individual Identification Type':[/^id type$/i,/^identification type$/i],
  'Individual Date of Birth':[/^date of birth$/i],
- 'Individual Nationality / Citizenship':[/^nationality(?:\/origin)?$/i],
- 'Individual Residential / Correspondence Address':[/^address$/i,/^residential address$/i],
+ 'Individual Nationality / Citizenship':[/^nationality(?:\s*\/\s*(?:origin|citizenship))?$/i,/^citizenship$/i],
+ 'Individual Gender':[/^gender$/i],
+ 'Individual Residential / Correspondence Address':[/^address$/i,/^residential address$/i,/^correspondence address$/i],
  'Corporate Name':[/^corporate name$/i,/^company name$/i],
  'Company Registration No. (per Members Register)':[/^company registration (?:no|number)$/i,/^registration (?:no|number)$/i],
- 'Registered / Correspondence Address':[/^registered address$/i],
- 'Number of Shares Held':[/^current number of shares held$/i,/^total shares held$/i,/^shares held$/i],
+ 'Country of Incorporation':[/^country of incorporation$/i,/^country incorporated$/i],
+ 'Registered / Correspondence Address':[/^registered address$/i,/^registered office$/i,/^correspondence address$/i],
+ 'Number of Shares Held':[/^current number of shares held$/i,/^total shares held$/i,/^shares held$/i,/^shareholding$/i],
  'Class of Shares':[/^class of shares$/i,/^share class$/i,/^class$/i],
  // A "Percentage of Recorded Current Holdings" is not necessarily the
  // percentage of a specific share class; never map it to that AR field.
- 'Percentage of Own Share Class':[/^percentage of own share class$/i]
+ 'Percentage of Own Share Class':[/^percentage of own share class$/i],
+ 'Voting / Other Share Rights':[/^voting \/ other share rights$/i,/^share voting rights$/i,/^voting rights$/i]
 };
 const bos={
  'Full Name':[/^full name$/i,/^name$/i],
@@ -83,9 +86,9 @@ const bos={
  'Nationality / Race':[/nationality/i],
  'Position / Occupation':[/^occupation$/i,/^position$/i,/business occupation/i],
  'Residential Address':[/^residential address$/i,/^address$/i],
- 'Recorded Ownership / Voting Rights Percentage':[/^recorded ownership \/ voting rights percentage$/i,/^ownership percentage$/i],
- 'Type of Beneficial Ownership':[/^type of beneficial ownership$/i],
- 'Criteria of Beneficial Ownership':[/^criteria of (?:beneficial ownership|bo)$/i]
+ 'Recorded Ownership / Voting Rights Percentage':[/^recorded ownership \/ voting rights percentage$/i,/^ownership percentage$/i,/^ownership \/ voting rights(?: \(%\))?$/i,/^ownership \/ voting rights \(%\)$/i,/^ownership \/ voting rights percentage$/i,/^voting rights percentage$/i],
+ 'Type of Beneficial Ownership':[/^type of beneficial ownership$/i,/^type of ownership$/i,/^nature of ownership$/i],
+ 'Criteria of Beneficial Ownership':[/^criteria of (?:beneficial ownership|bo)$/i,/^criteria$/i,/^beneficial owner criteria$/i]
 };
 const charges={
  'Registered No.':[/^registered no\.?$/i,/^charge registration (?:no|number)$/i],
@@ -287,18 +290,20 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
  }
  const profile=profileFields(findSection(/^company details$/i)||{blocks:[]});
  const profileMap={
-  'Former Name':[/^former name$/i],
+  'Former Name':[/^former name$/i,/^previous name$/i],
+  'Annual Return Year':[/^annual return year$/i],
+  'Anniversary Date':[/^anniversary date$/i,/^annual return anniversary date$/i],
   'Date of Incorporation':[/^date of (?:registration|incorporation)$/i],
-  'Registered Office':[/^registered address$/i,/^registered office$/i],
+  'Registered Office':[/^registered address$/i,/^registered office$/i,/^registered office address$/i],
   'Address Where Register of Members Is Kept':[/^address where register of members is kept$/i],
-  'Principal Place of Business':[/^business address$/i,/^principal place of business$/i],
+  'Principal Place of Business':[/^business address$/i,/^principal place of business$/i,/^principal business address$/i],
   'Address Where Financial Records Are Kept':[/^address where financial records are kept$/i],
-  'Nature of Business / MSIC Code':[/^(?:nature of business|msic code)$/i]
+  'Nature of Business / MSIC Code':[/^(?:nature of business|msic code|nature of business \/ msic code|principal business activities)$/i]
  };
  if(!shareholdingOnly){
   for(const [key,patterns] of Object.entries(profileMap)){
    let value=select(profile,...patterns);
-   if(/Date of Incorporation/i.test(key))value=safeDate(value);
+   if(/Date of Incorporation|Anniversary Date/i.test(key))value=safeDate(value);
    write(doc.particulars,key,value);
   }
  }
@@ -378,14 +383,25 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
     if(kind==='members'&&target==='Percentage of Own Share Class'&&!value&&classPercentages)
      value=classPercentages[i];
     if(/^Date /.test(target))value=safeDate(value);
-    if(target==='Member Type'&&!value&&kind==='members'){
-     value=select(source,/^corporate name$/i,/^company registration (?:no|number)$/i)?'Body Corporate':'Individual';
-    }
-    if(kind==='members'&&
+    const memberType=kind==='members'?select(source,/^member type$/i,/^individual\s*\/\s*corporate$/i):'';
+    const memberName=kind==='members'?select(source,/^shareholder name$/i,/^name$/i,/^full name$/i):'';
+    const corporate=kind==='members'&&(
+     /^(?:body corporate|company|corporate)$/i.test(memberType)||
+     Boolean(select(source,/^corporate name$/i,/^company registration (?:no\.?|number)$/i))||
+     /\b(?:sdn\.?\s*bhd\.?|berhad|bhd\.?|limited|ltd\.?|llp)\s*$/i.test(memberName));
+    if(kind==='members'&&target==='Member Type'&&!value)
+     value=corporate?'Body Corporate':'Individual';
+    if(kind==='members'&&target==='Corporate Name'&&!value&&corporate)
+     value=memberName;
+    if(kind==='members'&&target==='Registered / Correspondence Address'&&!value&&corporate)
+     value=select(source,/^address$/i,/^residential address$/i);
+    if(kind==='members'&&corporate&&
       ['Individual Full Name','Individual NRIC / Passport No.','Individual Identification Type',
-       'Individual Date of Birth','Individual Nationality / Citizenship',
-       'Individual Residential / Correspondence Address'].includes(target)&&
-      select(source,/^corporate name$/i,/^company registration (?:no|number)$/i))continue;
+       'Individual Date of Birth','Individual Nationality / Citizenship','Individual Gender',
+       'Individual Residential / Correspondence Address'].includes(target))continue;
+    if(kind==='members'&&!corporate&&
+      ['Corporate Name','Company Registration No. (per Members Register)',
+       'Country of Incorporation','Registered / Correspondence Address'].includes(target))continue;
     write(targets[i],target,value);
    }
   }
