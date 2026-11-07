@@ -109,9 +109,19 @@ export function createCloudDraftClient({getCompanyId,getScope,getDocument,applyD
      }
     }
     applyDocument(document);
-    saveAnnualReturnDraft(localStorage,scope,id,document,{updatedAt:cloud.updatedAt});
+    // The editor may complete blank registered-address, financial-record
+    // address, share-capital or MSIC particulars during load. Persist exactly
+    // what is displayed, not the pre-prefill cloud snapshot; the revision
+    // guarded save below safely propagates those new values to other devices.
+    const displayed=normalizeDocument(getDocument());
+    const prefilled=JSON.stringify(displayed)!==JSON.stringify(document);
+    saveAnnualReturnDraft(localStorage,scope,id,displayed,{
+     updatedAt:prefilled?new Date().toISOString():cloud.updatedAt
+    });
+    if(prefilled)dirty=true;
     message('Loaded cloud draft revision '+revision+' · Available on web, Windows and Android.'+
-     (differs?' Previous device copy retained in local draft backups.':''));
+     (differs?' Previous device copy retained in local draft backups.':'')+
+     (prefilled?' Updated blank linked particulars will sync automatically.':''));
    }else if(local){
     dirty=true;
     message('Uploading your existing local draft to make it available on other devices…');
