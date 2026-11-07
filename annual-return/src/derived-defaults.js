@@ -15,6 +15,21 @@ const numberOfShares=v=>{
  const n=Number(raw);
  return Number.isSafeInteger(n)&&n>0?n:null;
 };
+/** Format confirmed MYR paid-up share capital without changing its numeric value.
+ * Reject foreign currency, percentages and descriptive text; do not convert FX.
+ */
+export function formatRinggitAmount(value){
+ const raw=txt(value);
+ if(!raw)return raw;
+ const amount=raw.replace(/^(?:RM|MYR)\s*/i,'');
+ if(!/^\d[\d,]*(?:\.\d{1,2})?$/.test(amount))return raw;
+ const compact=amount.replace(/,/g,'');
+ const [whole,decimal='']=compact.split('.');
+ if(!whole||!decimal.match(/^\d{0,2}$/))return raw;
+ const grouped=whole.replace(/^0+(?=\d)/,'').replace(/\B(?=(\d{3})+(?!\d))/g,',');
+ return 'RM'+grouped+'.'+decimal.padEnd(2,'0');
+}
+
 const msicCode=v=>{
  const raw=txt(v).toLowerCase();
  return /^\d{5}[abeiu]?$/.test(raw)?raw:'';
@@ -72,6 +87,17 @@ export function applyAnnualReturnDefaults(document,{msicCodes=[]}={}){
  // RM1/share only where currency is MYR or unspecified; no assumptions for
  // foreign-currency capital. Do not fabricate an otherwise missing share count.
  const isMYR=!currencyText||/^(?:rm|myr|ringgit|malaysian ringgit)$/i.test(currencyText);
+ // Normalize recorded class-specific paid-up amounts when the currency is MYR.
+ // Keep verified amounts, their provenance flags and non-MYR capital intact.
+ if(isMYR)for(const key of [
+  'Ordinary Share Capital (recorded amount paid)',
+  'Preference Share Capital (recorded amount paid)'
+ ]){
+  const cell=get(key);
+  if(!cell||!exists(cell.value))continue;
+  const normalized=formatRinggitAmount(cell.value);
+  if(normalized!==cell.value){cell.value=normalized;filled++;capital++;}
+ }
  if(isMYR)for(const [unitsKey,paidKey] of [
   ['Number of Ordinary Shares','Ordinary Share Capital (recorded amount paid)'],
   ['Number of Preference Shares','Preference Share Capital (recorded amount paid)']
@@ -82,7 +108,7 @@ export function applyAnnualReturnDefaults(document,{msicCodes=[]}={}){
   // but manually entered or registered amounts always remain untouched.
   const derived=target.autoAssumedRate===1;
   if(exists(target.value)&&!derived)continue;
-  const computed=units.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const computed=formatRinggitAmount(units.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
   if(derived&&txt(target.value)===computed)continue;
   target.value=computed;
   target.autoAssumedRate=1;
