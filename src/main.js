@@ -2,6 +2,7 @@ import {createSupabaseSigning} from './signing-supabase.js';
 import {annualReturnCloudAction} from './annual-return-cloud.js';
 import {syncAnnualReturnAfterRegisterSave,annualReturnHistoryAction} from './annual-return-register-sync.js';
 import {auditorFromMasterListing} from './master-listing-auditor.js';
+import {annualReturnParticularsFromMasterListing} from './master-listing-annual-return.js';
 import { createClient } from '@supabase/supabase-js';
 import {freshLoginAuthOptions,clearLegacyAuthSession} from './fresh-login-auth.js';
 import {requestRecoveryEmail,recoveryRedirectFromAppRoot} from './password-recovery-helpers.js';
@@ -1238,9 +1239,10 @@ window.addEventListener('message',event=>{
    if(typeof requestId!=='string'||!/^ar_auditor_[\w-]{1,70}$/.test(requestId))return;
    const source=frame.contentWindow,user=state.user;
    const company=state.companies.find(c=>c.id===requested);
-   const reply=(ok,auditor,error='')=>source?.postMessage({
+   const reply=(ok,auditor,error='',particulars=null)=>source?.postMessage({
      type:'ZHENLI_DMS_AR_AUDITOR_RESPONSE',id:requestId,companyId:requested,
-     ok,auditor:ok?auditor:null,error:ok?'':String(error).slice(0,240)
+     ok,auditor:ok?auditor:null,particulars:ok?particulars:null,
+     error:ok?'':String(error).slice(0,240)
    },window.location.origin);
    if(!user||!company||company.user_id!==user.id||state.arSelectedCompanyId!==requested){
      reply(false,null,'Selected company does not match the signed-in user.');return;
@@ -1253,12 +1255,12 @@ window.addEventListener('message',event=>{
        throw Error('Could not read the private Master Listing: '+error.message);
      }
      const model=JSON.parse(await data.text());
-     const auditor=auditorFromMasterListing(model,{
-       name:company.name,registrationNo:company.registration_no||''
-     });
+     const match={name:company.name,registrationNo:company.registration_no||''};
+     const auditor=auditorFromMasterListing(model,match);
+     const particulars=annualReturnParticularsFromMasterListing(model,match);
      if(state.user?.id!==user.id||state.arSelectedCompanyId!==requested||
         state.tab!=='annual-return')return;
-     reply(true,auditor);
+     reply(true,auditor,'',particulars);
    })().catch(error=>reply(false,null,error.message||error));
    return;
  }
