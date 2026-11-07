@@ -56,6 +56,17 @@ export function applyAnnualReturnDefaults(document,{msicCodes=[]}={}){
    target.value=txt(source.value);filled++;addresses++;
   }
  }
+ // A verified sole-class share count may be read from the explicitly
+ // recorded all-class total. Never split a mixed-class total by assumption.
+ const knownClass=txt(get('Classes of Shares Issued')?.value).toLowerCase().replace(/\s+shares?$/,'');
+ const allCount=numberOfShares(get('Total Number of Issued Shares (all classes)')?.value);
+ if(allCount&&['ordinary','preference'].includes(knownClass)){
+  const primary=get(knownClass==='ordinary'?'Number of Ordinary Shares':'Number of Preference Shares');
+  const other=get(knownClass==='ordinary'?'Number of Preference Shares':'Number of Ordinary Shares');
+  if(primary&&!exists(primary.value)&&!exists(other?.value)){
+   primary.value=allCount.toLocaleString('en-US');filled++;capital++;
+  }
+ }
  const currency=get('Currency');
  const currencyText=txt(currency?.value);
  // RM1/share only where currency is MYR or unspecified; no assumptions for
@@ -79,12 +90,22 @@ export function applyAnnualReturnDefaults(document,{msicCodes=[]}={}){
  }
  const item=get('Nature of Business / MSIC Code');
  if(item){
-  const existing=txt(item.value);
-  const codesAlready=extractMSICCodes(existing).map(x=>x.code);
-  const present=new Set(codesAlready);
-  // Account for MSIC codes in compact source descriptions, e.g. "MSIC: 64923".
-  const embedded=existing.match(/\b\d{5}[abeiu]?\b/gi)||[];
-  for(const code of embedded)present.add(code.toLowerCase());
+  let existing=txt(item.value);
+  // Legacy register books use "MSIC: 64923, 64929", which was not
+  // recognised by the MSIC chip controls. Convert this narrowly delimited
+  // suffix into canonical lines, preserving any preceding business nature.
+  const list=/^\d{5}[abeiu]?(?:\s*[,;]\s*\d{5}[abeiu]?){0,2}$/i;
+  const compact=existing.match(/(?:^|\s*\|\s*|\n)MSIC(?:\s+codes?)?\s*[:\-]\s*(\d{5}[abeiu]?(?:\s*[,;]\s*\d{5}[abeiu]?){0,2})\s*$/i);
+  if(compact){
+   const codes=compact[1].match(/\d{5}[abeiu]?/gi)||[];
+   existing=existing.slice(0,compact.index).trim().replace(/[|,;]+$/,'').trim();
+   existing+=(existing?'\n':'')+codes.map(code=>code.toLowerCase()+' — ').join('\n');
+  }else if(list.test(existing)){
+   existing=(existing.match(/\d{5}[abeiu]?/gi)||[])
+    .map(code=>code.toLowerCase()+' — ').join('\n');
+  }
+  const current=extractMSICCodes(existing).map(x=>x.code);
+  const present=new Set(current);
   const accepted=[];
   for(const proposed of msicCodes||[]){
    const raw=typeof proposed==='string'?proposed:proposed?.code;
@@ -96,8 +117,11 @@ export function applyAnnualReturnDefaults(document,{msicCodes=[]}={}){
    present.add(code);
   }
   if(accepted.length){
-   item.value=(existing?existing+'\n':'')+accepted.join('\n');
-   filled++;msic+=accepted.length;
+   existing+=(existing?'\n':'')+accepted.join('\n');
+   msic+=accepted.length;
+  }
+  if(existing!==txt(item.value)){
+   item.value=existing;filled++;
   }
  }
  return {document,filled,addresses,capital,msic};
