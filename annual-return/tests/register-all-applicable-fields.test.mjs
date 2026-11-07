@@ -62,7 +62,7 @@ test('all statutory sources populate current directors, secretaries, auditor-com
  assert.equal(val(document,'Principal Place of Business'),'NO. 2 IPOH');
  assert.equal(val(document,'Total Number of Issued Shares (all classes)'),'100');
  assert.equal(val(document,'Number of Ordinary Shares'),'100');
- assert.equal(val(document,'Ordinary Share Capital (recorded amount paid)'),'100,000.00');
+ assert.equal(val(document,'Ordinary Share Capital (recorded amount paid)'),'RM100,000.00');
  assert.equal(val(document,'Full Name','DIRECTOR 1'),'DIRECTOR A');
  assert.equal(val(document,'NRIC / Passport No.','DIRECTOR 1'),'DIR123');
  assert.equal(val(document,'Service / Business Address','DIRECTOR 1'),'IPOH SERVICE');
