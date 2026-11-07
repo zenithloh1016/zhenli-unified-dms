@@ -21,8 +21,8 @@ function safeDate(value){
 }
 function select(fields,...patterns){
  for(const pattern of patterns){
-  const item=fields.find(f=>pattern.test(txt(f.label)));
-  if(item&&exists(item.value))return cleanValue(item.value);
+  const item=fields.find(f=>pattern.test(txt(f.label))&&exists(f.value));
+  if(item)return cleanValue(item.value);
  }
  return '';
 }
