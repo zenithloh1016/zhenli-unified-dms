@@ -207,6 +207,11 @@ export function renderPages(doc){
    const continued=parts.length>1?'Part '+(i+1)+' of '+parts.length:'';
    appendRow(tableRow('field',displayParticularLabel(item),displayParticularLabel(item,'cn'),part,continued));
   });
+  if(item.autoAssumedRate===1&&/^(?:Ordinary|Preference) Share Capital \(recorded amount paid\)$/.test(item.en||'')){
+   appendRow(tableRow('note','','',
+    '<p class="pdf-legal-note">WORKING ESTIMATE ONLY: '+pageEsc(displayParticularLabel(item))+
+    ' was calculated at RM1 per recorded share. Malaysian shares have no par value under section 74 of the Companies Act 2016. Confirm the actual paid-up amount against the statutory records before filing. / 仅为估算：按每股 RM1 计算，请核实实缴股本。</p>'));
+  }
  }
  // Director confirmation uses the same table, borders, fonts and spacing as
  // every other section. This also keeps it within the same pagination rules.
