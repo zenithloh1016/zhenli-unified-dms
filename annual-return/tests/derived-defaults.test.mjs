@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {cloneBlank,normalizeDocument} from '../src/core.js';
-import {applyAnnualReturnDefaults,msicCodesFromProfileFields} from '../src/derived-defaults.js';
+import {applyAnnualReturnDefaults,msicCodesFromProfileFields,formatRinggitAmount} from '../src/derived-defaults.js';
 import {extractMSICCodes} from '../src/msic.js';
 const field=(d,key)=>d.particulars.find(x=>x.type==='field'&&x.en===key);
 test('defaults address fields to registered and principal office, never overriding verified exceptions',()=>{
@@ -23,14 +23,14 @@ test('RM1/share fills only missing MYR ordinary and preference paid-up amounts a
  field(d,'Currency').value='MYR';
  const a=applyAnnualReturnDefaults(d);
  assert.equal(a.capital,2);
- assert.equal(field(d,'Ordinary Share Capital (recorded amount paid)').value,'150,000.00');
- assert.equal(field(d,'Preference Share Capital (recorded amount paid)').value,'50,000.00');
+ assert.equal(field(d,'Ordinary Share Capital (recorded amount paid)').value,'RM150,000.00');
+ assert.equal(field(d,'Preference Share Capital (recorded amount paid)').value,'RM50,000.00');
  assert.equal(field(d,'Ordinary Share Capital (recorded amount paid)').autoAssumedRate,1);
  assert.equal(field(normalizeDocument(d),'Ordinary Share Capital (recorded amount paid)').autoAssumedRate,1);
  assert.equal(applyAnnualReturnDefaults(d).capital,0,'idempotent');
  field(d,'Number of Ordinary Shares').value='250,000';
  assert.equal(applyAnnualReturnDefaults(d).capital,1);
- assert.equal(field(d,'Ordinary Share Capital (recorded amount paid)').value,'250,000.00');
+ assert.equal(field(d,'Ordinary Share Capital (recorded amount paid)').value,'RM250,000.00');
 });
 test('explicit capital always wins, and no RM estimate for missing counts or foreign currency',()=>{
  const d=cloneBlank();
@@ -42,9 +42,9 @@ test('explicit capital always wins, and no RM estimate for missing counts or for
  assert.equal(field(d,'Ordinary Share Capital (recorded amount paid)').value,'RM 560.00');
  assert.equal(field(d,'Preference Share Capital (recorded amount paid)').value,'');
  field(d,'Currency').value='MYR';
- assert.equal(applyAnnualReturnDefaults(d).capital,1);
- assert.equal(field(d,'Ordinary Share Capital (recorded amount paid)').value,'RM 560.00');
- assert.equal(field(d,'Preference Share Capital (recorded amount paid)').value,'40.00');
+ assert.equal(applyAnnualReturnDefaults(d).capital,2);
+ assert.equal(field(d,'Ordinary Share Capital (recorded amount paid)').value,'RM560.00');
+ assert.equal(field(d,'Preference Share Capital (recorded amount paid)').value,'RM40.00');
 });
 test('sole declared class with explicit issued total can provide count, mixed class cannot',()=>{
  const d=cloneBlank();
@@ -53,7 +53,7 @@ test('sole declared class with explicit issued total can provide count, mixed cl
  const result=applyAnnualReturnDefaults(d);
  assert.equal(result.capital,2,'preference count and amount');
  assert.equal(field(d,'Number of Preference Shares').value,'8,000');
- assert.equal(field(d,'Preference Share Capital (recorded amount paid)').value,'8,000.00');
+ assert.equal(field(d,'Preference Share Capital (recorded amount paid)').value,'RM8,000.00');
  const other=cloneBlank();
  field(other,'Classes of Shares Issued').value='Ordinary & Preference';
  field(other,'Total Number of Issued Shares (all classes)').value='8,000';
@@ -82,4 +82,23 @@ test('converts legacy compact MSIC entries and adds missing codes once, maximum 
  fieldBlank.value='64923,64929';
  applyAnnualReturnDefaults(blank);
  assert.deepEqual(extractMSICCodes(fieldBlank.value).map(x=>x.code),['64923','64929']);
+});
+
+test('Ringgit amounts are rendered with RM and two decimals without FX conversion',()=>{
+ assert.equal(formatRinggitAmount('100,000.00'),'RM100,000.00');
+ assert.equal(formatRinggitAmount('MYR 125599225'),'RM125,599,225.00');
+ assert.equal(formatRinggitAmount('RM 250.5'),'RM250.50');
+ assert.equal(formatRinggitAmount('RM1,000.00'),'RM1,000.00');
+ assert.equal(formatRinggitAmount('USD 10,000.00'),'USD 10,000.00');
+ assert.equal(formatRinggitAmount('NOT PROVIDED'),'NOT PROVIDED');
+});
+test('verified ordinary and preference paid-up capital normalize without changing their amounts',()=>{
+ const d=cloneBlank();
+ field(d,'Currency').value='MYR';
+ field(d,'Ordinary Share Capital (recorded amount paid)').value='100,000.00';
+ field(d,'Preference Share Capital (recorded amount paid)').value='RM 5,000';
+ assert.equal(applyAnnualReturnDefaults(d).capital,2);
+ assert.equal(field(d,'Ordinary Share Capital (recorded amount paid)').value,'RM100,000.00');
+ assert.equal(field(d,'Preference Share Capital (recorded amount paid)').value,'RM5,000.00');
+ assert.equal(applyAnnualReturnDefaults(d).capital,0);
 });
