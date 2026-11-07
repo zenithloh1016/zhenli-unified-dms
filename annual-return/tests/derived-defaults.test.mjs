@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {cloneBlank,normalizeDocument} from '../src/core.js';
 import {applyAnnualReturnDefaults,msicCodesFromProfileFields,formatRinggitAmount} from '../src/derived-defaults.js';
-import {extractMSICCodes} from '../src/msic.js';
+import {extractMSICCodes,completeMSICDescriptions} from '../src/msic.js';
 const field=(d,key)=>d.particulars.find(x=>x.type==='field'&&x.en===key);
 test('defaults address fields to registered and principal office, never overriding verified exceptions',()=>{
  const d=cloneBlank();
@@ -101,4 +101,33 @@ test('verified ordinary and preference paid-up capital normalize without changin
  assert.equal(field(d,'Ordinary Share Capital (recorded amount paid)').value,'RM100,000.00');
  assert.equal(field(d,'Preference Share Capital (recorded amount paid)').value,'RM5,000.00');
  assert.equal(applyAnnualReturnDefaults(d).capital,0);
+});
+
+test('reopened draft carries registered and business addresses, both capital classes and MSIC into PDF values',()=>{
+ const draft=normalizeDocument(cloneBlank());
+ field(draft,'Registered Office').value='REGISTERED OFFICE, IPOH';
+ field(draft,'Principal Place of Business').value='PRINCIPAL BUSINESS, KUALA LUMPUR';
+ field(draft,'Number of Ordinary Shares').value='100,000';
+ field(draft,'Number of Preference Shares').value='20,000';
+ field(draft,'Currency').value='MYR';
+ const defaults=applyAnnualReturnDefaults(draft,{msicCodes:['64923','64929']});
+ assert.equal(defaults.addresses,2);
+ assert.equal(field(draft,'Address Where Register of Members Is Kept').value,'REGISTERED OFFICE, IPOH');
+ assert.equal(field(draft,'Address Where Financial Records Are Kept').value,'PRINCIPAL BUSINESS, KUALA LUMPUR');
+ assert.equal(field(draft,'Ordinary Share Capital (recorded amount paid)').value,'RM100,000.00');
+ assert.equal(field(draft,'Preference Share Capital (recorded amount paid)').value,'RM20,000.00');
+ const msic=field(draft,'Nature of Business / MSIC Code');
+ msic.value=completeMSICDescriptions(msic.value,[
+  {code:'64923',en:'Licensed money lending activities'},
+  {code:'64929',en:'Other credit granting n.e.c.'}
+ ]);
+ assert.deepEqual(extractMSICCodes(msic.value),[
+  {code:'64923',en:'Licensed money lending activities'},
+  {code:'64929',en:'Other credit granting n.e.c.'}
+ ]);
+ const restored=normalizeDocument(draft);
+ assert.equal(field(restored,'Address Where Register of Members Is Kept').value,'REGISTERED OFFICE, IPOH');
+ assert.equal(field(restored,'Preference Share Capital (recorded amount paid)').autoAssumedRate,1);
+ assert.equal(applyAnnualReturnDefaults(restored,{msicCodes:['64923','64929']}).filled,0,
+  'reopening and regenerating PDF must not duplicate MSIC codes or recalculate unchanged values');
 });
