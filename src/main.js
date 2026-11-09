@@ -677,7 +677,23 @@ function renderTasks(){
     <div class="frame-shell ${state.taskFullscreen?'task-expanded':''}">${state.taskFullscreen?'<div class="frame-toolbar"><strong>Task Hub</strong><button type="button" class="btn secondary" data-action="exit-tasks">Exit full screen ✕</button></div>':''}
     <iframe id="zh-task-frame" class="integration-frame" title="UNICOSEC Secretarial Task Hub · Supabase" src="${esc(TASK_HUB_BUNDLED)}" loading="lazy" referrerpolicy="same-origin"></iframe></div>`;
 }
-const signingSupabaseUI=createSupabaseSigning({db,getCompanies:()=>state.companies,update:()=>render()});
+// The Android APK already registers the native Save As picker through
+// scripts/install-native-pdf-saver.mjs. Reuse it for signed PDFs so the user
+// chooses Downloads/Documents and receives confirmation only after writing.
+async function saveSigningPdf(blob,filename){
+  if(Capacitor.isNativePlatform()){
+    try {
+      await savePdfToAndroidFiles(blob,filename);
+      return {saved:true};
+    } catch(error){
+      if(String(error?.message||error).includes('SAVE_CANCELLED'))return {cancelled:true};
+      throw error;
+    }
+  }
+  browserDownload(blob,filename);
+  return {downloadStarted:true};
+}
+const signingSupabaseUI=createSupabaseSigning({db,getCompanies:()=>state.companies,update:()=>render(),savePdf:saveSigningPdf});
 // Same contained full-screen layout as Task Hub. Preserve the Supabase signing DOM
 // on toggle so unsaved PDF placements and request fields are never discarded.
 function renderSigning(){
