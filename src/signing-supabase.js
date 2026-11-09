@@ -21,7 +21,7 @@ const pdfAsDataUrl = file => new Promise((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
-export function createSupabaseSigning({db,getCompanies,update}) {
+export function createSupabaseSigning({db,getCompanies,update,savePdf}) {
   let view='list',requests=[],detail=null,busy=false,message='',error=false;
   let initialized=false, signerCount=2, placementRows=[],totalRequests=0;
   let deleteIntent=null;
@@ -352,14 +352,33 @@ export function createSupabaseSigning({db,getCompanies,update}) {
   }
 
   async function downloadPdf(id) {
+    const documentInfo=detail?.documents.find(d=>d.id===id);
+    if(!documentInfo)throw Error('Signing PDF not found. Reload the request and retry.');
+    // Retrieval still goes through the owner's authenticated Edge Function.
+    // Native Capacitor WebViews cannot reliably download blob: URLs via anchors.
     const blob=await getPdf(id);
-    const url=URL.createObjectURL(blob),anchor=document.createElement('a');
-    anchor.href=url;anchor.download=detail.documents.find(d=>d.id===id)?.name||'document.pdf';
-    document.body.append(anchor);anchor.click();anchor.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),30000);
-    const finalized=detail.documents.find(d=>d.id===id)?.ready;
-    feedback(finalized?'Completed signed PDF downloaded.':
-      'Original PDF downloaded. Final signed PDF will be available after completion.');
+    let outcome;
+    if(typeof savePdf==='function'){
+      outcome=await savePdf(blob,documentInfo.name||'document.pdf');
+    }else{
+      // Backwards-compatible browser-only fallback for standalone module callers.
+      const url=URL.createObjectURL(blob),anchor=document.createElement('a');
+      anchor.href=url;anchor.download=documentInfo.name||'document.pdf';
+      document.body.append(anchor);anchor.click();anchor.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),120000);
+      outcome={downloadStarted:true};
+    }
+    if(outcome?.cancelled){
+      feedback('Save cancelled. The PDF remains available in this signing request.');
+      return;
+    }
+    if(outcome?.saved){
+      feedback(documentInfo.ready?'Completed signed PDF saved to your chosen Android folder.':
+        'Original PDF saved to your chosen Android folder.');
+    }else{
+      feedback(documentInfo.ready?'Completed signed PDF download started.':
+        'Original PDF download started. Final signed PDF will be available after completion.');
+    }
   }
   async function copyLink(id) {
     if(!detail||detail.status==='draft')throw Error('Activate the request before sharing links.');
