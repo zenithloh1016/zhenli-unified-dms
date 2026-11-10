@@ -373,8 +373,94 @@ async function ensureChargesFolders({force=false}={}){
   return {created,existing,failed};
 }
 
+// Folder/document IDs never change during a company rename. Only the
+// saved register's display metadata is revised; the original is backed up.
+async function syncRenamedStatutoryRegister(company){
+  const uid=state.user?.id;
+  if(!uid||!company?.id)throw Error('Please sign in before syncing Statutory Registers.');
+  const storage=db.storage.from(BUCKET);
+  const filePath=uid+'/statutory-registers/'+company.id+'.json';
+  const response=await storage.download(filePath);
+  if(response.error){
+    if(/object not found|not found|404|no such key/i.test(String(response.error.message||response.error.statusCode||'')))
+      return {changed:false,missing:true};
+    throw Error('Cannot read saved Statutory Registers: '+response.error.message);
+  }
+  let book;
+  try{book=JSON.parse(await response.data.text());}
+  catch{throw Error('Stored Statutory Registers cannot be parsed; no data was changed.');}
+  if(!book||book.companyId!==company.id||!Array.isArray(book.sheets))
+    throw Error('Saved Statutory Registers do not match the company ID.');
+  if(book.companyName===company.name)return {changed:false};
+  const backupPath=uid+'/statutory-registers/history/'+company.id+'-'+
+    Date.now()+'-'+crypto.randomUUID()+'.json';
+  const oldBlob=new Blob([JSON.stringify(book)],{type:'application/json'});
+  const backed=await storage.upload(backupPath,oldBlob,{upsert:false,contentType:'application/json'});
+  if(backed.error)throw Error('Cannot back up previous Statutory Registers: '+backed.error.message);
+  const updated={...book,companyName:company.name,updatedAt:new Date().toISOString()};
+  const saved=await storage.upload(filePath,new Blob([JSON.stringify(updated)],{type:'application/json'}),
+    {upsert:true,contentType:'application/json',cacheControl:'0'});
+  if(saved.error)throw Error('Cannot sync Statutory Registers company name: '+saved.error.message);
+  registerBookUI.reset();
+  return {changed:true};
+}
+
+// Database rows, Task Hub tasks, Signing metadata and Annual Return drafts
+// are updated atomically by the company-name trigger. Cloud JSON files need
+// a durable retry queue, including for older Android/Windows installations.
+let companyRenameSyncBusy=false;
+async function finishPendingCompanyRenames(){
+  if(companyRenameSyncBusy||!state.user?.id)return {completed:0,failed:0};
+  companyRenameSyncBusy=true;
+  let completed=0,failed=0;
+  const uid=state.user.id;
+  try{
+    const {data,error}=await db.from('dms_company_rename_queue')
+      .select('company_id,old_name,new_name,master_listing_done,statutory_register_done')
+      .eq('user_id',uid).order('updated_at',{ascending:true});
+    check(error);
+    for(const item of data||[]){
+      const company=state.companies.find(c=>c.id===item.company_id&&c.user_id===uid);
+      if(!company||company.name!==item.new_name)continue;
+      let masterDone=item.master_listing_done,registerDone=item.statutory_register_done;
+      if(!masterDone){
+        try{
+          await masterListingUI.syncRenamedDocumentCompany({
+            oldName:item.old_name,newName:item.new_name,registration_no:company.registration_no
+          });
+          const ack=await db.from('dms_company_rename_queue')
+            .update({master_listing_done:true}).eq('company_id',item.company_id)
+            .eq('user_id',uid).eq('new_name',item.new_name).select('company_id');
+          check(ack.error);masterDone=!!ack.data?.length;
+        }catch(error){failed++;console.warn('Master Listing name sync pending:',error);}
+      }
+      if(!registerDone){
+        try{
+          await syncRenamedStatutoryRegister(company);
+          const ack=await db.from('dms_company_rename_queue')
+            .update({statutory_register_done:true}).eq('company_id',item.company_id)
+            .eq('user_id',uid).eq('new_name',item.new_name).select('company_id');
+          check(ack.error);registerDone=!!ack.data?.length;
+        }catch(error){failed++;console.warn('Statutory Register name sync pending:',error);}
+      }
+      if(masterDone&&registerDone){
+        const removed=await db.from('dms_company_rename_queue').delete()
+          .eq('company_id',item.company_id).eq('user_id',uid)
+          .eq('new_name',item.new_name)
+          .eq('master_listing_done',true).eq('statutory_register_done',true);
+        check(removed.error);completed++;
+      }
+    }
+  }finally{companyRenameSyncBusy=false;}
+  return {completed,failed};
+}
+
 async function refresh() {
   await reloadCompanies();
+  try{
+    const renames=await finishPendingCompanyRenames();
+    if(renames.failed)state.notice='Company renaming is saved. Master Listing / Statutory Registers sync needs another attempt; reopening UNICOSEC will retry.';
+  }catch(error){console.warn('Company rename sync:',error);state.notice='Company rename sync will retry: '+String(error?.message||error);}
   try{await finishPendingCompanyDeletions();}
   catch(error){console.warn('Company cleanup queue unavailable:',error);state.notice='Company cleanup check failed: '+String(error?.message||error);}
   try{
@@ -1133,9 +1219,25 @@ ROOT.addEventListener('submit',event=>{
       const {error}=await db.from('folders').insert({user_id:state.user.id,company_id:state.companyId,parent_id:state.folderId,name});check(error);
       await reloadContent();
     }else if(m.kind==='rename'){
-      const table=m.target==='company'?'companies':m.target==='folder'?'folders':'documents';
-      const {error}=await db.from(table).update({name}).eq('id',m.id);check(error);
-      await refresh();
+      if(m.target==='company'){
+        const previous=state.companies.find(c=>c.id===m.id);
+        if(!previous||previous.user_id!==state.user.id)
+          throw Error('Company could not be found in your portfolio.');
+        if(previous.name!==name){
+          const {error}=await db.from('companies').update({name})
+            .eq('id',m.id).eq('user_id',state.user.id);
+          check(error);
+          await reloadCompanies();
+          const renamed=await finishPendingCompanyRenames();
+          companySyncNotice=renamed.failed
+            ?'Company renamed in Documents, Task Hub, Annual Return and Signing. Master Listing or Statutory Registers sync is pending and will automatically retry.'
+            :'Company name updated across Documents, Master Listing, Statutory Registers, Annual Return, Tasks and Signing.';
+        }else companySyncNotice='Company name is unchanged.';
+      }else{
+        const table=m.target==='folder'?'folders':'documents';
+        const {error}=await db.from(table).update({name}).eq('id',m.id);
+        check(error);
+      }
     }
     state.modal=null;await refresh();toast(companySyncNotice||'Saved successfully.');
   });
