@@ -82,7 +82,9 @@ function profileFields(rows,limit=100){
   if(!entries.length)continue;
   let found=false;
   for(const item of entries){
-   if(!isLabel(item.value))continue;
+   // Imported Company Details sometimes omit ':' after "Former Name".
+   // Unlike generic text, this known statutory label remains a field.
+   if(!isLabel(item.value)&&companyDetailIndex(item.value)!==1)continue;
    const col=item.col+1;
    if(col>=row.length)continue;
    fields.push(field(ri,col,item.value,row[col]));
