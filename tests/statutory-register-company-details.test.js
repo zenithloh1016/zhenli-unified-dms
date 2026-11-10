@@ -145,3 +145,16 @@ test('an unrelated description must never be guessed as a former legal name',()=
  book.sheets[0].rows.splice(1,0,['Business Description:','FORMER ACTIVITIES IN PROPERTY']);
  assert.equal(recordedFormerCompanyName(book),'');
 });
+
+test('current editable Company Details takes precedence over an older Master import',()=>{
+ const historical=bookWithLegacyFields();
+ historical.sheets=[
+  {name:'Master',rows:[['Former Name:','VERY OLD COMPANY SDN BHD']]},
+  {name:'Company Details',rows:[['Former Name (If Any):','CURRENTLY RECORDED FORMER SDN BHD']]}
+ ];
+ assert.equal(recordedFormerCompanyName(historical),'CURRENTLY RECORDED FORMER SDN BHD');
+ const view=currentCompanyRegisterView(historical,{...company,former_names:[]});
+ assert.equal(view.formerNames[0],'CURRENTLY RECORDED FORMER SDN BHD');
+ const currentSection=buildGroupedRegister(view,1,{showBlanks:true});
+ assert(currentSection.blocks.some(b=>b.value==='CURRENTLY RECORDED FORMER SDN BHD'));
+});
