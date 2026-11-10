@@ -22,6 +22,8 @@ import {WORKING_RESOLUTION_FOLDER_NAME,WORKING_RESOLUTION_FOLDER_SORT_ORDER,miss
 import {CHARGES_FOLDER_NAME,CHARGES_FOLDER_SORT_ORDER,missingChargesFolders} from './charges-folders.js';
 import {STANDARD_FOLDER_COUNT,isExistingRegisterBookFolder} from './register-book-folders.js';
 import {createRegisterBookTab} from './register-book-tab.js';
+import {currentCompanyRegisterView} from './statutory-register-company-context.js';
+import {companyDetailIndex,referenceKind,formatFormerCompanyName} from './statutory-register-reference.js';
 import {combinedRegisterSnapshot} from './statutory-ar-bridge.js';
 import './style.css';
 import {installHubBridge,waitForHubWrites,forgetDeletedHubCompany} from './integrated-modules.js';
@@ -391,13 +393,21 @@ async function syncRenamedStatutoryRegister(company){
   catch{throw Error('Stored Statutory Registers cannot be parsed; no data was changed.');}
   if(!book||book.companyId!==company.id||!Array.isArray(book.sheets))
     throw Error('Saved Statutory Registers do not match the company ID.');
-  if(book.companyName===company.name)return {changed:false};
+  const live=currentCompanyRegisterView(book,company);
+  // Old workbooks can lack the former-name row entirely. Append it only to
+  // Company Details, without deleting or reordering imported evidence.
+  live.sheets=live.sheets.map(sheet=>{
+    if(referenceKind(sheet.name)!=='profile'||!Array.isArray(sheet.rows)||
+       sheet.rows.some(row=>companyDetailIndex(row?.[0])===1))return sheet;
+    return {...sheet,rows:[...sheet.rows,['Former Company Name:',formatFormerCompanyName(company)]]};
+  });
+  if(JSON.stringify(book)===JSON.stringify(live))return {changed:false};
   const backupPath=uid+'/statutory-registers/history/'+company.id+'-'+
     Date.now()+'-'+crypto.randomUUID()+'.json';
   const oldBlob=new Blob([JSON.stringify(book)],{type:'application/json'});
   const backed=await storage.upload(backupPath,oldBlob,{upsert:false,contentType:'application/json'});
   if(backed.error)throw Error('Cannot back up previous Statutory Registers: '+backed.error.message);
-  const updated={...book,companyName:company.name,updatedAt:new Date().toISOString()};
+  const updated={...live,updatedAt:new Date().toISOString()};
   const saved=await storage.upload(filePath,new Blob([JSON.stringify(updated)],{type:'application/json'}),
     {upsert:true,contentType:'application/json',cacheControl:'0'});
   if(saved.error)throw Error('Cannot sync Statutory Registers company name: '+saved.error.message);
