@@ -33,7 +33,7 @@ export async function recoverFormerNameFromOriginalExcels(
    const xlsx=await openWorkbook(data);
    const sheets=(xlsx.sheetNames||[]).slice();
    const profile=sheets.filter(name=>
-    /^(?:master|company details|company particulars|company information|company profile)(?:\b|\s*\()/i.test(String(name).trim()));
+    /^(?:master|company details|company particulars|company'?s? particulars|company information|company profile|corporate information|cover(?: sheet| page)?)(?:\b|\s*\()/i.test(String(name).trim()));
    const candidates=profile.length?profile:sheets.slice(0,8);
    const source=[];
    for(const name of candidates){
