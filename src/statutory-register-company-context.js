@@ -83,7 +83,8 @@ export function recordedFormerCompanyName(book){
   if(referenceKind(title)&&referenceKind(title)!=='profile')continue;
   const cells=(sheet.rows||[]).slice(0,120).flatMap(row=>Array.isArray(row)?row:[]);
   const hasIdentity=cells.some(cell=>companyDetailIndex(cell)===0||companyDetailIndex(cell)===2);
-  if(!hasIdentity)continue;
+  const namedCompanyCover=/^(?:(?:company'?s?\s+)?particulars|company\s+(?:information|profile|overview)|corporate\s+information|cover(?:\s+(?:sheet|page))?|master\s+(?:sheet|register))$/i.test(title);
+  if(!hasIdentity&&!namedCompanyCover)continue;
   const hit=extractRows((sheet.rows||[]).slice(0,120));
   if(hit)return hit;
  }
