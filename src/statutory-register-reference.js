@@ -10,12 +10,12 @@ export const COMPANY_DETAILS_FIELDS=[
  'Company Name','Former Company Name','Company No.','Last update',
  'Date of Incorporation','Date of Cosec Appointment','Registered Address'
 ];
-// The last recorded former name is the most recent, displayed only when known.
+// The last recorded former name is the most recent, displayed without an F.K.A. prefix.
 export function formatFormerCompanyName(company){
  const names=company?.former_names||company?.formerNames||[];
  const last=Array.isArray(names)?names[names.length-1]:'';
  const raw=String(last||company?.formerCompanyName||'').trim().replace(/^F\.?K\.?A\.?\s*/i,'');
- return raw?'F.K.A. '+raw:'';
+ return raw;
 }
 export function createCompanyDetailsSheet(company){
  return {name:'Company Details',rows:COMPANY_DETAILS_FIELDS.map((label,i)=>[
