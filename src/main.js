@@ -1021,7 +1021,14 @@ ROOT.addEventListener('click', event=>{
   if(a==='sr-pdf'){busyDo(()=>registerBookUI.pdf());return;}
   if(a==='sr-pdf-combined'){busyDo(()=>registerBookUI.pdf({combined:true}));return;}
   if(registerBookUI.command(a,id))return;
-  if(a==='deadline-refresh'){reloadStatutoryDeadlines(true).catch(showError);return;}
+  if(a==='deadline-refresh'){
+    void (async()=>{
+      await reloadCompanies();
+      await masterListingUI.reconcileRenamedCompanyNames(state.companies);
+      await reloadStatutoryDeadlines(true);
+    })().catch(showError);
+    return;
+  }
   if(a==='deadline-open-master'){
     state.tab='master-listing';render();
     void (async()=>{
