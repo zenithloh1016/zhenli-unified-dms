@@ -7,6 +7,7 @@ import {unzipSync,strFromU8} from 'fflate';
 import {openMasterListingWorkbook} from './master-listing-reader.js';
 import {matchRegisterBook} from './register-book-zip.js';
 import {referenceTemplateSheets,createCompanyDetailsSheet} from './statutory-register-reference.js';
+import {recordedFormerCompanyName} from './statutory-register-company-context.js';
 
 const MAX_ZIP=80*1024*1024,MAX_UNPACKED=160*1024*1024;
 const MAX_WORKBOOK=20*1024*1024,MAX_PDF=35*1024*1024;
@@ -180,6 +181,15 @@ export function makeRegisterBook(company,row){
   importedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),
   sheets:row?.sheets?.map(s=>({name:s.name,rows:s.rows.map(r=>r.slice())}))||
     [...referenceTemplateSheets(),createCompanyDetailsSheet(company)]};
+ // Preserve verified old-company names as metadata at initial Excel import.
+ // Without this, a later appended blank Company Details template can shadow
+ // the name recorded in an original Register Book Master worksheet.
+ const sourceFormer=recordedFormerCompanyName(value);
+ const historical=Array.isArray(company?.former_names)?
+  company.former_names.filter(x=>String(x||'').trim()):[];
+ if(sourceFormer||historical.length){
+  value.formerNames=[...new Set([...historical,...(sourceFormer?[sourceFormer]:[])])];
+ }
  return validateRegisterBook(value);
 }
 
@@ -205,7 +215,19 @@ export function mergeRegisterBooks(oldBook, importedBook){
   result.sheets.push({name,rows:sheet.rows.map(r=>r.slice())});
   added++;
  }
- result.sourceFile=[oldBook.sourceFile,importedBook.sourceFile].filter(Boolean).join(' | ').slice(0,500);
- result.importedAt=importedBook.importedAt;
- return {book:validateRegisterBook(result),added,skipped};
+ // A source Excel file can contain a former name even if it was previously
+ // imported as an identical worksheet. Reconcile missing metadata without
+ // overwriting a manual Company Details value or deleting source rows.
+ const oldFormer=recordedFormerCompanyName(oldBook);
+ const incomingFormer=recordedFormerCompanyName(importedBook);
+ const metadataChanged=!!incomingFormer&&!oldFormer;
+ if(metadataChanged){
+  const previous=Array.isArray(result.formerNames)?result.formerNames:[];
+  result.formerNames=[...new Set([...previous,incomingFormer])];
+ }
+ if(added){
+  result.sourceFile=[oldBook.sourceFile,importedBook.sourceFile].filter(Boolean).join(' | ').slice(0,500);
+  result.importedAt=importedBook.importedAt;
+ }
+ return {book:validateRegisterBook(result),added,skipped,metadataChanged};
 }
