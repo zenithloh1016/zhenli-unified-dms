@@ -24,6 +24,9 @@ export function renderStatutoryRegisterDocument(book,sheetIndex,{showBlanks=fals
      block.sheetIndex+':'+block.row+'" aria-label="Delete entry '+esc(block.title)+'">Delete Entry</button></div>';
   }
   if(block.type==='note')return '<p class="sr-ar-note">'+esc(block.text)+'</p>';
+  if(block.readOnly)return '<div class="sr-ar-row sr-ar-readonly'+(empty(block.value)?' sr-ar-blank':'')+'">'+
+   '<span class="sr-ar-label"><span>'+esc(block.label)+'</span></span>'+
+   '<span class="sr-ar-value"><strong>'+esc(empty(block.value)?'-':block.value)+'</strong></span></div>';
   return '<div class="sr-ar-row'+(empty(block.value)?' sr-ar-blank':'')+'">'+
    '<span class="sr-ar-label"><span>'+esc(block.label)+'</span>'+
     '<span class="sr-field-actions"><button type="button" class="sr-edit-field" data-action="sr-edit-field" data-id="'+
