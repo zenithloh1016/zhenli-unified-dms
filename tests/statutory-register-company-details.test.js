@@ -40,7 +40,7 @@ test('Company Details templates end at Registered Address for every new company'
   const sheet=createCompanyDetailsSheet({id,name:'EXAMPLE SDN BHD',registration_no:'202601234567',
    former_names:['OLD EXAMPLE SDN BHD']});
   assert.equal(sheet.rows.length,7);
-  assert.equal(sheet.rows[1][1],'F.K.A. OLD EXAMPLE SDN BHD');
+  assert.equal(sheet.rows[1][1],'OLD EXAMPLE SDN BHD');
   assert.equal(sheet.rows.at(-1)[0],'Registered Address:');
  }
 });
@@ -65,7 +65,8 @@ test('the current Documents company name overrides stale stored heading in every
  const html=renderStatutoryRegisterDocument(visible,0,{showBlanks:true});
  assert.match(html,/<h2>LANGFORD PRIVATE EQUITY SDN\. BHD\.<\/h2>/);
  assert.doesNotMatch(html,/<h2>AURUMROCK LABORATORY/);
- assert.match(html,/F\.K\.A\. AURUMROCK LABORATORY SDN\. BHD\./);
+ assert.match(html,/>AURUMROCK LABORATORY SDN\. BHD\.</);
+ assert.doesNotMatch(html,/F\.K\.A\./);
  assert.doesNotMatch(html,/Type of Shares Issued|Ordinary Share Capital|Aggregate Amount Paid/);
 });
 test('never apply another company name to the wrong company ID',()=>{
