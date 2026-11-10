@@ -6,21 +6,43 @@
  */
 import {formatFormerCompanyName,companyDetailIndex,referenceKind} from './statutory-register-reference.js';
 
-const cleanName=value=>String(value??'').trim()
- .replace(/^F\.?K\.?A\.?\s*/i,'').trim();
+// Former-name text can originate in merged Excel cells, shared strings,
+// PDF/Excel line breaks or full-width separators. Remove only the descriptive
+// F.K.A. marker, not the company's actual registered name.
+const fkaPrefix=/^F\s*\.?\s*K\s*\.?\s*A\s*\.?\s*[:=–—-]?\s*/i;
+const cleanName=value=>String(value??'').normalize('NFKC')
+ .replace(/\u00a0/g,' ').trim()
+ .replace(/^\(\s*(?=F\s*\.?\s*K\s*\.?\s*A)/i,'')
+ .replace(fkaPrefix,'')
+ .replace(/\)\s*$/,'').trim();
 const validName=value=>{
  const name=cleanName(value);
- return name.length>=3&&name.length<=250&&!/^(?:-|—|–|N\/?A|NIL|NONE|NOT APPLICABLE|UNKNOWN|NOT PROVIDED)$/i.test(name)
+ return name.length>=3&&name.length<=250&&
+  !/^(?:-|—|–|N\/?A|NIL|NONE|NOT APPLICABLE|UNKNOWN|NOT PROVIDED)$/i.test(name)
   ?name:'';
 };
 
-/** Text explicitly says Former Name in one source cell (e.g. scanned PDF). */
+/** Text explicitly says Former Name or F.K.A. in a register source cell. */
 export function formerNameFromInlineCell(value){
- const text=String(value??'').trim();
- const labelled=/^(?:(?:former|previous|old|prior)\s+(?:company\s+|registered\s+)?names?|(?:company\s+)?formerly\s+known\s+as)\s*(?:\(\s*if any\s*\))?\s*[:=–-]\s*(.+)$/i.exec(text);
- if(labelled)return validName(labelled[1]);
- const abbreviated=/^F\.?K\.?A\.?\s*[:=–-]?\s+(.+)$/i.exec(text);
- return abbreviated?validName(abbreviated[1]):'';
+ const text=String(value??'').normalize('NFKC').replace(/\u00a0/g,' ').trim();
+ if(!text)return '';
+ // A current company name and its former name may share an Excel cell on
+ // separate lines (including Excel Alt+Enter) or inside parentheses.
+ const segments=text.split(/[\r\n]+|(?=\(\s*F\s*\.?\s*K\s*\.?\s*A)/i);
+ for(const raw of segments){
+  const segment=raw.trim();
+  const labelled=/^(?:(?:former|previous|old|prior)\s+(?:company\s+|registered\s+)?names?|(?:company\s+)?formerly\s+known\s+as)\s*(?:\(\s*if any\s*\))?\s*[:=–—-]\s*(.*)$/i.exec(segment);
+  if(labelled){
+   const value=validName(labelled[1]);
+   if(value)return value;
+  }
+  const abbreviated=/^\(?\s*F\s*\.?\s*K\s*\.?\s*A\s*\.?\s*[:=–—-]?\s*(.+)$/i.exec(segment);
+  if(abbreviated){
+   const value=validName(abbreviated[1]);
+   if(value)return value;
+  }
+ }
+ return '';
 }
 
 /** Read explicit former names from imported/saved Company Details or metadata. */
