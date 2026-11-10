@@ -284,7 +284,12 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
      label:'Registered Address',value:lines.join('\n'),
      continuation:continuation.map(f=>({row:f.row,col:f.col})),composite:true});
    }else if(!continuation.includes(item)){
-    if(showBlanks||hasText(item.value))result.blocks.push(mappedField(item,sheetIndex));
+    if(showBlanks||hasText(item.value)){
+     const field=mappedField(item,sheetIndex);
+     if(companyDetailIndex(item.label)===1)
+      field.value=field.value.replace(/^F\.?K\.?A\.?\s*/i,'');
+     result.blocks.push(field);
+    }
    }
   }
   // Existing books might predate the former-name field. Expose the
