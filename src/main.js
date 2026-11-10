@@ -132,6 +132,22 @@ const registerBookUI=createRegisterBookTab({
   const user=state.user,company=state.companies.find(c=>c.id===companyId);
   if(!user||!company||company.user_id!==user.id)
    throw Error('Signed-in company context changed during statutory register save.');
+  // After the user reviews and SAVES a recovered former company name from
+  // an original Excel, preserve the verified name in the Documents company
+  // record too. This makes the Annual Return and future device sessions
+  // consistent even before the original workbook is opened again.
+  const priorNames=Array.isArray(company.former_names)?company.former_names:[];
+  const nameFromRegister=recordedFormerCompanyName(updatedBook);
+  const cleaned=String(nameFromRegister||'').trim();
+  if(!priorNames.some(v=>String(v||'').trim())&&cleaned&&
+     cleaned.toUpperCase()!==String(company.name||'').trim().toUpperCase()){
+    const {data,error}=await db.from('companies').update({former_names:[cleaned]})
+     .eq('id',company.id).eq('user_id',user.id)
+     .select('id,former_names');
+    if(error)throw Error('Statutory Registers saved, but company former-name history was not synchronised: '+error.message);
+    if(!data?.length)throw Error('Statutory Registers saved, but the former-name update was not confirmed.');
+    await reloadCompanies();
+  }
   return syncAnnualReturnAfterRegisterSave(db,{
    user,company,previousBook,updatedBook,bucket:BUCKET
   });
