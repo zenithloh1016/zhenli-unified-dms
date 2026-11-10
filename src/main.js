@@ -123,7 +123,7 @@ function withKnownFormerCompanyName(company){
   formerListingCache.set(key,value);
  }
  const verified=formerListingCache.get(key);
- return verified?{...company,former_names:[verified]}:company;
+ return verified?{...company,former_names:[verified],formerNameSource:'master-listing'}:company;
 }
 const registerBookUI=createRegisterBookTab({
  db,getUser:()=>state.user,
