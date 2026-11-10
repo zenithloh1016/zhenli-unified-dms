@@ -69,3 +69,30 @@ test('multiple secretary names cannot be silently reduced to one officer',()=>{
  assert.equal(data.secretary['Secretary Name'],'');
  assert.equal(data.secretary['Secretary NRIC'],'');
 });
+
+test('a renamed Documents company still matches its uniquely registered Master Listing row',()=>{
+ const old=structuredClone(model);
+ old.rows[0].values[0]='BEFORE NAME CHANGE SDN BHD';
+ old.columns[2].label='Former Company Name (If Any)';
+ const current={name:'EXAMPLE SDN BHD',registrationNo:'202601000001'};
+ const match=matchedAnnualReturnListingRow(old,current);
+ assert.equal(match?.id,'r0');
+ const data=annualReturnParticularsFromMasterListing(old,current);
+ assert.equal(data.fields['Company Name'],'EXAMPLE SDN BHD');
+ assert.equal(data.fields['Former Name'],'OLD EXAMPLE SDN BHD');
+});
+test('a registration match must be unique; never mix two companies with the same SSM number',()=>{
+ const duplicate=structuredClone(model);
+ duplicate.rows.push({id:'r3',values:[...duplicate.rows[0].values]});
+ duplicate.rows.at(-1).values[0]='OLDER NAME SDN BHD';
+ assert.equal(matchedAnnualReturnListingRow(duplicate,company),null);
+});
+test('older Master Listing labels for FKA and Previous Name (If Any) are recognised',()=>{
+ for(const label of ['Former Name (If Any)','Previous Company Name (If Any)',
+  'Company Formerly Known As','F.K.A.']){
+  const book=structuredClone(model);
+  book.columns[2].label=label;
+  const fields=annualReturnParticularsFromMasterListing(book,company)?.fields||{};
+  assert.equal(fields['Former Name'],'OLD EXAMPLE SDN BHD',label);
+ }
+});
