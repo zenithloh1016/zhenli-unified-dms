@@ -271,9 +271,9 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
   // editable Company Details view and generated PDF (non-destructive).
   const profile=(details.fields||[]).filter(f=>{
    const index=companyDetailIndex(f.label);
-   return index>=0&&index<=5;
+   return index>=0&&index<=6;
   });
-  const first=profile.find(f=>companyDetailIndex(f.label)===5);
+  const first=profile.find(f=>companyDetailIndex(f.label)===6);
   // Legacy register books can split registered office across subsequent rows.
   const continuation=first?(details.fields||[]).filter(f=>f.row>first.row&&
    /^registered (?:office|address) · continued$/i.test(f.label)):[];
@@ -286,6 +286,15 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
    }else if(!continuation.includes(item)){
     if(showBlanks||hasText(item.value))result.blocks.push(mappedField(item,sheetIndex));
    }
+  }
+  // Existing books might predate the former-name field. Expose the
+  // current name history without modifying archived workbook rows.
+  if(!profile.some(f=>companyDetailIndex(f.label)===1)){
+   const names=book.formerNames||[];
+   const former=Array.isArray(names)&&names.length?
+    'F.K.A. '+String(names[names.length-1]).trim():'';
+   result.blocks.push({type:'field',label:'Former Company Name',
+    value:former,readOnly:true,sheetIndex,row:-1,col:-1});
   }
   result.blocks=sortCompanyDetails(result.blocks);
   if(!first)result.blocks.push({type:'note',text:'Registered Address is not recorded. Complete the registered address once verified.'});
