@@ -69,6 +69,45 @@ test('the current Documents company name overrides stale stored heading in every
  assert.doesNotMatch(html,/F\.K\.A\./);
  assert.doesNotMatch(html,/Type of Shares Issued|Ordinary Share Capital|Aggregate Amount Paid/);
 });
+test('existing saved former name is retained when Documents has no historical names',()=>{
+ const original=bookWithLegacyFields();
+ original.sheets[0].rows.splice(1,0,['Former Name:','F.K.A. SAVED PREVIOUS COMPANY SDN. BHD.']);
+ const emptyHistory={...company,former_names:[]};
+ const projected=currentCompanyRegisterView(original,emptyHistory);
+ assert.equal(projected.formerNames[0],'SAVED PREVIOUS COMPANY SDN. BHD.');
+ const html=renderStatutoryRegisterDocument(projected,0,{showBlanks:true});
+ assert.match(html,/SAVED PREVIOUS COMPANY SDN\. BHD\./);
+ assert.doesNotMatch(html,/F\.K\.A\./);
+ assert.equal(original.sheets[0].rows[1][1],'F.K.A. SAVED PREVIOUS COMPANY SDN. BHD.',
+  'source workbook and private history remain unchanged');
+});
+test('recognize former names in imported Company Details without a colon',()=>{
+ const original=bookWithLegacyFields();
+ original.sheets[0].rows.splice(1,0,['Previous Company Name','OLDER REGISTER NAME SDN. BHD.']);
+ const projected=currentCompanyRegisterView(original,{...company,former_names:[]});
+ const blocks=buildGroupedRegister(projected,0,{showBlanks:true}).blocks;
+ assert.equal(blocks.find(x=>x.label==='Former Company Name'||x.label==='Previous Company Name')?.value,
+  'OLDER REGISTER NAME SDN. BHD.');
+});
+test('read saved former-name metadata even when old Company Details added a blank field',()=>{
+ const old=bookWithLegacyFields();
+ old.formerNames=['REGISTER ORIGINAL NAME SDN. BHD.'];
+ old.sheets[0].rows.splice(1,0,['Former Company Name:','']);
+ const projected=currentCompanyRegisterView(old,{...company,former_names:[]});
+ assert.equal(projected.sheets[0].rows[1][1],'REGISTER ORIGINAL NAME SDN. BHD.');
+ const rendered=renderStatutoryRegisterDocument(projected,0,{showBlanks:true});
+ assert.match(rendered,/REGISTER ORIGINAL NAME SDN\. BHD\./);
+ assert.doesNotMatch(rendered,/F\.K\.A\./);
+});
+test('an obsolete workbook heading alone is not evidence of legal former name',()=>{
+ const old=bookWithLegacyFields();
+ const projected=currentCompanyRegisterView(old,{...company,former_names:[]});
+ assert.equal(projected.companyName,newCompanyName);
+ assert.equal(projected.formerNames.length,0);
+ const fields=buildGroupedRegister(projected,0,{showBlanks:true}).blocks;
+ assert.equal(fields.find(x=>x.label==='Former Company Name')?.value,'');
+});
+
 test('never apply another company name to the wrong company ID',()=>{
  const previous=bookWithLegacyFields('different-id');
  assert.equal(currentCompanyRegisterView(previous,company),previous);
