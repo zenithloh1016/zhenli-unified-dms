@@ -3,17 +3,12 @@
  * SDN. BHD. Register Book. These are schema definitions ONLY; company-specific
  * names, shares, addresses, dates and transactions must never be copied.
  */
+// Company Details is limited to these six particulars, ending with the
+// Registered Address. Share-capital data belongs in the relevant statutory
+// registers/Annual Return and is not displayed in this overview.
 export const COMPANY_DETAILS_FIELDS=[
  'Company Name','Company No.','Last update','Date of Incorporation',
- 'Date of Cosec Appointment','Registered Address',
- // These are explicitly entered statutory capital particulars. Never
- // synthesise issued capital from members' ledgers or transfer values.
- 'Type of Shares Issued','Currency','Classes of Shares Issued',
- 'Number of Ordinary Shares','Number of Preference Shares',
- 'Total Number of Issued Shares (all classes)',
- 'Ordinary Share Capital (recorded amount paid)',
- 'Preference Share Capital (recorded amount paid)',
- 'Aggregate Amount Paid on Allotments (verify share capital)'
+ 'Date of Cosec Appointment','Registered Address'
 ];
 export function createCompanyDetailsSheet(company){
  return {name:'Company Details',rows:COMPANY_DETAILS_FIELDS.map((label,i)=>[
