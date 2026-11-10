@@ -21,8 +21,12 @@ export function currentCompanyRegisterView(book,company){
    let changed=false;
    const rows=(sheet.rows||[]).map(row=>{
     const position=companyDetailIndex(row?.[0]);
+    // Normalize old imported F.K.A. values even when Documents has no
+    // former-name history; never change unrelated profile particulars.
+    const previousValue=String(row?.[1]||'').trim();
+    const cleanedPrevious=previousValue.replace(/^F\.?K\.?A\.?\s*/i,'');
     const replacement=position===0?currentName:
-     position===1&&formerValue?formerValue:
+     position===1?(formerValue||cleanedPrevious):
      position===2?currentNumber:null;
     if(replacement===null||String(row?.[1]||'')===replacement)return row;
     changed=true;
