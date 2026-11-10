@@ -14,7 +14,8 @@ export const COMPANY_DETAILS_FIELDS=[
 export function formatFormerCompanyName(company){
  const names=company?.former_names||company?.formerNames||[];
  const last=Array.isArray(names)?names[names.length-1]:'';
- const raw=String(last||company?.formerCompanyName||'').trim().replace(/^F\.?K\.?A\.?\s*/i,'');
+ const raw=String(last||company?.formerCompanyName||'').normalize('NFKC').trim()
+  .replace(/^F\s*\.?\s*K\s*\.?\s*A\s*\.?\s*[:=–—-]?\s*/i,'');
  return raw;
 }
 export function createCompanyDetailsSheet(company){
