@@ -182,7 +182,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   state.loading=true;state.error='';state.message='Loading '+company.name+' registers…';notify();
   try{
    const [saved,originalDocs]=await Promise.all([remoteBook(uid,id),legacyOriginals(id)]);
-   const book=saved||makeRegisterBook(company);
+   const book=currentCompanyRegisterView(saved||makeRegisterBook(company),company);
    const chargesAdded=ensureChargeRegister(book);
    const referenceAdded=ensureReferenceParticulars(book);
    const changed=chargesAdded||referenceAdded;
@@ -192,6 +192,8 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    state.historyOpen=false;state.historyItems=[];state.historyPreview=null;
    state.historyPreviewName='';state.historyLoaded=false;state.historyLoading=false;
    state.inputDialog=null;state.inputError='';
+   // Register metadata/Company Details can change after a Documents rename.
+   // Keep the correction visible without implying manual edits were made.
    state.dirty=!!changed;
    state.sheetIndex=visibleRegisterIndices(book)[0]??0;
    state.showBlankFields=true; // Always display the reference particulars, including blanks.
