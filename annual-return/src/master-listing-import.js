@@ -91,7 +91,7 @@ export function prepopulateAnnualReturnFromMasterListing(document,listing,audito
   const cell=input.particulars.find(x=>x.type==='field'&&x.en===key);
   if(!cell)continue; // A user-deleted field is not recreated.
   if(exists(cell.value)&&cell.autoAssumedRate!==1){kept++;continue;}
-  cell.value=txt(raw).slice(0,1400);
+  cell.value=(key==='Former Name'?txt(raw).replace(/^F\.?K\.?A\.?\s*/i,''):txt(raw)).slice(0,1400);
   // A documented class amount from Master Listing supersedes an earlier
   // estimated RM1/share amount created from register holdings.
   delete cell.autoAssumedRate;
