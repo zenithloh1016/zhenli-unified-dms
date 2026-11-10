@@ -33,17 +33,30 @@ export function formerNameFromInlineCell(value){
  // A current company name and its former name may share an Excel cell on
  // separate lines (including Excel Alt+Enter) or inside parentheses.
  const segments=text.split(/[\r\n]+|(?=\(\s*F\s*\.?\s*K\s*\.?\s*A)/i);
+ let awaitingName=false;
  for(const raw of segments){
   const segment=raw.trim();
+  if(!segment)continue;
+  if(awaitingName){
+   awaitingName=false;
+   if(companyDetailIndex(segment)<0){
+    const previous=validName(segment);
+    if(previous)return previous;
+   }
+  }
   const labelled=/^(?:(?:former|previous|old|prior)\s+(?:company\s+|registered\s+)?names?|(?:company\s+)?formerly\s+known\s+as)\s*(?:\(\s*if any\s*\))?\s*[:=–—-]\s*(.*)$/i.exec(segment);
   if(labelled){
    const value=validName(labelled[1]);
    if(value)return value;
+   awaitingName=true;
   }
-  const abbreviated=/^\(?\s*F\s*\.?\s*K\s*\.?\s*A\s*\.?\s*[:=–—-]?\s*(.+)$/i.exec(segment);
+  const abbreviated=/^\(?\s*F\s*\.?\s*K\s*\.?\s*A\s*\.?\s*[:=–—-]?\s*(.*)$/i.exec(segment);
   if(abbreviated){
-   const value=validName(abbreviated[1]);
+   const rawName=abbreviated[1].replace(
+    segment.startsWith('(')&&segment.endsWith(')')?/\)\s*$/:/$^/,'');
+   const value=validName(rawName);
    if(value)return value;
+   awaitingName=true;
   }
  }
  return '';
