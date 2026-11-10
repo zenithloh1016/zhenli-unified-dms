@@ -50,7 +50,8 @@ export function currentCompanyRegisterView(book,company){
  // When Documents lacks name history (common in older companies), restore the
  // name from saved Company Details or the original statutory register metadata.
  // Never infer a former legal name from a stale workbook heading or file title.
- const formerValue=verified||savedName||validName(formatFormerCompanyName({formerNames:historical}));
+ const formerValue=(company.formerNameSource==='master-listing'?savedName||verified:verified||savedName)||
+  validName(formatFormerCompanyName({formerNames:historical}));
  const formerNames=liveHistory.some(name=>validName(name))?liveHistory:
   formerValue?[formerValue]:historical;
  return {
