@@ -1,6 +1,6 @@
 import {isCurrentMember,currentMemberKey,positiveShares,hasPendingMemberShares} from './statutory-current-members.js';
 import {formatMemberFolioNumber} from './statutory-member-folio-format.js';
-import {sortReferenceFields,referenceDisplayLabel,referenceKind,excludeRegisterField,sortCompanyDetails} from './statutory-register-reference.js';
+import {sortReferenceFields,referenceDisplayLabel,referenceKind,excludeRegisterField,sortCompanyDetails,companyDetailIndex} from './statutory-register-reference.js';
 import {formatStatutoryNumber,numericKind,parseStatutoryNumber} from './statutory-number-format.js';
 /**
  * Editable, independent statutory-register document projection.
@@ -264,12 +264,18 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
  const fields=items=>(items||[]).filter(f=>showBlanks||hasText(f.value))
   .map(f=>mappedField(f,sheetIndex));
  if(details.kind==='profile'){
-  // Restore every original Company Details field in its imported order.
-  // Only the Registered Office continuation *rows* are collapsed into the
-  // first Registered Address entry; unrelated fields remain editable.
-  const profile=details.fields||[];
-  const first=profile.find(f=>/^registered (?:office|address)$/i.test(f.label));
-  const continuation=first?profile.filter(f=>f.row>first.row&&
+  // Keep Company Details consistently limited to Company Name, Company No.,
+  // Last update, Incorporation Date, Cosec Appointment and Registered Address
+  // for EVERY stored/imported register book. Older capital and custom fields
+  // are preserved in the source worksheet/history, but hidden from the
+  // editable Company Details view and generated PDF (non-destructive).
+  const profile=(details.fields||[]).filter(f=>{
+   const index=companyDetailIndex(f.label);
+   return index>=0&&index<=5;
+  });
+  const first=profile.find(f=>companyDetailIndex(f.label)===5);
+  // Legacy register books can split registered office across subsequent rows.
+  const continuation=first?(details.fields||[]).filter(f=>f.row>first.row&&
    /^registered (?:office|address) · continued$/i.test(f.label)):[];
   for(const item of profile){
    if(first&&item===first){
