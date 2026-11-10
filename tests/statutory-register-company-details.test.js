@@ -7,7 +7,8 @@ import {renderStatutoryRegisterDocument} from '../src/statutory-register-annual-
 
 const savedCompanyName='AURUMROCK LABORATORY SDN. BHD.';
 const newCompanyName='LANGFORD PRIVATE EQUITY SDN. BHD.';
-const company={id:'c1',name:newCompanyName,registration_no:'201001006398 (891019-H)'};
+const company={id:'c1',name:newCompanyName,registration_no:'201001006398 (891019-H)',
+ former_names:[savedCompanyName]};
 const bookWithLegacyFields=(id='c1')=>({
  version:1,companyId:id,companyName:savedCompanyName,
  registrationNo:'201001006398 (891019-H)',
@@ -32,12 +33,14 @@ const bookWithLegacyFields=(id='c1')=>({
 
 test('Company Details templates end at Registered Address for every new company',()=>{
  assert.deepEqual(COMPANY_DETAILS_FIELDS,[
-  'Company Name','Company No.','Last update',
+  'Company Name','Former Company Name','Company No.','Last update',
   'Date of Incorporation','Date of Cosec Appointment','Registered Address'
  ]);
  for(const id of ['c1','c2']){
-  const sheet=createCompanyDetailsSheet({id,name:'EXAMPLE SDN BHD',registration_no:'202601234567'});
-  assert.equal(sheet.rows.length,6);
+  const sheet=createCompanyDetailsSheet({id,name:'EXAMPLE SDN BHD',registration_no:'202601234567',
+   former_names:['OLD EXAMPLE SDN BHD']});
+  assert.equal(sheet.rows.length,7);
+  assert.equal(sheet.rows[1][1],'F.K.A. OLD EXAMPLE SDN BHD');
   assert.equal(sheet.rows.at(-1)[0],'Registered Address:');
  }
 });
@@ -62,6 +65,7 @@ test('the current Documents company name overrides stale stored heading in every
  const html=renderStatutoryRegisterDocument(visible,0,{showBlanks:true});
  assert.match(html,/<h2>LANGFORD PRIVATE EQUITY SDN\. BHD\.<\/h2>/);
  assert.doesNotMatch(html,/<h2>AURUMROCK LABORATORY/);
+ assert.match(html,/F\.K\.A\. AURUMROCK LABORATORY SDN\. BHD\./);
  assert.doesNotMatch(html,/Type of Shares Issued|Ordinary Share Capital|Aggregate Amount Paid/);
 });
 test('never apply another company name to the wrong company ID',()=>{
