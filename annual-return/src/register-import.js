@@ -307,6 +307,7 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
  if(!shareholdingOnly){
   for(const [key,patterns] of Object.entries(profileMap)){
    let value=select(profile,...patterns);
+   if(key==='Former Name')value=String(value||'').replace(/^F\.?K\.?A\.?\s*/i,'');
    if(/Date of Incorporation|Anniversary Date/i.test(key))value=safeDate(value);
    write(doc.particulars,key,value);
   }
