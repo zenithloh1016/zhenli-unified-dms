@@ -536,6 +536,62 @@ async function saveRepairedDates(){
  }
 
 
+ /**
+  * Follow a Documents company rename by the stable registration number where
+  * possible, falling back to the unique former company name. Only the name
+  * cell changes: all statutory, banking and historical worksheet data survives.
+  * Safe to repeat after an interrupted APK/web/desktop synchronisation.
+  */
+ async function syncRenamedDocumentCompany({oldName,newName,registration_no}){
+  if(state.loading||state.saving)throw Error('Master Listing is busy. Rename will retry automatically.');
+  if(!getUser?.()?.id)throw Error('Sign in before syncing a company rename.');
+  await load(true);
+  if(state.error)throw Error('Cannot load the latest Master Listing: '+state.error);
+  const model=state.model||manualListingTemplate();
+  const nameKey=v=>String(v??'').normalize('NFKC').trim().replace(/\s+/g,' ').toUpperCase();
+  const regKey=v=>{
+   const s=nameKey(v);
+   return s==='N/A'?'':s.replace(/[^A-Z0-9]/g,'');
+  };
+  const oldKey=nameKey(oldName),newKey=nameKey(newName),reg=regKey(registration_no);
+  if(!newKey||newKey==='N/A')throw Error('Invalid renamed company name.');
+  const oldRows=oldKey?model.rows.filter(r=>nameKey(companyData(model,r).name)===oldKey):[];
+  const regRows=reg?model.rows.filter(r=>regKey(companyData(model,r).registration)===reg):[];
+  const newRows=model.rows.filter(r=>nameKey(companyData(model,r).name)===newKey);
+  if(oldRows.length>1||regRows.length>1||newRows.length>1)
+   throw Error('Ambiguous company entries in Master Listing. Check duplicate names/registration numbers before syncing.');
+  if(oldRows.length&&regRows.length&&oldRows[0].id!==regRows[0].id)
+   throw Error('Master Listing former name and registration number point to different rows. Review manually.');
+  const target=regRows[0]||oldRows[0];
+  if(target&&newRows.length&&newRows[0].id!==target.id)
+   throw Error('Another Master Listing row already uses the new company name.');
+  if(!target){
+   if(newRows.length)return {changed:false,alreadySynced:true};
+   const added=mergeDocumentCompanies(model,[{name:newName,registration_no}]);
+   if(!added.added)return {changed:false,alreadySynced:true};
+   state.saving=true;
+   try{
+    await saveModel(added.model,{backup:!!state.model});
+    state.status=newName+' added to Master Listing after Documents rename.';
+    return {changed:true,added:true};
+   }finally{state.saving=false;onRender?.();}
+  }
+  if(String(target.values[model.nameColumn])===newName)
+   return {changed:false,alreadySynced:true};
+  const updated={...model,rows:model.rows.map(row=>
+   row.id===target.id
+    ?{...row,values:row.values.map((v,i)=>i===model.nameColumn?newName:v)}
+    :row)};
+  const sorted=sortMasterListingCompanies(updated).model;
+  state.saving=true;
+  try{
+   await saveModel(sorted,{backup:true});
+   state.page=0;
+   state.status='Company name synced from Documents: '+oldName+' → '+newName+'. All other fields retained; previous listing backed up.';
+   return {changed:true};
+  }finally{state.saving=false;onRender?.();}
+ }
+
  /** Sync a successful Documents company deletion, backing up the private listing. */
  async function removeDeletedCompany(company,remainingCompanies=[]){
   if(state.loading||state.saving)throw Error('Master Listing busy, retry after it finishes.');
@@ -802,5 +858,5 @@ function renderEditor(){
   return true;
  }
  const exitFullscreen=()=>{if(!state.fullScreen)return false;state.fullScreen=false;state.page=0;onRender?.();return true;};
- return {render,load,reset,onClick,onChange,onSubmit,afterRender,exitFullscreen,syncDocumentCompanies,syncConstitutionDocuments,removeDeletedCompany,reconcileOrphanedCompanies,get model(){return state.model;},get state(){return state;}};
+ return {render,load,reset,onClick,onChange,onSubmit,afterRender,exitFullscreen,syncDocumentCompanies,syncRenamedDocumentCompany,syncConstitutionDocuments,removeDeletedCompany,reconcileOrphanedCompanies,get model(){return state.model;},get state(){return state;}};
 }
