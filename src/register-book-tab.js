@@ -682,7 +682,11 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   }
   validateRegisterBook(pending);
   // A saved workbook's old heading must never undo a Documents rename.
-  const company=(getCompanies?.()||[]).find(c=>c.id===pending.companyId&&c.user_id===user.id);
+  // getCompanies() is already scoped to the signed-in user's RLS-filtered
+  // portfolio. Legacy company objects and local test fixtures may not carry
+  // a user_id property; only reject a *present, conflicting* owner ID.
+  const company=(getCompanies?.()||[]).find(c=>
+   c.id===pending.companyId&&(!c.user_id||c.user_id===user.id));
   if(!company)throw Error('Company is no longer available in the signed-in portfolio.');
   const updated={...currentCompanyRegisterView(pending,company),updatedAt:new Date().toISOString()};
   const body=new Blob([JSON.stringify(updated)],{type:'application/json'});
