@@ -294,7 +294,7 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
  }
  const profile=profileFields(findSection(/^company details$/i)||{blocks:[]});
  const profileMap={
-  'Former Name':[/^former name$/i,/^previous name$/i],
+  'Former Name':[/^former (?:company )?name$/i,/^previous (?:company )?name$/i,/^old (?:company )?name$/i],
   'Annual Return Year':[/^annual return year$/i],
   'Anniversary Date':[/^anniversary date$/i,/^annual return anniversary date$/i],
   'Date of Incorporation':[/^date of (?:registration|incorporation)$/i],
