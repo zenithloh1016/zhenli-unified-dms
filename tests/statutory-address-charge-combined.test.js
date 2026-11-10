@@ -52,8 +52,8 @@ test('Company Details display precisely one multiline Registered Address, not du
  const before=JSON.stringify(b.sheets[0].rows);
  const fields=buildIndependentRegister(b,0).blocks.filter(x=>x.type==='field');
  assert.equal(fields.length,4);
- assert.deepEqual(fields.map(f=>f.label),['Company Name','Company No.','Registered Address','Company Secretary']);
- const address=fields[2];
+ assert.deepEqual(fields.map(f=>f.label),['Company Name','Former Company Name','Company No.','Registered Address']);
+ const address=fields[3];
  assert.equal(address.value,'NO. 17, JALAN YONG SHOOK LIN,\nSEKSYEN 7,\n46050 PETALING JAYA,\nSELANGOR');
  assert.equal(address.continuation.length,3);
  assert.equal(JSON.stringify(b.sheets[0].rows),before);
@@ -61,7 +61,7 @@ test('Company Details display precisely one multiline Registered Address, not du
  assert.match(html,/data-merge-address="true"/);
  assert.match(html,/data-action="sr-edit-field"/);
  assert(!html.includes('Registered Office · continued'));
- assert(html.includes('Company Secretary'));
+ assert(!html.includes('Company Secretary'),'legacy fields beyond Registered Address must remain hidden');
  assert(html.includes('Company Name'));
 });
 test('Company Details inline address edit consolidates old continuation cells',async()=>{
@@ -150,7 +150,7 @@ test('Combined PDF includes each distinct register and excludes Managers, using 
   assert(printed.includes('Registered Address (New)'));
   assert(printed.includes('MEMBER B'));
   assert(!printed.includes('MANAGER X'));
-  assert(printed.includes('Company Secretary'));
+  assert(!printed.includes('Company Secretary'),'legacy fields beyond Registered Address must be omitted from PDF');
  }finally{globalThis.document=previous;}
 });
 
@@ -160,20 +160,21 @@ test('Remove Field is confirmed, hidden from PDF, saved privately, and reversibl
  await tab.openCompany('co1');
  const prior=globalThis.window;globalThis.window={confirm:()=>false};
  try{
-  tab.command('sr-remove-field','0:6:1');
-  assert.equal(tab.state.dirty,true);
+  // Registered Address is a currently displayed and editable profile field.
+  tab.command('sr-remove-field','0:2:1');
+  assert(!tab.state.book.removedFields?.['0:2:1'],'cancellation must not remove any field');
   globalThis.window.confirm=()=>true;
-  tab.command('sr-remove-field','0:6:1');
-  assert.equal(tab.state.book.removedFields['0:6:1'],true);
+  tab.command('sr-remove-field','0:2:1');
+  assert.equal(tab.state.book.removedFields['0:2:1'],true);
   assert.equal(tab.state.dirty,true);
-  assert(!buildIndependentRegister(tab.state.book,0).blocks.some(x=>x.label==='Company Secretary'));
-  assert(!buildCombinedRegisters(tab.state.book).flatMap(x=>x.blocks).some(x=>x.label==='Company Secretary'));
+  assert(!buildIndependentRegister(tab.state.book,0).blocks.some(x=>x.label==='Registered Address'));
+  assert(!buildCombinedRegisters(tab.state.book).flatMap(x=>x.blocks).some(x=>x.label==='Registered Address'));
   globalThis.document={getElementById:()=>null};
   await tab.save();
   assert(blobs.has('u1/statutory-registers/co1.json'));
   assert(tab.render().includes('Restore Removed Items'));
   tab.command('sr-restore-removed');
-  assert(buildIndependentRegister(tab.state.book,0).blocks.some(x=>x.label==='Company Secretary'));
+  assert(buildIndependentRegister(tab.state.book,0).blocks.some(x=>x.label==='Registered Address'));
   assert.equal(tab.state.dirty,true);
  }finally{globalThis.window=prior;}
 });
