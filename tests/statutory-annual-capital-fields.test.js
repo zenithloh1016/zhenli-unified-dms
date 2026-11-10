@@ -11,7 +11,7 @@ test('Company Details ends at Registered Address; share capital is not guessed o
  const labels=sheet.rows.map(row=>row[0].replace(/:$/,''));
  assert.deepEqual(labels,COMPANY_DETAILS_FIELDS);
  assert.equal(labels.at(-1),'Registered Address');
- assert.equal(sheet.rows[1][1],'F.K.A. OLD EXAMPLE SDN BHD');
+ assert.equal(sheet.rows[1][1],'OLD EXAMPLE SDN BHD');
  for(const label of [
   'Number of Ordinary Shares','Number of Preference Shares',
   'Total Number of Issued Shares (all classes)',
