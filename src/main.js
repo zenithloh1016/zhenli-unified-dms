@@ -115,7 +115,7 @@ function withKnownFormerCompanyName(company){
     name:company.name,registrationNo:company.registration_no||''
    });
    value=String(details?.fields?.['Former Name']||'').trim()
-    .replace(/^F\.?K\.?A\.?\s*/i,'');
+    .replace(/^F\s*\.?\s*K\s*\.?\s*A\s*\.?\s*[:=–—-]?\s*/i,'');
    if(value.length<3||value.length>250||
      /^(?:N\/?A|NIL|NONE|NOT APPLICABLE|UNKNOWN|-)$/i.test(value)||
      value.toUpperCase()===String(company.name).trim().toUpperCase())value='';
