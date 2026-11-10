@@ -72,18 +72,47 @@ export async function launchSigning() {
   else window.open(u.href,'_blank','noopener,noreferrer');
 }
 
-function mergeCompanies(current, dms) {
-  const entries = Array.isArray(current) ? [...current] : [];
-  const names = new Set(entries.map(c=>String(c.name||'').trim().toUpperCase()));
-  let added=0;
+function mergeCompanies(current,dms){
+  // Match by the immutable Documents ID, not the former company name.
+  // This also repairs older APK Task Hub payloads that are saved after a rename.
+  const entries=[],byId=new Set(),byName=new Set(),renames=new Map();
+  let added=0,renamed=0;
+  const dmsById=new Map(dms.map(c=>[String(c.id),c]));
+  for(const original of Array.isArray(current)?current:[]){
+    const live=dmsById.get(String(original.id));
+    const updated=live?{...original,name:live.name}:original;
+    if(live&&hubName(original.name)!==hubName(live.name)){
+      const oldKey=hubName(original.name);
+      if(oldKey)renames.set(oldKey,live.name);
+      renamed++;
+    }
+    const key=String(updated.id||''),n=hubName(updated.name);
+    if(key&&byId.has(key))continue;
+    if(key)byId.add(key);
+    if(n)byName.add(n);
+    entries.push(updated);
+  }
   for(const co of dms){
-    const name=String(co.name || '').trim().toUpperCase();
-    if(!name || names.has(name))continue;
-    names.add(name);
-    entries.push({id:co.id,name,reg:co.registration_no||'',arDate:'',arDueDate:'',afsDueDate:'',afsDueStatus:'not provided',financialYearEnded:'',fye:'',notes:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
+    const name=String(co.name||'').trim();
+    const n=hubName(name);
+    if(!n||byId.has(String(co.id))||byName.has(n))continue;
+    byId.add(String(co.id));byName.add(n);
+    entries.push({id:co.id,name,reg:co.registration_no||'',arDate:'',arDueDate:'',
+      afsDueDate:'',afsDueStatus:'not provided',financialYearEnded:'',fye:'',
+      notes:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
     added++;
   }
-  return {entries,added};
+  return {entries,added,renamed,renames};
+}
+function mergeHubPayload(current,dms){
+  const merged=mergeCompanies(current.companies,dms);
+  const tasks=(current.tasks||[]).map(task=>{
+    const replacement=merged.renames.get(hubName(task.company));
+    return replacement?{...task,company:replacement}:task;
+  });
+  return {payload:{...current,companies:merged.entries,tasks},
+    changed:!!(merged.added||merged.renamed||
+     tasks.some((task,i)=>task!==current.tasks[i]))};
 }
 
 /** Parent/child postMessage security: same origin AND exact iframe window; Supabase policies control stored data. */
@@ -129,9 +158,9 @@ export function installHubBridge(db, getUser, getCompanies, displayError) {
         const {data,error}=await db.from('task_hub_state').select('payload').eq('user_id',user.id).maybeSingle();
         if(error)throw error;
         const loaded=scrubDeletedHubCompanies(data?.payload && Array.isArray(data.payload.tasks) && Array.isArray(data.payload.companies) ? data.payload : defaultPayload(),user.id);
-        const merged=mergeCompanies(loaded.companies,getCompanies());
-        payload={...loaded,companies:merged.entries};
-        if(merged.added || !data){
+        const merged=mergeHubPayload(loaded,getCompanies());
+        payload=merged.payload;
+        if(merged.changed || !data){
           const {error:saveError}=await db.from('task_hub_state').upsert({user_id:user.id,payload,updated_at:new Date().toISOString()},{onConflict:'user_id'});
           if(saveError)throw saveError;
         }
@@ -149,7 +178,8 @@ export function installHubBridge(db, getUser, getCompanies, displayError) {
         return;
       }
       const filtered=scrubDeletedHubCompanies(p,user.id);
-      payload=filtered;lastUserId=user.id;queuedState=filtered;
+      const synced=mergeHubPayload(filtered,getCompanies()).payload;
+      payload=synced;lastUserId=user.id;queuedState=synced;
       try {
         await saveChanges();
         if(type==='ZHENLI_HUB_SAVE_CONFIRM')respond(childWindow,'ZHENLI_HUB_SAVE_RESULT',requestId,{ok:true});
