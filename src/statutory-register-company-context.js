@@ -10,7 +10,7 @@ const cleanName=value=>String(value??'').trim()
  .replace(/^F\.?K\.?A\.?\s*/i,'').trim();
 const validName=value=>{
  const name=cleanName(value);
- return name.length>=3&&!/^(?:-|—|–|N\/?A|NIL|NONE|NOT APPLICABLE|UNKNOWN|NOT PROVIDED)$/i.test(name)
+ return name.length>=3&&name.length<=250&&!/^(?:-|—|–|N\/?A|NIL|NONE|NOT APPLICABLE|UNKNOWN|NOT PROVIDED)$/i.test(name)
   ?name:'';
 };
 
@@ -26,8 +26,16 @@ export function formerNameFromInlineCell(value){
 /** Read explicit former names from imported/saved Company Details or metadata. */
 export function recordedFormerCompanyName(book){
  if(!book)return '';
- for(const sheet of book.sheets||[]){
-  if(referenceKind(sheet.name)!=='profile')continue;
+ // Prefer the current editable Company Details, then the original Master,
+ // then imported historical editions. An old imported book must not replace
+ // a more recent explicit former-name entry in the primary register.
+ const profiles=(book.sheets||[]).filter(s=>referenceKind(s.name)==='profile');
+ profiles.sort((a,b)=>{
+  const rank=name=>/^company details$/i.test(String(name||'').trim())?0:
+   /^master$/i.test(String(name||'').trim())?1:2;
+  return rank(a.name)-rank(b.name);
+ });
+ for(const sheet of profiles){
   for(const row of sheet.rows||[]){
    if(!Array.isArray(row))continue;
    for(let col=0;col<row.length;col++){
