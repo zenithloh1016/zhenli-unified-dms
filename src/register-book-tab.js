@@ -15,6 +15,7 @@ import {mergeStatutoryRegisterEdits} from './statutory-register-conflict.js';
 import {Capacitor} from '@capacitor/core';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
 import {secretaryFromAnnualReturn,unanimousSecretaryReferences,mergeSecretaryIntoBook} from './statutory-secretary-sync.js';
+import {currentCompanyRegisterView} from './statutory-register-company-context.js';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const act=(label,action,id='',style='secondary')=>'<button type="button" class="btn '+style+'" data-action="'+action+'" data-id="'+esc(id)+'">'+esc(label)+'</button>';
@@ -208,8 +209,8 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   state.historyPreviewName='';state.historyLoaded=false;notify();
  }
  function renderEditor(){
-  const book=state.book;
   const company=(getCompanies?.()||[]).find(c=>c.id===state.selectedId);
+  const book=currentCompanyRegisterView(state.book,company);
   if(!book||!company)return '';
   const sheet=book.sheets[state.sheetIndex];
   const name=sheet?registerLabel(sheet.name):'No register selected';
@@ -678,7 +679,10 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    }
   }
   validateRegisterBook(pending);
-  const updated={...pending,updatedAt:new Date().toISOString()};
+  // A saved workbook's old heading must never undo a Documents rename.
+  const company=(getCompanies?.()||[]).find(c=>c.id===pending.companyId&&c.user_id===user.id);
+  if(!company)throw Error('Company is no longer available in the signed-in portfolio.');
+  const updated={...currentCompanyRegisterView(pending,company),updatedAt:new Date().toISOString()};
   const body=new Blob([JSON.stringify(updated)],{type:'application/json'});
   if(body.size>24*1024*1024)throw Error('Register exceeds 24 MB. Split its worksheets.');
   if(current){
@@ -987,11 +991,13 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    }finally{state.saving=false;notify();}
   }
     async function pdf({combined=false}={}){
-  if(!state.book)throw Error('Select a company.');
+  const company=(getCompanies?.()||[]).find(c=>c.id===state.selectedId);
+  const book=currentCompanyRegisterView(state.book,company);
+  if(!book)throw Error('Select a company.');
   state.saving=true;state.error='';status('Generating statutory register PDF…');
   try{
-   const blob=await buildStatutoryRegistersPdf(state.book,{sheetIndex:state.sheetIndex,combined,showBlanks:state.showBlankFields,onProgress:message=>{state.message=message;notify();}});
-   const safe=String(state.book.companyName||'Company').replace(/[\\/:*?"<>|]/g,'_').slice(0,110);
+   const blob=await buildStatutoryRegistersPdf(book,{sheetIndex:state.sheetIndex,combined,showBlanks:state.showBlankFields,onProgress:message=>{state.message=message;notify();}});
+   const safe=String(book.companyName||'Company').replace(/[\\/:*?"<>|]/g,'_').slice(0,110);
    const type=registerLabel(state.book.sheets[state.sheetIndex]?.name||'Register of Other Records').replace(/[\\/:*?"<>|]/g,'_');
    const filename=combined?'Statutory Registers_Combined_'+safe+'.pdf':'Statutory Register_'+type+'_'+safe+'.pdf';
    if(Capacitor.isNativePlatform()){
