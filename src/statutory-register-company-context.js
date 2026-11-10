@@ -26,32 +26,66 @@ export function formerNameFromInlineCell(value){
 /** Read explicit former names from imported/saved Company Details or metadata. */
 export function recordedFormerCompanyName(book){
  if(!book)return '';
- // Prefer the current editable Company Details, then the original Master,
- // then imported historical editions. An old imported book must not replace
- // a more recent explicit former-name entry in the primary register.
+ // Editable Company Details wins over an older imported Master worksheet.
  const profiles=(book.sheets||[]).filter(s=>referenceKind(s.name)==='profile');
  profiles.sort((a,b)=>{
   const rank=name=>/^company details$/i.test(String(name||'').trim())?0:
    /^master$/i.test(String(name||'').trim())?1:2;
   return rank(a.name)-rank(b.name);
  });
- for(const sheet of profiles){
-  for(const row of sheet.rows||[]){
+ const isOtherField=value=>companyDetailIndex(value)>=0;
+ const extractRows=rows=>{
+  for(let ri=0;ri<rows.length;ri++){
+   const row=rows[ri]||[];
    if(!Array.isArray(row))continue;
    for(let col=0;col<row.length;col++){
-    if(companyDetailIndex(row[col])===1){
-     for(let offset=1;offset<=2&&col+offset<row.length;offset++){
-      const adjacent=String(row[col+offset]||'').trim();
-      if(!adjacent)continue;
-      if(companyDetailIndex(adjacent)>=0)break;
-      const value=validName(adjacent);
+    const text=String(row[col]||'').trim();
+    if(companyDetailIndex(text)===1){
+     // Real workbook templates often use B or C for a former name, even
+     // when the label is in A. Reject intervening statutory field labels.
+     for(let pos=col+1;pos<Math.min(row.length,col+9);pos++){
+      const next=String(row[pos]||'').trim();
+      if(!next)continue;
+      if(isOtherField(next))break;
+      const value=validName(next);
       if(value)return value;
      }
+     // Some merged-cell spreadsheets place the value on the next row.
+     const nextRow=rows[ri+1]||[];
+     if(Array.isArray(nextRow)&&
+        !nextRow.slice(0,col+1).some(v=>String(v||'').trim())){
+      for(let pos=col+1;pos<Math.min(nextRow.length,col+9);pos++){
+       const candidate=String(nextRow[pos]||'').trim();
+       if(!candidate)continue;
+       if(isOtherField(candidate))break;
+       const value=validName(candidate);
+       if(value)return value;
+      }
+     }
     }
-    const inline=formerNameFromInlineCell(row[col]);
+    const inline=formerNameFromInlineCell(text);
     if(inline)return inline;
    }
   }
+  return '';
+ };
+ for(const sheet of profiles){
+  const hit=extractRows(sheet.rows||[]);
+  if(hit)return hit;
+ }
+ // Excel conversion may place the cover-page particulars on a sheet not
+ // literally called Master. Only accept it if the sheet contains an explicit
+ // company identity label and a former-name label. Do not read director or
+ // member personal-name fields as legal company history.
+ for(const sheet of book.sheets||[]){
+  if(profiles.includes(sheet))continue;
+  const title=String(sheet.name||'').trim();
+  if(referenceKind(title)&&referenceKind(title)!=='profile')continue;
+  const cells=(sheet.rows||[]).slice(0,120).flatMap(row=>Array.isArray(row)?row:[]);
+  const hasIdentity=cells.some(cell=>companyDetailIndex(cell)===0||companyDetailIndex(cell)===2);
+  if(!hasIdentity)continue;
+  const hit=extractRows((sheet.rows||[]).slice(0,120));
+  if(hit)return hit;
  }
  const history=Array.isArray(book.formerNames)?book.formerNames:
   Array.isArray(book.former_names)?book.former_names:
