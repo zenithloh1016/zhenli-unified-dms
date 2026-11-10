@@ -12,12 +12,23 @@ const label=value=>str(value).normalize('NFKC').toLowerCase().replace(/[^a-z0-9]
 const companyKey=value=>str(value).normalize('NFKC').toUpperCase().replace(/[^A-Z0-9]+/g,'');
 const regKey=value=>str(value).match(/\d{12}/)?.[0]||'';
 
-/** Reject duplicate, mismatched or unrelated company rows. */
+/** Match by the immutable 12-digit SSM number first.
+ * A formerly named Master Listing entry may have a different name from the
+ * current Documents record. Never select duplicate or conflicting identities.
+ */
 export function matchedAnnualReturnListingRow(listing,company){
  const model=validateMasterListing(listing);
  const name=companyKey(company?.name);
  const reg=regKey(company?.registrationNo??company?.registration_no);
  if(!name)return null;
+ if(reg){
+  const matchingNumber=model.rows.filter(row=>
+   regKey(companyData(model,row)?.registration)===reg);
+  if(matchingNumber.length>1)return null;
+  if(matchingNumber.length===1)return matchingNumber[0];
+ }
+ // Legacy worksheet entries can lack a registration number. Name matching
+ // remains strict and never overrides a DIFFERENT populated SSM number.
  const matches=model.rows.filter(row=>{
   const info=companyData(model,row);
   if(companyKey(info?.name)!==name)return false;
@@ -28,7 +39,12 @@ export function matchedAnnualReturnListingRow(listing,company){
 }
 
 const aliases={
- 'Former Name':[/^(?:former|previous|old) (?:company )?name(?:s)?$/],
+ 'Former Name':[
+  /^(?:former|previous|old|prior) (?:company |registered )?names?(?: if any)?$/,
+  /^(?:company )?formerly known as(?: names?)?(?: if any)?$/,
+  /^(?:f k a|fka)(?: name)?(?: if any)?$/,
+  /^company (?:former|previous|old) names?(?: if any)?$/
+ ],
  'Annual Return Year':[/^annual return year$/],
  'Anniversary Date':[/^(?:anniversary date|annual return anniversary date|date of anniversary)$/],
  'Date of Incorporation':[/^(?:date of incorporation|incorporation date|date of registration|registration date|date incorporated)$/],
@@ -79,7 +95,9 @@ export function annualReturnParticularsFromMasterListing(listing,company){
  const select=(...patterns)=>cells.find(c=>patterns.some(re=>re.test(c.label)))?.value||'';
  const info=companyData(model,row);
  const fields={
-  'Company Name':info.name,
+  // Documents is authoritative after a legal company name change. Never
+  // inject an obsolete Master Listing name into an Annual Return draft.
+  'Company Name':str(company?.name)||info.name,
   'Company Registration No.':info.registration
  };
  for(const [target,patterns] of Object.entries(aliases)){
