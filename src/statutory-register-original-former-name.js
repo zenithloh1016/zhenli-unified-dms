@@ -9,8 +9,8 @@
 import {openMasterListingWorkbook} from './master-listing-reader.js';
 import {recordedFormerCompanyName} from './statutory-register-company-context.js';
 
-const cleanName=value=>String(value||'').trim()
- .replace(/^F\.?K\.?A\.?\s*/i,'').trim();
+const cleanName=value=>String(value||'').normalize('NFKC').trim()
+ .replace(/^F\s*\.?\s*K\s*\.?\s*A\s*\.?\s*[:=–—-]?\s*/i,'').trim();
 const MAX_BYTES=20*1024*1024;
 const MAX_FILES=8;
 
@@ -34,7 +34,10 @@ export async function recoverFormerNameFromOriginalExcels(
    const sheets=(xlsx.sheetNames||[]).slice();
    const profile=sheets.filter(name=>
     /^(?:master|company details|company particulars|company'?s? particulars|company information|company profile|corporate information|cover(?: sheet| page)?)(?:\b|\s*\()/i.test(String(name).trim()));
-   const candidates=profile.length?profile:sheets.slice(0,8);
+   // Read the main Company Details first, then other bounded worksheets:
+   // the name reader ignores directors/members registers and demands a
+   // documented company-identity context on miscellaneous worksheets.
+   const candidates=[...profile,...sheets.filter(name=>!profile.includes(name))].slice(0,16);
    const source=[];
    for(const name of candidates){
     const rows=xlsx.readSheet(name,{sparse:true});
