@@ -12,6 +12,7 @@ import {applyAnnualReturnDefaults} from './derived-defaults.js';
 import {saveAnnualReturnDraft,readAnnualReturnDraft,listAnnualReturnDrafts,removeAnnualReturnDraft,draftIdOfKey} from './drafts.js';
 import {BO_CRITERIA_DESCRIPTIONS,selectedBoCriteria} from './bo-criteria.js';
 import {createCloudDraftClient} from './cloud-draft-client.js';
+import {syncFormerNameField} from './former-company-name.js';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let doc=cloneBlank(),generated=null,busy=false;
@@ -61,13 +62,17 @@ document.addEventListener('keydown',event=>{
 
 let draftScope=window.parent===window?'standalone':'dms:pending',newDraftId='new-'+Date.now().toString(36),draftTimer=null;
 let selectedDmsCompanyId=null,dmsCompanies=[],cloudDrafts=[];
+let selectedDmsFormerName='';
+const applySelectedFormerName=()=>syncFormerNameField(doc,selectedDmsFormerName);
 let pendingRegisterImport='',pendingSecretaryImport='',pendingAuditorImport='';
 const cloudDraft=createCloudDraftClient({
  getCompanyId:()=>selectedDmsCompanyId,
  getScope:()=>draftScope,
  getDocument:()=>doc,
  applyDocument:document=>{
-  doc=document;normalizeReviewValues();generated=null;$('download-box').hidden=true;
+  doc=document;
+  applySelectedFormerName();
+  normalizeReviewValues();generated=null;$('download-box').hidden=true;
   resetView();draftOptions();
  },
  onStatus:(message,error=false)=>{
@@ -101,8 +106,12 @@ function requestAuditorMasterListing(companyId){
 function loadCloudThenSecretary(options={}){
  const companyId=selectedDmsCompanyId;
  void cloudDraft.open(options).then(()=>{
-  if(companyId===selectedDmsCompanyId&&cloudDraft.isReady())
-   requestSecretaryRegisterImport(companyId);
+  if(companyId!==selectedDmsCompanyId||!cloudDraft.isReady())return;
+  if(applySelectedFormerName()){
+   renderSections();
+   queueDraftSave();
+  }
+  requestSecretaryRegisterImport(companyId);
  }).catch(error=>console.warn('Annual Return cloud load:',error));
 }
 function currentDraftId(){return selectedDmsCompanyId||newDraftId;}
@@ -271,6 +280,8 @@ function applyDmsCompany(company){
  if(!isValidCompanyRecord(company))return {ok:false,reason:'Invalid company record from DMS.'};
  const name=company.name.trim(),registrationNo=company.registrationNo.trim();
  if(selectedDmsCompanyId===company.id&&doc.company.name===name&&doc.company.no===registrationNo){
+  selectedDmsFormerName=String(company.formerName||'').trim();
+  if(applySelectedFormerName())renderSections();
   loadCloudThenSecretary({force:true});
   const fixed=removeRsshChargeTwoOnce();
   if(fixed)status(fixed);
@@ -291,12 +302,14 @@ function applyDmsCompany(company){
    else if(doc.particulars[i].en==='Company Registration No.'){doc.particulars[i].value=registrationNo;setCompanyDetail(doc,i,registrationNo);}
  }
  selectedDmsCompanyId=company.id;
+ selectedDmsFormerName=String(company.formerName||'').trim();
  pendingSecretaryImport='';pendingAuditorImport='';
  generated=null;$('download-box').hidden=true;
  let previous=null;
  try{previous=readAnnualReturnDraft(localStorage,draftScope,company.id);}
  catch(err){draftStatus('Saved draft could not be loaded: '+err.message,true);}
  if(previous&&previous.data.company.name===name&&previous.data.company.no===registrationNo)doc=previous.data;
+ applySelectedFormerName();
  normalizeReviewValues();
  resetView();draftOptions();
  const restored=restoreRsshSavedDraftOnce();
@@ -313,6 +326,11 @@ if(window.parent!==window){
   if(event.data?.type==='ZHENLI_DMS_AR_COMPANY_LIST'){
    const records=Array.isArray(event.data.companies)?event.data.companies:[];
    dmsCompanies=records.slice(0,5000).filter(isValidCompanyRecord).sort((a,b)=>a.name.localeCompare(b.name));
+   const selected=dmsCompanies.find(c=>c.id===selectedDmsCompanyId);
+   if(selected){
+    selectedDmsFormerName=String(selected.formerName||'').trim();
+    if(applySelectedFormerName())renderSections();
+   }
    if(typeof event.data.userId==='string'&&/^[a-z0-9-]{16,90}$/i.test(event.data.userId)){
     draftScope='dms:'+event.data.userId;
     // Locally saved DMS drafts for deleted company UUIDs must not reappear.
