@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {makeRegisterBook,mergeRegisterBooks} from '../src/statutory-register-data.js';
-import {recordedFormerCompanyName,currentCompanyRegisterView} from '../src/statutory-register-company-context.js';
+import {recordedFormerCompanyName,currentCompanyRegisterView,formerNameFromInlineCell} from '../src/statutory-register-company-context.js';
 import {recoverFormerNameFromOriginalExcels} from '../src/statutory-register-original-former-name.js';
 import {buildGroupedRegister} from '../src/statutory-register-annual-layout.js';
 
@@ -85,4 +85,39 @@ test('an archived Excel for another company without evidence does not fill a nam
   ['Business Nature:','PREVIOUS BUSINESS ACTIVITIES']
  ]})});
  assert.equal(value.name,'');
+});
+
+test('F.K.A. prefixes in preserved Excel are recovered without being displayed',()=>{
+ const inputs=[
+  'F.K.A. ORIGINAL REGISTER NAME SDN BHD',
+  'F.K.A.:ORIGINAL REGISTER NAME SDN BHD',
+  'F.K.A.ORIGINAL REGISTER NAME SDN BHD',
+  'F.K.A：ORIGINAL REGISTER NAME SDN BHD',
+  '(F.K.A. ORIGINAL REGISTER NAME SDN BHD)',
+  'CURRENT REGISTER COMPANY SDN BHD\nF.K.A. ORIGINAL REGISTER NAME SDN BHD',
+  'Former Name: F.K.A. ORIGINAL REGISTER NAME SDN BHD',
+  'F.K.A.\nORIGINAL REGISTER NAME SDN BHD'
+ ];
+ for(const v of inputs){
+  assert.equal(formerNameFromInlineCell(v),'ORIGINAL REGISTER NAME SDN BHD',JSON.stringify(v));
+  const source=makeRegisterBook(company,{path:'Preserved Original.xlsx',sheets:[
+   {name:'Master',rows:[
+    ['Company Name:','CURRENT REGISTER COMPANY SDN BHD'],
+    ['Company No.:','202603330000'],
+    ['Historical company particulars',v]
+   ]}
+  ]});
+  assert.equal(recordedFormerCompanyName(source),'ORIGINAL REGISTER NAME SDN BHD');
+  const current=currentCompanyRegisterView(source,company);
+  assert.equal(current.formerNames.at(-1),'ORIGINAL REGISTER NAME SDN BHD');
+  const section=buildGroupedRegister(current,0,{showBlanks:true});
+  assert.equal(section.blocks.find(x=>x.label==='Former Company Name')?.value,
+   'ORIGINAL REGISTER NAME SDN BHD');
+ }
+});
+test('legal former company names ending in parentheses remain intact',()=>{
+ const original=makeRegisterBook(company,{path:'Preserved Original.xlsx',sheets:[
+  {name:'Master',rows:[['Former Name:','F.K.A. OLD GROUP (MALAYSIA)']]}
+ ]});
+ assert.equal(recordedFormerCompanyName(original),'OLD GROUP (MALAYSIA)');
 });
