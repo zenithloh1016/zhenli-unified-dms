@@ -72,48 +72,96 @@ export async function launchSigning() {
   else window.open(u.href,'_blank','noopener,noreferrer');
 }
 
+const hubRegKey=value=>{
+  const s=String(value??'').normalize('NFKC').toUpperCase();
+  const twelve=s.match(/\d{12}/);
+  if(twelve)return twelve[0];
+  const compact=s.replace(/[^A-Z0-9]/g,'');
+  return compact.length>=6&&compact!=='NA'?compact:'';
+};
 function mergeCompanies(current,dms){
-  // Match by the immutable Documents ID, not the former company name.
-  // This also repairs older APK Task Hub payloads that are saved after a rename.
-  const entries=[],byId=new Set(),byName=new Set(),renames=new Map();
-  let added=0,renamed=0;
-  const dmsById=new Map(dms.map(c=>[String(c.id),c]));
-  for(const original of Array.isArray(current)?current:[]){
-    const live=dmsById.get(String(original.id));
-    const updated=live?{...original,name:live.name}:original;
-    if(live&&String(original.name)!==String(live.name)){
+  // Older Task Hub entries have their OWN UUIDs, unrelated to Documents IDs.
+  // Match a unique registration number first, then Documents ID or unique
+  // current name. Never create a second Task Hub entry for a renamed company.
+  const source=Array.isArray(current)?current:[];
+  const docs=Array.isArray(dms)?dms:[];
+  const docsById=new Map(docs.map(co=>[String(co.id),co]));
+  const groupBy=(arr,keyfn)=>{
+    const map=new Map();
+    for(const x of arr){
+      const key=keyfn(x);
+      if(!key)continue;
+      if(!map.has(key))map.set(key,[]);
+      map.get(key).push(x);
+    }
+    return map;
+  };
+  const docsByReg=groupBy(docs,x=>hubRegKey(x.registration_no));
+  const docsByName=groupBy(docs,x=>hubName(x.name));
+  const lookup=entry=>{
+    const byId=docsById.get(String(entry.id));
+    if(byId)return byId;
+    const reg=hubRegKey(entry.reg);
+    if(reg&&docsByReg.get(reg)?.length===1)return docsByReg.get(reg)[0];
+    const name=hubName(entry.name);
+    return docsByName.get(name)?.length===1?docsByName.get(name)[0]:null;
+  };
+  const richer=entry=>['arDate','arDueDate','afsDueDate','financialYearEnded','fye','notes']
+    .reduce((sum,k)=>sum+(String(entry?.[k]??'').trim()?1:0),0);
+  const entries=[],entryByDocumentId=new Map(),renames=new Map();
+  let added=0,renamed=0,deduped=0;
+  for(const original of source){
+    const match=lookup(original);
+    const updated=match?{...original,name:match.name,
+      reg:match.registration_no||original.reg}:original;
+    if(match&&String(original.name)!==String(match.name)){
       const oldKey=hubName(original.name);
-      if(oldKey)renames.set(oldKey,live.name);
+      if(oldKey)renames.set(oldKey,match.name);
       renamed++;
     }
-    const key=String(updated.id||''),n=hubName(updated.name);
-    if(key&&byId.has(key))continue;
-    if(key)byId.add(key);
-    if(n)byName.add(n);
-    entries.push(updated);
+    if(match&&entryByDocumentId.has(String(match.id))){
+      // Retain the historical record holding deadlines, notes and original ID.
+      // Fill only empty fields from the duplicate, never discard actual data.
+      const index=entryByDocumentId.get(String(match.id));
+      const previous=entries[index],incoming=updated;
+      const winning=richer(incoming)>richer(previous)?incoming:previous;
+      const extra=winning===incoming?previous:incoming;
+      const combined={...winning};
+      for(const k of ['arDate','arDueDate','afsDueDate','afsDueStatus',
+        'financialYearEnded','fye','notes']){
+        if(!String(combined[k]??'').trim()&&String(extra[k]??'').trim())
+          combined[k]=extra[k];
+      }
+      entries[index]=combined;
+      deduped++;
+    }else{
+      if(match)entryByDocumentId.set(String(match.id),entries.length);
+      entries.push(updated);
+    }
   }
-  for(const co of dms){
+  for(const co of docs){
+    if(entryByDocumentId.has(String(co.id)))continue;
+    // Leave legacy unmatched companies alone; add only genuinely absent ones.
     const name=String(co.name||'').trim();
-    const n=hubName(name);
-    if(!n||byId.has(String(co.id))||byName.has(n))continue;
-    byId.add(String(co.id));byName.add(n);
+    if(!name)continue;
+    entryByDocumentId.set(String(co.id),entries.length);
     entries.push({id:co.id,name,reg:co.registration_no||'',arDate:'',arDueDate:'',
       afsDueDate:'',afsDueStatus:'not provided',financialYearEnded:'',fye:'',
       notes:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
     added++;
   }
-  return {entries,added,renamed,renames};
+  return {entries,added,renamed,deduped,renames};
 }
 function mergeHubPayload(current,dms){
   const merged=mergeCompanies(current.companies,dms);
   const tasks=(current.tasks||[]).map(task=>{
-    const replacement=merged.renames.get(hubName(task.company));
-    return replacement?{...task,company:replacement}:task;
+    const nextName=merged.renames.get(hubName(task.company));
+    return nextName&&task.company!==nextName
+      ?{...task,company:nextName}:task;
   });
-  return {payload:{...current,companies:merged.entries,tasks},
-    changed:!!(merged.added||merged.renamed||
-     merged.entries.length!==current.companies.length+merged.added||
-     tasks.some((task,i)=>task!==current.tasks[i]))};
+  const changed=JSON.stringify(merged.entries)!==JSON.stringify(current.companies)||
+    tasks.some((task,i)=>task!==current.tasks[i]);
+  return {payload:{...current,companies:merged.entries,tasks},changed};
 }
 
 /** Parent/child postMessage security: same origin AND exact iframe window; Supabase policies control stored data. */
