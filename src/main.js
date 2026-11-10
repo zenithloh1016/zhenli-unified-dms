@@ -709,7 +709,9 @@ function sendAnnualReturnCompanyList(){
  const frame=ROOT.querySelector('#zh-annual-return-frame');
  if(!frame||!state.user)return;
  const companies=state.companies.slice(0,5000).map(c=>({
-  id:String(c.id),name:String(c.name||''),registrationNo:String(c.registration_no||'')
+  id:String(c.id),name:String(c.name||''),registrationNo:String(c.registration_no||''),
+  formerName:Array.isArray(c.former_names)&&c.former_names.length?
+    'F.K.A. '+String(c.former_names[c.former_names.length-1]):''
  }));
  frame.contentWindow?.postMessage({type:'ZHENLI_DMS_AR_COMPANY_LIST',companies,userId:String(state.user.id)},window.location.origin);
  void sendAnnualReturnDraftList();
@@ -735,7 +737,9 @@ function sendAnnualReturnCompany(){
  const company=state.companies.find(c=>c.id===state.arSelectedCompanyId);
  if(!frame||!company||!state.user)return;
  frame.contentWindow?.postMessage({type:'ZHENLI_DMS_AR_SELECT_COMPANY',company:{
-  id:String(company.id),name:String(company.name||''),registrationNo:String(company.registration_no||'')
+  id:String(company.id),name:String(company.name||''),registrationNo:String(company.registration_no||''),
+  formerName:Array.isArray(company.former_names)&&company.former_names.length?
+    'F.K.A. '+String(company.former_names[company.former_names.length-1]):''
  }},window.location.origin);
 }
 function renderAnnualReturn(){
@@ -1405,6 +1409,12 @@ window.addEventListener('message',event=>{
      const match={name:company.name,registrationNo:company.registration_no||''};
      const auditor=auditorFromMasterListing(model,match);
      const particulars=annualReturnParticularsFromMasterListing(model,match);
+     const former=Array.isArray(company.former_names)&&company.former_names.length?
+       'F.K.A. '+String(company.former_names[company.former_names.length-1]):'';
+     // The current Documents company name history supersedes an outdated
+     // private Master Listing cell when preparing the Annual Return PDF.
+     if(former&&particulars)
+       particulars.fields={...(particulars.fields||{}),'Former Name':former};
      if(state.user?.id!==user.id||state.arSelectedCompanyId!==requested||
         state.tab!=='annual-return')return;
      reply(true,auditor,'',particulars);
