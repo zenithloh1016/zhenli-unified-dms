@@ -22,7 +22,7 @@ import {WORKING_RESOLUTION_FOLDER_NAME,WORKING_RESOLUTION_FOLDER_SORT_ORDER,miss
 import {CHARGES_FOLDER_NAME,CHARGES_FOLDER_SORT_ORDER,missingChargesFolders} from './charges-folders.js';
 import {STANDARD_FOLDER_COUNT,isExistingRegisterBookFolder} from './register-book-folders.js';
 import {createRegisterBookTab} from './register-book-tab.js';
-import {currentCompanyRegisterView} from './statutory-register-company-context.js';
+import {currentCompanyRegisterView,recordedFormerCompanyName} from './statutory-register-company-context.js';
 import {companyDetailIndex,referenceKind,formatFormerCompanyName} from './statutory-register-reference.js';
 import {combinedRegisterSnapshot} from './statutory-ar-bridge.js';
 import './style.css';
@@ -781,11 +781,36 @@ function sendAnnualReturnCompany(){
  const record=state.companies.find(c=>c.id===state.arSelectedCompanyId);
  const company=record&&withKnownFormerCompanyName(record);
  if(!frame||!company||!state.user)return;
- frame.contentWindow?.postMessage({type:'ZHENLI_DMS_AR_SELECT_COMPANY',company:{
-  id:String(company.id),name:String(company.name||''),registrationNo:String(company.registration_no||''),
-  formerName:Array.isArray(company.former_names)&&company.former_names.length?
-    String(company.former_names[company.former_names.length-1]):''
+ const uid=state.user.id,cid=company.id,win=frame.contentWindow;
+ const notifyFormer=name=>win?.postMessage({type:'ZHENLI_DMS_AR_SELECT_COMPANY',company:{
+  id:String(company.id),name:String(company.name||''),
+  registrationNo:String(company.registration_no||''),
+  formerName:String(name||'')
  }},window.location.origin);
+ const known=Array.isArray(company.former_names)&&company.former_names.length?
+  String(company.former_names[company.former_names.length-1]):'';
+ notifyFormer(known);
+ // Some old portfolios have no Documents history and no Former Name column
+ // in Master Listing, but retain the verified name in an imported Register
+ // Book. Read only this company's private register; never infer from its
+ // obsolete filename or previous heading. Preserve its stored worksheet.
+ if(known&&company.formerNameSource!=='master-listing')return;
+ void (async()=>{
+  const key=uid+'/statutory-registers/'+cid+'.json';
+  const {data,error}=await db.storage.from(BUCKET).download(key);
+  if(error){
+   if(/not found|404|no such key/i.test(String(error.message||'')))return;
+   throw Error('Unable to read former-name source from Statutory Registers: '+error.message);
+  }
+  const book=JSON.parse(await data.text());
+  if(book?.companyId!==cid||!Array.isArray(book.sheets))return;
+  const recorded=recordedFormerCompanyName(book);
+  if(!recorded||recorded.toUpperCase()===String(company.name).trim().toUpperCase()||
+     recorded===known)return;
+  if(state.user?.id!==uid||state.arSelectedCompanyId!==cid||
+     ROOT.querySelector('#zh-annual-return-frame')?.contentWindow!==win)return;
+  notifyFormer(recorded);
+ })().catch(error=>console.warn('Annual Return former-name register lookup:',error));
 }
 function renderAnnualReturn(){
  return '<section id="zh-ar-shell" class="annual-return-module '+(state.arFullscreen?'ar-fullscreen-open':'')+'" aria-label="Annual Return PDF generator">'+
