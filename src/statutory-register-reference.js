@@ -219,12 +219,17 @@ export function excludeRegisterField(name,label){
  return false;
 }
 export function companyDetailIndex(label){
- const x=norm(label);
+ // Imported sheets frequently append "(If Any)" to the former-name label.
+ // Normalize only known suffixes; never map unrelated custom fields.
+ const x=norm(label).replace(/ (?:if any|if applicable)$/,'')
+  .replace(/^(former|previous|old|prior) name s$/,'$1 names');
  const aliases=[
   ['company name'],
   ['former company name','former company names','former name','former names',
    'previous company name','previous company names','previous name','previous names',
-   'old company name','old name','formerly known as','f k a','fka'],
+   'old company name','old name','prior company name','prior name',
+   'formerly known as','company formerly known as','former name f k a',
+   'former company name f k a','f k a','fka'],
   ['company no','company number','company registration no','company registration number','registration no'],
   ['last update','last updated','date of last update'],
   ['date of incorporation','incorporation date','date of registration','registration date'],
