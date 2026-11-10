@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {COMPANY_DETAILS_FIELDS,createCompanyDetailsSheet} from '../src/statutory-register-reference.js';
-import {currentCompanyRegisterView} from '../src/statutory-register-company-context.js';
+import {currentCompanyRegisterView,recordedFormerCompanyName,formerNameFromInlineCell} from '../src/statutory-register-company-context.js';
 import {buildGroupedRegister} from '../src/statutory-register-annual-layout.js';
 import {renderStatutoryRegisterDocument} from '../src/statutory-register-annual-ui.js';
 
@@ -111,4 +111,37 @@ test('an obsolete workbook heading alone is not evidence of legal former name',(
 test('never apply another company name to the wrong company ID',()=>{
  const previous=bookWithLegacyFields('different-id');
  assert.equal(currentCompanyRegisterView(previous,company),previous);
+});
+
+test('legacy statutory books preserve former names stored in one cell',()=>{
+ const samples=[
+  'Former Name: LEGACY FIRST SDN BHD',
+  'Former Name (If Any): LEGACY FIRST SDN BHD',
+  'Company formerly known as: LEGACY FIRST SDN BHD',
+  'F.K.A. LEGACY FIRST SDN BHD'
+ ];
+ for(const entry of samples){
+  const book=bookWithLegacyFields();
+  book.sheets[0].rows.splice(1,0,[entry]);
+  assert.equal(formerNameFromInlineCell(entry),'LEGACY FIRST SDN BHD');
+  assert.equal(recordedFormerCompanyName(book),'LEGACY FIRST SDN BHD');
+  const view=currentCompanyRegisterView(book,{...company,former_names:[]});
+  const section=buildGroupedRegister(view,0,{showBlanks:true});
+  assert.equal(section.blocks.find(x=>x.label==='Former Company Name')?.value,
+   'LEGACY FIRST SDN BHD');
+  assert.equal(book.sheets[0].rows[1][0],entry,'original source must not change');
+ }
+});
+test('legacy name label containing If Any restores verified adjacent value',()=>{
+ const book=bookWithLegacyFields();
+ book.sheets[0].rows.splice(1,0,['Former Name (If Any):','THE EARLIER NAME SDN BHD']);
+ const view=currentCompanyRegisterView(book,{...company,former_names:[]});
+ assert.equal(recordedFormerCompanyName(book),'THE EARLIER NAME SDN BHD');
+ assert.match(renderStatutoryRegisterDocument(view,0,{showBlanks:true}),
+  /THE EARLIER NAME SDN BHD/);
+});
+test('an unrelated description must never be guessed as a former legal name',()=>{
+ const book=bookWithLegacyFields();
+ book.sheets[0].rows.splice(1,0,['Business Description:','FORMER ACTIVITIES IN PROPERTY']);
+ assert.equal(recordedFormerCompanyName(book),'');
 });
