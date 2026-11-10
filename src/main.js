@@ -461,6 +461,15 @@ async function refresh() {
     const renames=await finishPendingCompanyRenames();
     if(renames.failed)state.notice='Company renaming is saved. Master Listing / Statutory Registers sync needs another attempt; reopening UNICOSEC will retry.';
   }catch(error){console.warn('Company rename sync:',error);state.notice='Company rename sync will retry: '+String(error?.message||error);}
+  // Older installations created no rename-queue entry. Reconcile historical
+  // names by the unique registration number on sign-in/refresh.
+  if(!masterListingUI.state.loading&&!masterListingUI.state.saving){
+    try{await masterListingUI.reconcileRenamedCompanyNames(state.companies);}
+    catch(error){
+      console.warn('Historical company name reconciliation:',error);
+      state.notice='Master Listing name check needs attention: '+String(error?.message||error);
+    }
+  }
   try{await finishPendingCompanyDeletions();}
   catch(error){console.warn('Company cleanup queue unavailable:',error);state.notice='Company cleanup check failed: '+String(error?.message||error);}
   try{
@@ -1040,17 +1049,28 @@ ROOT.addEventListener('click', event=>{
     if(state.tab==='statutory-registers' && nextTab!=='statutory-registers' && !registerBookUI.canLeave())return;
     state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;if(state.tab!=='annual-return')state.arFullscreen=false;render();
     if(nextTab==='master-listing'){
-      // Reload the authoritative Documents companies before reconciling
-      // historical deletions. Orphan cleanup never affects imported-only rows.
+      // Repair names changed before the rename queue existed, including Excel
+      // rows whose SSM number omits the old number shown in Documents.
       void (async()=>{
         await reloadCompanies();
+        await masterListingUI.reconcileRenamedCompanyNames(state.companies);
         if(!masterListingUI.model?.restoredPreAmendment)
-         await masterListingUI.reconcileOrphanedCompanies(state.companies);
-        // Do not auto-sync Constitution over a restored historical Master Listing.
+          await masterListingUI.reconcileOrphanedCompanies(state.companies);
       })().catch(showError);
     }
     if(nextTab==='statutory-registers')registerBookUI.load().catch(showError);
-    if(nextTab==='statutory-deadlines')reloadStatutoryDeadlines(true).catch(showError);
+    if(nextTab==='statutory-deadlines'){
+      void (async()=>{
+        await reloadCompanies();
+        await masterListingUI.reconcileRenamedCompanyNames(state.companies);
+        await reloadStatutoryDeadlines(true);
+      })().catch(showError);
+    }
+    if(nextTab==='tasks'){
+      // Task Hub's original IDs are independent from Documents; fetch current
+      // company names before the iframe starts its cloud reconciliation.
+      void reloadCompanies().then(()=>{if(state.tab==='tasks')render();}).catch(showError);
+    }
     return;
   }
   if(a==='prepare-annual-return'||a==='select-ar-company'){
