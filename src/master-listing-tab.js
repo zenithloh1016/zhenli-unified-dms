@@ -745,7 +745,8 @@ async function saveRepairedDates(){
     '<span>Source: '+esc(model.filename)+' / '+esc(model.worksheet)+'</span></div>'+
     '<div class="ml-toolbar"><label>Search company or any field <input id="ml-search" type="search" value="'+esc(state.search)+'" placeholder="Search company name, number or details"></label>'+
     act('Search','ml-search-do','','secondary')+act('Clear','ml-search-clear','','secondary')+
-    act('Sync missing company folders','ml-sync','','secondary')+act('Sync from Documents','ml-pull-documents','','secondary')+'</div>'+
+    act('Sync missing company folders','ml-sync','','secondary')+act('Sync from Documents','ml-pull-documents','','secondary')+
+    act('Sync Company Names','ml-sync-names','','secondary')+'</div>'+
     (state.fullScreen?'<p class="ml-fullscreen-help">Full-screen table · all '+visible.length+' information columns · scroll right or down to browse.</p>':
     '<div class="ml-columns-nav">'+act('← Columns','ml-prev-cols','','secondary')+
     '<span>Columns '+(first+1)+'–'+end+' of '+visible.length+'</span>'+
@@ -853,6 +854,17 @@ function renderEditor(){
   if(action==='ml-search-do'){state.search=document.getElementById('ml-search')?.value||'';state.page=0;onRender?.();return true;}
   if(action==='ml-search-clear'){state.search='';state.page=0;onRender?.();return true;}
   if(action==='ml-sync'){asyncRun(syncDocuments);return true;}
+  if(action==='ml-sync-names'){
+    asyncRun(async()=>{
+      await refreshCompanies?.();
+      const outcome=await reconcileRenamedCompanyNames(getCompanies?.()||[]);
+      if(!outcome.renamed&&!outcome.conflicts){
+        state.status='Company names checked against Documents by SSM registration number. No differences found.';
+        onRender?.();
+      }
+    });
+    return true;
+  }
   if(action==='ml-pull-documents'){asyncRun(async()=>{await reconcileOrphanedCompanies(getCompanies?.()||[]);await syncDocumentCompanies(getCompanies?.()||[]);});return true;}
   if(action==='ml-documents'){openCompany?.(id);return true;}
   return false;
