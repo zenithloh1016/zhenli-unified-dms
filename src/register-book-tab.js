@@ -882,7 +882,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
      const merged=mergeRegisterBooks(existing,incoming);
      ensureChargeRegister(merged.book);
      skipped+=merged.skipped;
-     if(merged.added){
+     if(merged.added||merged.metadataChanged){
       const {updated,syncError}=await writeBook(merged.book,{expectedUpdatedAt:existing?.updatedAt||null,baseBook:existing});
       if(syncError)failed.push(row.company.name+' Annual Return auto-sync: '+syncError);
       added+=merged.added;saved++;
