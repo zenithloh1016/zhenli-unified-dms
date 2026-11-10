@@ -1054,7 +1054,13 @@ ROOT.addEventListener('click', event=>{
     const nextTab=a.slice(4);
     // Drafts are saved as edits are made; no JSON export is needed before switching modules.
     if(state.tab==='statutory-registers' && nextTab!=='statutory-registers' && !registerBookUI.canLeave())return;
-    state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;if(state.tab!=='annual-return')state.arFullscreen=false;render();
+    state.tab=nextTab;if(state.tab!=='signing')state.signingFullscreen=false;if(state.tab!=='annual-return')state.arFullscreen=false;
+    if(nextTab==='tasks'){
+      // Do not mount the iframe until it has the latest Documents company list.
+      void reloadCompanies().then(()=>{if(state.tab==='tasks')render();}).catch(showError);
+      return;
+    }
+    render();
     if(nextTab==='master-listing'){
       // Repair names changed before the rename queue existed, including Excel
       // rows whose SSM number omits the old number shown in Documents.
@@ -1073,11 +1079,7 @@ ROOT.addEventListener('click', event=>{
         await reloadStatutoryDeadlines(true);
       })().catch(showError);
     }
-    if(nextTab==='tasks'){
-      // Task Hub's original IDs are independent from Documents; fetch current
-      // company names before the iframe starts its cloud reconciliation.
-      void reloadCompanies().then(()=>{if(state.tab==='tasks')render();}).catch(showError);
-    }
+
     return;
   }
   if(a==='prepare-annual-return'||a==='select-ar-company'){
