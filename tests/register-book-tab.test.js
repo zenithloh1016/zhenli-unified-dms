@@ -55,13 +55,14 @@ test('initializes only missing company statutory registers with the same editabl
  assert(created.sheets.find(s=>s.name==='Register of Charges').rows[0].includes('Date of Discharge'));
  assert(created.sheets.filter(s=>s.name!=='Company Details').every(s=>s.rows.length===1),'do not invent any statutory particulars');
  const info=created.sheets.find(s=>s.name==='Company Details');
- assert.deepEqual(info.rows.slice(0,6).map(r=>r[0]),['Company Name:','Company No.:','Last update:',
+ assert.deepEqual(info.rows.map(r=>r[0]),['Company Name:','Former Company Name:','Company No.:' ,'Last update:',
   'Date of Incorporation:','Date of Cosec Appointment:','Registered Address:']);
- assert(info.rows.some(r=>r[0]==='Number of Ordinary Shares:'&&r[1]===''));
- assert(info.rows.some(r=>r[0]==='Ordinary Share Capital (recorded amount paid):'&&r[1]===''));
+ assert.equal(info.rows.length,7,'Company Details must end at Registered Address');
+ assert(info.rows.every(r=>!/^(?:Number of|Ordinary Share Capital|Preference Share Capital)/i.test(r[0])));
  assert.equal(info.rows[0][1],'BETA SDN BHD');
- assert.equal(info.rows[1][1],'202609876543');
- assert(info.rows.slice(2).every(row=>row[1]===''));
+ assert.equal(info.rows[1][1],'','unknown former name must not be invented');
+ assert.equal(info.rows[2][1],'202609876543');
+ assert(info.rows.slice(3).every(row=>row[1]===''));
  await tab.load(true);
  assert.equal(written.filter(p=>p==='u1/statutory-registers/c2.json').length,1,'repeat refresh must be idempotent');
  await tab.openCompany('c2');
