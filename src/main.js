@@ -1451,7 +1451,8 @@ window.addEventListener('message',event=>{
     const book=JSON.parse(await data.text());
     if(state.user?.id!==user.id||state.arSelectedCompanyId!==company.id||
        state.tab!=='annual-return')throw Error('Company changed while loading. Try again.');
-    const payload=combinedRegisterSnapshot(book,{companyId:company.id,
+    const visibleBook=currentCompanyRegisterView(book,company);
+    const payload=combinedRegisterSnapshot(visibleBook,{companyId:company.id,
      companyName:company.name,registrationNo:company.registration_no||''});
     reply(true,payload,'');
    })().catch(error=>reply(false,null,error.message||error));
