@@ -18,15 +18,14 @@ test('every new company has Company Details first in tabs and combined PDF',()=>
  assert.equal(buildCombinedRegisters(b,{showBlanks:true})[0].title,'Company Details');
  const page=buildGroupedRegister(b,pi,{showBlanks:true});
  const fields=page.blocks.filter(x=>x.type==='field');
- assert.deepEqual(fields.slice(0,6).map(x=>x.label),[
-  'Company Name','Company No.','Last update','Date of Incorporation',
-  'Date of Cosec Appointment','Registered Address'
+ assert.deepEqual(fields.map(x=>x.label),[
+  'Company Name','Former Company Name','Company No.','Last update',
+  'Date of Incorporation','Date of Cosec Appointment','Registered Address'
  ]);
- assert.deepEqual(fields.slice(0,6).map(x=>x.value),[
-  co.name,co.registration_no,'','','',''
+ assert.deepEqual(fields.map(x=>x.value),[
+  co.name,'',co.registration_no,'','','',''
  ]);
- assert(fields.some(x=>x.label==='Number of Ordinary Shares'&&x.value===''));
- assert(fields.some(x=>x.label==='Ordinary Share Capital (recorded amount paid)'&&x.value===''));
+ assert(!fields.some(x=>/Share Capital|Number of Ordinary Shares/i.test(x.label)));
  const html=renderStatutoryRegisterDocument(b,pi,{showBlanks:true});
  assert(html.includes(co.name));
  assert(html.includes('Date of Cosec Appointment'));
@@ -48,9 +47,9 @@ test('imported Master company details keep values, add missing fields, and remai
  assert.deepEqual(b.sheets[0].rows.slice(0,before.length),before);
  const details=buildGroupedRegister(b,0,{showBlanks:true});
  const fields=details.blocks.filter(x=>x.type==='field');
- assert.deepEqual(fields.map(x=>x.label).slice(0,6),[
-  'Company Name','Company No.','Last update','Date of Incorporation',
-  'Date of Cosec Appointment','Registered Address'
+ assert.deepEqual(fields.map(x=>x.label),[
+  'Company Name','Former Company Name','Company No.','Last update',
+  'Date of Incorporation','Date of Cosec Appointment','Registered Address'
  ]);
  assert(fields.some(x=>x.label==='Registered Address'&&x.value==='ORIGINAL REGISTERED OFFICE'));
  assert(fields.some(x=>x.label==='Company Name'&&x.value==='ORIGINAL COMPANY NAME'));
