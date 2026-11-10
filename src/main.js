@@ -92,8 +92,42 @@ const masterListingUI=createMasterListingTab({
  notify:message=>{if(message)state.notice=message;}
 });
 masterListingUI.afterRender(()=>render());
+
+// Older company portfolios may have a verified Former Name in Master Listing
+// but no former_names column history yet. Use only an exact, unique listing
+// match; never infer it from the old filename or a previous heading.
+let formerListingCacheModel=null;
+const formerListingCache=new Map();
+function withKnownFormerCompanyName(company){
+ if(!company?.id)return company;
+ if(Array.isArray(company.former_names)&&company.former_names.some(x=>String(x||'').trim()))
+  return company;
+ const model=masterListingUI.model;
+ if(!model)return company;
+ if(formerListingCacheModel!==model){
+  formerListingCacheModel=model;formerListingCache.clear();
+ }
+ const key=String(company.id)+'|'+String(company.name)+'|'+String(company.registration_no||'');
+ if(!formerListingCache.has(key)){
+  let value='';
+  try{
+   const details=annualReturnParticularsFromMasterListing(model,{
+    name:company.name,registrationNo:company.registration_no||''
+   });
+   value=String(details?.fields?.['Former Name']||'').trim()
+    .replace(/^F\.?K\.?A\.?\s*/i,'');
+   if(value.length<3||value.length>250||
+     /^(?:N\/?A|NIL|NONE|NOT APPLICABLE|UNKNOWN|-)$/i.test(value)||
+     value.toUpperCase()===String(company.name).trim().toUpperCase())value='';
+  }catch(error){console.warn('Unable to compare former name from Master Listing:',error);}
+  formerListingCache.set(key,value);
+ }
+ const verified=formerListingCache.get(key);
+ return verified?{...company,former_names:[verified]}:company;
+}
 const registerBookUI=createRegisterBookTab({
- db,getUser:()=>state.user,getCompanies:()=>state.companies,
+ db,getUser:()=>state.user,
+ getCompanies:()=>state.companies.map(withKnownFormerCompanyName),
  onSaved:async({companyId,previousBook,updatedBook})=>{
   const user=state.user,company=state.companies.find(c=>c.id===companyId);
   if(!user||!company||company.user_id!==user.id)
@@ -718,7 +752,7 @@ function renderOverview() {
 function sendAnnualReturnCompanyList(){
  const frame=ROOT.querySelector('#zh-annual-return-frame');
  if(!frame||!state.user)return;
- const companies=state.companies.slice(0,5000).map(c=>({
+ const companies=state.companies.slice(0,5000).map(withKnownFormerCompanyName).map(c=>({
   id:String(c.id),name:String(c.name||''),registrationNo:String(c.registration_no||''),
   formerName:Array.isArray(c.former_names)&&c.former_names.length?
     String(c.former_names[c.former_names.length-1]):''
@@ -744,7 +778,8 @@ async function sendAnnualReturnDraftList(){
 }
 function sendAnnualReturnCompany(){
  const frame=ROOT.querySelector('#zh-annual-return-frame');
- const company=state.companies.find(c=>c.id===state.arSelectedCompanyId);
+ const record=state.companies.find(c=>c.id===state.arSelectedCompanyId);
+ const company=record&&withKnownFormerCompanyName(record);
  if(!frame||!company||!state.user)return;
  frame.contentWindow?.postMessage({type:'ZHENLI_DMS_AR_SELECT_COMPANY',company:{
   id:String(company.id),name:String(company.name||''),registrationNo:String(company.registration_no||''),
@@ -1419,8 +1454,9 @@ window.addEventListener('message',event=>{
      const match={name:company.name,registrationNo:company.registration_no||''};
      const auditor=auditorFromMasterListing(model,match);
      const particulars=annualReturnParticularsFromMasterListing(model,match);
-     const former=Array.isArray(company.former_names)&&company.former_names.length?
-       String(company.former_names[company.former_names.length-1]):'';
+     const named=withKnownFormerCompanyName(company);
+     const former=Array.isArray(named.former_names)&&named.former_names.length?
+       String(named.former_names[named.former_names.length-1]):'';
      // The current Documents company name history supersedes an outdated
      // private Master Listing cell when preparing the Annual Return PDF.
      if(former&&particulars)
@@ -1451,7 +1487,7 @@ window.addEventListener('message',event=>{
     const book=JSON.parse(await data.text());
     if(state.user?.id!==user.id||state.arSelectedCompanyId!==company.id||
        state.tab!=='annual-return')throw Error('Company changed while loading. Try again.');
-    const visibleBook=currentCompanyRegisterView(book,company);
+    const visibleBook=currentCompanyRegisterView(book,withKnownFormerCompanyName(company));
     const payload=combinedRegisterSnapshot(visibleBook,{companyId:company.id,
      companyName:company.name,registrationNo:company.registration_no||''});
     reply(true,payload,'');
