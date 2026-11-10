@@ -81,7 +81,7 @@ function mergeCompanies(current,dms){
   for(const original of Array.isArray(current)?current:[]){
     const live=dmsById.get(String(original.id));
     const updated=live?{...original,name:live.name}:original;
-    if(live&&hubName(original.name)!==hubName(live.name)){
+    if(live&&String(original.name)!==String(live.name)){
       const oldKey=hubName(original.name);
       if(oldKey)renames.set(oldKey,live.name);
       renamed++;
@@ -112,6 +112,7 @@ function mergeHubPayload(current,dms){
   });
   return {payload:{...current,companies:merged.entries,tasks},
     changed:!!(merged.added||merged.renamed||
+     merged.entries.length!==current.companies.length+merged.added||
      tasks.some((task,i)=>task!==current.tasks[i]))};
 }
 
