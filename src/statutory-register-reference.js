@@ -222,7 +222,9 @@ export function companyDetailIndex(label){
  const x=norm(label);
  const aliases=[
   ['company name'],
-  ['former company name','former name','previous company name','previous name','old company name','old name'],
+  ['former company name','former company names','former name','former names',
+   'previous company name','previous company names','previous name','previous names',
+   'old company name','old name','formerly known as','f k a','fka'],
   ['company no','company number','company registration no','company registration number','registration no'],
   ['last update','last updated','date of last update'],
   ['date of incorporation','incorporation date','date of registration','registration date'],
