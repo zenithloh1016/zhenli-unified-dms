@@ -292,7 +292,7 @@ export function buildIndependentRegister(book,sheetIndex,{showBlanks=false}={}){
   if(!profile.some(f=>companyDetailIndex(f.label)===1)){
    const names=book.formerNames||[];
    const former=Array.isArray(names)&&names.length?
-    'F.K.A. '+String(names[names.length-1]).trim():'';
+    String(names[names.length-1]).trim().replace(/^F\.?K\.?A\.?\s*/i,''):'';
    result.blocks.push({type:'field',label:'Former Company Name',
     value:former,readOnly:true,sheetIndex,row:-1,col:-1});
   }
