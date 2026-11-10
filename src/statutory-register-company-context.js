@@ -10,11 +10,15 @@ import {formatFormerCompanyName,companyDetailIndex,referenceKind} from './statut
 // PDF/Excel line breaks or full-width separators. Remove only the descriptive
 // F.K.A. marker, not the company's actual registered name.
 const fkaPrefix=/^F\s*\.?\s*K\s*\.?\s*A\s*\.?\s*[:=–—-]?\s*/i;
-const cleanName=value=>String(value??'').normalize('NFKC')
- .replace(/\u00a0/g,' ').trim()
- .replace(/^\(\s*(?=F\s*\.?\s*K\s*\.?\s*A)/i,'')
- .replace(fkaPrefix,'')
- .replace(/\)\s*$/,'').trim();
+const cleanName=value=>{
+ const source=String(value??'').normalize('NFKC').replace(/\u00a0/g,' ').trim();
+ const wrapped=/^\(\s*F\s*\.?\s*K\s*\.?\s*A/i.test(source);
+ const unwrapped=wrapped?source.replace(/^\(\s*/,''):source;
+ const stripped=unwrapped.replace(fkaPrefix,'').trim();
+ // An ordinary registered name may legitimately end with "(MALAYSIA)".
+ // Remove a closing parenthesis only when the F.K.A. marker was wrapped.
+ return wrapped?stripped.replace(/\)\s*$/,'').trim():stripped;
+};
 const validName=value=>{
  const name=cleanName(value);
  return name.length>=3&&name.length<=250&&
