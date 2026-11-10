@@ -249,6 +249,8 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    '<div class="rb-editor-actions">'+act('Save Changes','sr-save','','primary')+
      (state.conflict?act('Overwrite Latest (Back Up First)','sr-force-save','','secondary'):'')+
     act('Previous Versions','sr-history')+
+    (state.originalDocs.some(d=>/\.xlsx$/i.test(String(d.name||'')))?
+     act('Recheck Original Excel Former Name','sr-recheck-former','','secondary'):'')+
     (state.dirty?act('Discard Unsaved Edits','sr-discard'):'')+
     (sheet&&!isManagerRegister(sheet.name)?act('Export This Register PDF','sr-pdf','','secondary'):'')+
     act('Export Combined Registers PDF','sr-pdf-combined','','secondary')+
@@ -424,6 +426,61 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   return null;
  }
  function command(action,id='',submitted){
+  if(action==='sr-recheck-former'){
+   if(state.dirty){
+    status('', 'Save or discard pending changes before rechecking the original Excel. No edits were overwritten.');
+    return true;
+   }
+   if(!state.book||!state.selectedId||state.loading||state.saving)return true;
+   const cid=state.selectedId,uid=getUser?.()?.id;
+   if(!uid)return true;
+   state.loading=true;status('Checking preserved Register Book Excel for a recorded former company name…');
+   void (async()=>{
+    try{
+     const files=state.originalDocs?.length?state.originalDocs:await legacyOriginals(cid);
+     const source=await recoverFormerNameFromOriginalExcels(files,{storage,
+      onError:error=>console.warn('Original register Excel former-name check:',error)});
+     if(state.selectedId!==cid||getUser?.()?.id!==uid)return;
+     if(source.conflict){
+      status('Original Excel check completed.', 'Different former company names were found in the archived Excel files. Review the originals before changing the statutory record.');
+      return;
+     }
+     if(!source.name){
+      status('Checked '+source.scanned+' original Excel file(s); no former company name could be extracted.'+
+       (source.failed?' '+source.failed+' original Excel file(s) could not be read.':'')+
+       ' Verify the F.K.A. cell in the original workbook or provide the file for inspection.');
+      return;
+     }
+     const company=(getCompanies?.()||[]).find(co=>co.id===cid);
+     if(!company)return;
+     const existing=recordedFormerCompanyName(state.book);
+     const savedHistory=Array.isArray(company.former_names)?company.former_names.filter(Boolean):[];
+     if((existing&&existing.toUpperCase()!==source.name.toUpperCase())||
+       (savedHistory.length&&
+        savedHistory[savedHistory.length-1].toUpperCase()!==source.name.toUpperCase())){
+      status('Found '+source.name+' in the archived Excel.',
+       'A different former company name already exists in the saved register or Documents. Review the evidence manually; UNICOSEC has not overwritten either value.');
+      return;
+     }
+     if(existing&&existing.toUpperCase()===source.name.toUpperCase()){
+      status('Original Excel verified: '+source.name+'. The saved former company name already matches.');
+      return;
+     }
+     state.book=currentCompanyRegisterView({
+      ...state.book,formerNames:[...new Set([
+       ...(Array.isArray(state.book.formerNames)?state.book.formerNames:[]),
+       source.name
+      ])]
+     },company);
+     state.dirty=true;
+     status('Recovered Former Company Name: '+source.name+
+      '. Review Company Details, then select Save Changes to synchronise Documents and Annual Return.');
+    }catch(error){
+     status('', 'Original Register Book Excel check failed: '+String(error?.message||error));
+    }finally{state.loading=false;notify();}
+   })();
+   return true;
+  }
   if(action==='sr-text-cancel'){
    state.inputDialog=null;state.inputError='';notify();return true;
   }
