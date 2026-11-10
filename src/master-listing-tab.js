@@ -10,6 +10,7 @@ import {applyConstitutionDocumentEvidence} from './master-listing-constitution-s
 import {restoreHistoricalConstitutionStatuses} from './master-listing-constitution-history.js';
 import {PRE_AMENDMENT_MASTER_LISTING,isMasterListingRestored,restoredMasterListingSnapshot} from './master-listing-pre-amendment.js';
 import {applyUploadedConstitutionStatuses} from './master-listing-constitution-source.js';
+import {reconcileListingCompanyNames,registrationIdentity} from './company-name-reconciliation.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeText=value=>String(value??'').slice(0,15000);
@@ -549,10 +550,7 @@ async function saveRepairedDates(){
   if(state.error)throw Error('Cannot load the latest Master Listing: '+state.error);
   const model=state.model||manualListingTemplate();
   const nameKey=v=>String(v??'').normalize('NFKC').trim().replace(/\s+/g,' ').toUpperCase();
-  const regKey=v=>{
-   const s=nameKey(v);
-   return s==='N/A'?'':s.replace(/[^A-Z0-9]/g,'');
-  };
+  const regKey=registrationIdentity;
   const oldKey=nameKey(oldName),newKey=nameKey(newName),reg=regKey(registration_no);
   if(!newKey||newKey==='N/A')throw Error('Invalid renamed company name.');
   const oldRows=oldKey?model.rows.filter(r=>nameKey(companyData(model,r).name)===oldKey):[];
@@ -589,6 +587,37 @@ async function saveRepairedDates(){
    state.page=0;
    state.status='Company name synced from Documents: '+oldName+' → '+newName+'. All other fields retained; previous listing backed up.';
    return {changed:true};
+  }finally{state.saving=false;onRender?.();}
+ }
+
+ /**
+  * Repair names changed before rename notifications were installed, or by
+  * older mobile/desktop versions. A unique SSM registration number is required;
+  * Excel-only rows, ambiguous matches and all other columns are preserved.
+  */
+ async function reconcileRenamedCompanyNames(companies){
+  if(state.loading||state.saving)throw Error('Master Listing is busy. Retry name sync.');
+  if(!getUser?.()?.id)throw Error('Sign in to sync company names.');
+  await load(true);
+  if(state.error)throw Error('Cannot load latest Master Listing: '+state.error);
+  if(!state.model)return {renamed:0,matched:0,conflicts:0};
+  const result=reconcileListingCompanyNames(state.model,companies);
+  if(!result.renamed.length){
+    if(result.conflicts){
+      state.status=result.conflicts+' ambiguous registration match(es) require review. No Master Listing values were changed.';
+      onRender?.();
+    }
+    return {renamed:0,matched:result.matched,conflicts:result.conflicts};
+  }
+  state.saving=true;state.error='';
+  state.status='Backing up and updating '+result.renamed.length+' company names from Documents…';
+  onRender?.();
+  try{
+    await saveModel(result.model,{backup:true});
+    state.page=0;state.editIndex=null;
+    state.status=result.renamed.length+' company name(s) synced from Documents to Master Listing. All existing fields preserved; private backup saved.'+
+      (result.conflicts?' '+result.conflicts+' ambiguous row(s) skipped.':'');
+    return {renamed:result.renamed.length,matched:result.matched,conflicts:result.conflicts};
   }finally{state.saving=false;onRender?.();}
  }
 
@@ -858,5 +887,5 @@ function renderEditor(){
   return true;
  }
  const exitFullscreen=()=>{if(!state.fullScreen)return false;state.fullScreen=false;state.page=0;onRender?.();return true;};
- return {render,load,reset,onClick,onChange,onSubmit,afterRender,exitFullscreen,syncDocumentCompanies,syncRenamedDocumentCompany,syncConstitutionDocuments,removeDeletedCompany,reconcileOrphanedCompanies,get model(){return state.model;},get state(){return state;}};
+ return {render,load,reset,onClick,onChange,onSubmit,afterRender,exitFullscreen,syncDocumentCompanies,syncRenamedDocumentCompany,reconcileRenamedCompanyNames,syncConstitutionDocuments,removeDeletedCompany,reconcileOrphanedCompanies,get model(){return state.model;},get state(){return state;}};
 }
