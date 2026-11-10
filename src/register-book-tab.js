@@ -427,10 +427,8 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  }
  function command(action,id='',submitted){
   if(action==='sr-recheck-former'){
-   if(state.dirty){
-    status('', 'Save or discard pending changes before rechecking the original Excel. No edits were overwritten.');
-    return true;
-   }
+   // This is an additive lookup. Keep all unsaved statutory edits and never
+   // overwrite a conflicting Former Name value found in the working register.
    if(!state.book||!state.selectedId||state.loading||state.saving)return true;
    const cid=state.selectedId,uid=getUser?.()?.id;
    if(!uid)return true;
