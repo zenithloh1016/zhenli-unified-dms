@@ -3,7 +3,7 @@
  * SDN. BHD. Register Book. These are schema definitions ONLY; company-specific
  * names, shares, addresses, dates and transactions must never be copied.
  */
-// Company Details is limited to these six particulars, ending with the
+// Company Details uses six current particulars plus the Former Company Name, ending with the
 // Registered Address. Share-capital data belongs in the relevant statutory
 // registers/Annual Return and is not displayed in this overview.
 export const COMPANY_DETAILS_FIELDS=[
@@ -14,7 +14,7 @@ export const COMPANY_DETAILS_FIELDS=[
 export function formatFormerCompanyName(company){
  const names=company?.former_names||company?.formerNames||[];
  const last=Array.isArray(names)?names[names.length-1]:'';
- const raw=String(last||company?.formerCompanyName||'').trim().replace(/^F\\.?K\\.?A\\.?\\s*/i,'');
+ const raw=String(last||company?.formerCompanyName||'').trim().replace(/^F\.?K\.?A\.?\s*/i,'');
  return raw?'F.K.A. '+raw:'';
 }
 export function createCompanyDetailsSheet(company){
