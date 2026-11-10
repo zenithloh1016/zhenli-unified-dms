@@ -7,7 +7,7 @@
 export function syncFormerNameField(document,formerName){
  const value=String(formerName||'').trim();
  if(!value||!document||!Array.isArray(document.particulars))return false;
- const raw=value.replace(/^F\\.?K\\.?A\\.?\\s*/i,'').trim();
+ const raw=value.replace(/^F\.?K\.?A\.?\s*/i,'').trim();
  if(!raw)return false;
  const official='F.K.A. '+raw;
  const field=document.particulars.find(x=>x.type==='field'&&x.en==='Former Name');
