@@ -7,13 +7,22 @@
 // Registered Address. Share-capital data belongs in the relevant statutory
 // registers/Annual Return and is not displayed in this overview.
 export const COMPANY_DETAILS_FIELDS=[
- 'Company Name','Company No.','Last update','Date of Incorporation',
- 'Date of Cosec Appointment','Registered Address'
+ 'Company Name','Former Company Name','Company No.','Last update',
+ 'Date of Incorporation','Date of Cosec Appointment','Registered Address'
 ];
+// The last recorded former name is the most recent, displayed only when known.
+export function formatFormerCompanyName(company){
+ const names=company?.former_names||company?.formerNames||[];
+ const last=Array.isArray(names)?names[names.length-1]:'';
+ const raw=String(last||company?.formerCompanyName||'').trim().replace(/^F\\.?K\\.?A\\.?\\s*/i,'');
+ return raw?'F.K.A. '+raw:'';
+}
 export function createCompanyDetailsSheet(company){
  return {name:'Company Details',rows:COMPANY_DETAILS_FIELDS.map((label,i)=>[
-  label+':',i===0?String(company?.companyName||company?.name||''):
-  i===1?String(company?.registrationNo||company?.registration_no||''):''
+  label+':',
+  i===0?String(company?.companyName||company?.name||''):
+  i===1?formatFormerCompanyName(company):
+  i===2?String(company?.registrationNo||company?.registration_no||''):''
  ])};
 }
 export const REFERENCE_FIELDS={
@@ -213,6 +222,7 @@ export function companyDetailIndex(label){
  const x=norm(label);
  const aliases=[
   ['company name'],
+  ['former company name','former name','previous company name','previous name','old company name','old name'],
   ['company no','company number','company registration no','company registration number','registration no'],
   ['last update','last updated','date of last update'],
   ['date of incorporation','incorporation date','date of registration','registration date'],
