@@ -15,7 +15,8 @@ import {mergeStatutoryRegisterEdits} from './statutory-register-conflict.js';
 import {Capacitor} from '@capacitor/core';
 import {savePdfToAndroidFiles} from './native-pdf-save.js';
 import {secretaryFromAnnualReturn,unanimousSecretaryReferences,mergeSecretaryIntoBook} from './statutory-secretary-sync.js';
-import {currentCompanyRegisterView} from './statutory-register-company-context.js';
+import {currentCompanyRegisterView,recordedFormerCompanyName} from './statutory-register-company-context.js';
+import {recoverFormerNameFromOriginalExcels} from './statutory-register-original-former-name.js';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const act=(label,action,id='',style='secondary')=>'<button type="button" class="btn '+style+'" data-action="'+action+'" data-id="'+esc(id)+'">'+esc(label)+'</button>';
@@ -182,10 +183,30 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   state.loading=true;state.error='';state.message='Loading '+company.name+' registers…';notify();
   try{
    const [saved,originalDocs]=await Promise.all([remoteBook(uid,id),legacyOriginals(id)]);
-   const book=currentCompanyRegisterView(saved||makeRegisterBook(company),company);
+   let sourceBook=saved||makeRegisterBook(company);
+   let formerRecovered='',recoveryConflict=false;
+   const hasVerifiedHistory=Array.isArray(company.former_names)&&
+    company.former_names.some(name=>String(name||'').trim());
+   if(!hasVerifiedHistory&&!recordedFormerCompanyName(sourceBook)){
+    // The original Excel is a separate document from the current editable
+    // JSON. Older imports may have lost the former-name field entirely.
+    // Read only the selected company's authenticated archived .xlsx files.
+    const recovered=await recoverFormerNameFromOriginalExcels(originalDocs,{
+     storage,onError:error=>console.warn('Original Register Book name extraction:',error)
+    });
+    formerRecovered=recovered.name||'';
+    recoveryConflict=!!recovered.conflict;
+    if(formerRecovered)sourceBook={
+     ...sourceBook,formerNames:[...new Set([
+      ...(Array.isArray(sourceBook.formerNames)?sourceBook.formerNames:[]),
+      formerRecovered
+     ])]
+    };
+   }
+   const book=currentCompanyRegisterView(sourceBook,company);
    const chargesAdded=ensureChargeRegister(book);
    const referenceAdded=ensureReferenceParticulars(book);
-   const changed=chargesAdded||referenceAdded;
+   const changed=chargesAdded||referenceAdded||!!formerRecovered;
    if(getUser?.()?.id!==uid)return;
    state.selectedId=id;state.book=book;state.originalUpdatedAt=saved?.updatedAt||null;
     state.baseBook=structuredClone(saved||book);state.conflict=false;state.originalDocs=originalDocs;
@@ -197,7 +218,12 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    state.dirty=!!changed;
    state.sheetIndex=visibleRegisterIndices(book)[0]??0;
    state.showBlankFields=true; // Always display the reference particulars, including blanks.
-   state.message=changed?'Missing MAJUKAYA ENTITI reference fields were added as blank editable particulars. Review and Save Changes to preserve them with a private version backup.':
+   state.message=formerRecovered?
+    'Recovered Former Company Name from the archived original Register Book Excel: '+formerRecovered+
+    '. Verify the name and choose Save Changes to preserve it with a private version backup.':
+    recoveryConflict?
+    'Different former company names appear in archived Register Book Excel files. Review the originals before entering a name; nothing was overwritten.':
+    changed?'Missing MAJUKAYA ENTITI reference fields were added as blank editable particulars. Review and Save Changes to preserve them with a private version backup.':
     book.sourceFile==='Manual entry'?'Register templates follow the MAJUKAYA ENTITI reference. Enter actual particulars before relying on them.':'Statutory registers loaded in MAJUKAYA ENTITI reference sequence.';
   }catch(error){state.error=String(error?.message||error);}
   finally{state.loading=false;notify();}
