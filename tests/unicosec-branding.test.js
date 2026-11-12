@@ -31,8 +31,12 @@ test('UNICOSEC is Android display name; package IDs do not change to preserve ex
  assert.match(workflow,/name: UNICOSEC-\$\{\{ github\.run_number \}\}/);
 });
 
-test('UNICOSEC branding remains in statutory PDFs while Annual Return client-review PDFs use ZHENLI company branding',()=>{
- contains('src/statutory-register-pdf.js','UNICOSEC · STATUTORY REGISTERS');
+test('statutory register PDF headers and footers use ZHENLI while non-PDF branding stays unchanged',()=>{
+ const pdf=file('src/statutory-register-pdf.js');
+ assert.match(pdf,/text\('ZHENLI CONSULTANCY SERVICES SDN BHD',LM,31,C\.blue\)/);
+ assert.match(pdf,/text\('STATUTORY REGISTERS · COMPANY PARTICULARS',LM,44,C\.blue\)/);
+ assert.match(pdf,/text\('ZHENLI CONSULTANCY SERVICES SDN BHD · STATUTORY REGISTERS',LM,H-35,C\.muted\)/);
+ assert.doesNotMatch(pdf,/UNICOSEC/);
  contains('src/statutory-register-annual-ui.js','UNICOSEC · COMPANY STATUTORY REGISTERS');
  contains('annual-return/src/pdf.js','ZHENLI CONSULTANCY SERVICES SDN. BHD. · ANNUAL RETURN PARTICULARS');
  contains('annual-return/src/pdf.js','class="pdf-brand-name">ZHENLI CONSULTANCY SERVICES SDN. BHD.');
