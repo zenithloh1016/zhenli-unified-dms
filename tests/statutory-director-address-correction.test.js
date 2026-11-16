@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {applyDirectorAddressCorrections} from '../src/statutory-director-address-correction.js';
+import {applyDirectorAddressCorrections,proposeDirectorAddressCorrections} from '../src/statutory-director-address-correction.js';
 
 const correction={fullName:'Sample Director',identificationNo:'1234',
  previousAddress:'NO. 75, JALAN SAMPLE, 30000 IPOH, PERAK',
@@ -45,4 +45,24 @@ test('does not touch non-directors sheets',()=>{
   ['Sample Director','1234','NO. 75, JALAN SAMPLE, 30000 IPOH, PERAK']
  ]}]};
  assert.equal(applyDirectorAddressCorrections(book,[correction]).changed,0);
+});
+
+
+test('proposes only a Director whose NRIC and street match the saved Annual Return',()=>{
+ const book={sheets:[{name:'Register of Directors',rows:[
+  ['Director Name','Identification No.','Residential Address','Service Address'],
+  ['Sample Director','1234','NO. 75, JALAN SAMPLE, 30000 IPOH, PERAK','PLOT 1, ROAD']
+ ]}]};
+ const draft={particulars:[{en:'DIRECTOR 1',value:''},
+  {en:'Full Name',value:'Sample Director'},
+  {en:'NRIC / Passport No.',value:'1234'},
+  {en:'Residential Address',value:'NO. 73, JALAN SAMPLE, 30000 IPOH, PERAK, MALAYSIA'},
+  {en:'COMPANY SECRETARY',value:''}]};
+ const proposals=proposeDirectorAddressCorrections(book,draft);
+ assert.equal(proposals.length,1);
+ assert.equal(proposals[0].fullName,'Sample Director');
+ assert.equal(applyDirectorAddressCorrections(book,proposals).changed,1);
+ const otherStreet={particulars:draft.particulars.map(x=>x.en==='Residential Address'?
+  {...x,value:'NO. 73, DIFFERENT ROAD, 30000 IPOH, PERAK'}:x)};
+ assert.equal(proposeDirectorAddressCorrections(book,otherStreet).length,0);
 });
