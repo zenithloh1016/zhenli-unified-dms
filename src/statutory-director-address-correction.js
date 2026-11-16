@@ -178,6 +178,7 @@ function registerScope(name){
  const text=tidy(name).toLowerCase();
  if(/^register (?:of|or) directors?\b/.test(text))return 'directors';
  if(/^register (?:of|or) (?:beneficial owners?|bo)\b/.test(text))return 'beneficialOwners';
+ if(/^register (?:of|or) secretar(?:y|ies)\b/.test(text))return 'secretaries';
  if(/^register (?:of|or) members?\b/.test(text))return 'members';
  return '';
 }
