@@ -147,3 +147,179 @@ export function proposeDirectorAddressCorrections(book, draft) {
   }
   return proposals;
 }
+
+
+/**
+ * Unified person/identity residential-address correction across the user's
+ * editable Registers of Directors, Members and Beneficial Owners. Original
+ * archived Excel and unrelated service/business addresses are not rewritten.
+ *
+ * Only a house-number mismatch with an otherwise identical full street,
+ * town, postcode and state can be suggested. All writes happen through the
+ * existing user-authenticated register save + private history mechanism.
+ */
+const personNames=new Set([
+ 'name','full name','director name','name of director','name of the director',
+ 'member name','members name','shareholder name','shareholders name',
+ 'beneficial owner name','beneficial owners name','name of beneficial owner',
+ 'name of bo','bo name','individual full name'
+]);
+const personIds=new Set([
+ 'identification no','identification number','identification registration no',
+ 'nric no','nric number','nric passport no','nric passport number',
+ 'nric passport no of individual','passport no','passport number',
+ 'ic no','ic number','ic no passport no','identity card no'
+]);
+const personResidences=new Set([
+ 'residential address','residence address','residential correspondence address',
+ 'individual residential correspondence address','residential address of director'
+]);
+function registerScope(name){
+ const text=tidy(name).toLowerCase();
+ if(/^register (?:of|or) directors?\b/.test(text))return 'directors';
+ if(/^register (?:of|or) (?:beneficial owners?|bo)\b/.test(text))return 'beneficialOwners';
+ if(/^register (?:of|or) members?\b/.test(text))return 'members';
+ return '';
+}
+function residenceLabel(scope,label){
+ const normalized=labelKey(label);
+ return personResidences.has(normalized)||
+  (scope==='members' && normalized==='address');
+}
+function houseParts(value) {
+ const match=/^NO\s+(\d+)\s+(.+)$/.exec(addressKey(value));
+ if(!match)return null;
+ return {number:match[1],location:match[2]};
+}
+function candidateChange(fields,scope,candidates){
+ const person=fields.find(field=>personNames.has(labelKey(field.label)));
+ const identity=fields.find(field=>personIds.has(labelKey(field.label)));
+ const address=fields.find(field=>residenceLabel(scope,field.label));
+ if(!person?.value||!identity?.value||!address?.value)return null;
+ const canonical=(candidates||[]).find(item=>
+  key(item.fullName)===key(person.value)&&
+  key(item.identificationNo)===key(identity.value));
+ if(!canonical?.newAddress)return null;
+ const before=String(address.value||'');
+ const old=houseParts(before),next=houseParts(canonical.newAddress);
+ if(!old||!next||old.number===next.number||old.location!==next.location)return null;
+ const originalCell=String(address.cellValue??address.value);
+ const replacement=originalCell.replace(/^(\s*NO\.?\s*)\d+\b/i,(_entire,prefix)=>prefix+next.number);
+ if(replacement===originalCell)return null;
+ return {row:address.row,col:address.col,oldCell:originalCell,newCell:replacement,
+  sheet:scope,fullName:String(person.value),identificationNo:String(identity.value),
+  oldAddress:before,newAddress:String(canonical.newAddress)};
+}
+
+export function planPersonResidentialAddressUpdates(book,candidates){
+ const planned=[],visited=new Set();
+ function add(fields,scope,si,sheetName){
+  const edit=candidateChange(fields,scope,candidates);
+  if(!edit)return;
+  const coordinate=si+':'+edit.row+':'+edit.col;
+  if(visited.has(coordinate))return;
+  visited.add(coordinate);
+  planned.push({...edit,sheetIndex:si,sheetName});
+ }
+ for(let si=0;si<(book?.sheets||[]).length;si++){
+  const sheet=book.sheets[si],scope=registerScope(sheet.name);
+  if(!scope)continue;
+  const rows=sheet.rows||[];
+  // Table-style Excel registers: named columns followed by individual rows.
+  for(let hi=0;hi<Math.min(rows.length,45);hi++){
+   const headings=(rows[hi]||[]).map(labelKey);
+   if(!headings.some(x=>personNames.has(x))||
+      !headings.some(x=>personIds.has(x))||
+      !headings.some(x=>residenceLabel(scope,x)))continue;
+   const nameCol=headings.findIndex(x=>personNames.has(x));
+   if(nameCol>2)continue;
+   for(let ri=hi+1;ri<rows.length;ri++){
+    const row=rows[ri]||[];
+    if(!row[nameCol]||personNames.has(labelKey(row[nameCol])))continue;
+    add(headings.map((label,col)=>({label,value:row[col],cellValue:row[col],row:ri,col})),
+      scope,si,sheet.name);
+   }
+   break;
+  }
+  // Multi-folio Members registers and legacy key/value Directors/BO layouts.
+  // A new explicit Name or ledger section ends the previous person's record.
+  for(let start=0;start<rows.length;start++){
+   const row=rows[start]||[];
+   const named=[];
+   for(let col=0;col<row.length-1;col++)
+    if(personNames.has(labelKey(row[col]))&&String(row[col+1]||'').trim())
+     named.push({col,personValue:row[col+1]});
+   if(!named.length)continue;
+   for(const person of named){
+    const fields=[{label:'Name',value:person.personValue,row:start,col:person.col+1}];
+    for(let ri=start;ri<Math.min(start+55,rows.length);ri++){
+     const r=rows[ri]||[];
+     if(ri>start && r.some((v,col)=>col<r.length-1&&
+       personNames.has(labelKey(v))&&String(r[col+1]||'').trim()))break;
+     if(ri>start && r.some(v=>/^(?:shares acquired|shares transferred)$/i.test(tidy(v))))break;
+     for(let col=0;col<r.length-1;col++){
+      const label=labelKey(r[col]);
+      if(!personIds.has(label)&&!residenceLabel(scope,label))continue;
+      const value=String(r[col+1]||'');
+      if(!value)continue;
+      let full=value;
+      if(residenceLabel(scope,label)){
+       for(let continuation=ri+1;continuation<Math.min(ri+8,rows.length);continuation++){
+        const next=rows[continuation]||[];
+        if(tidy(next[col])||!tidy(next[col+1]))break;
+        full+='\n'+next[col+1];
+       }
+      }
+      fields.push({label:r[col],value:full,cellValue:value,row:ri,col:col+1});
+     }
+    }
+    add(fields,scope,si,sheet.name);
+   }
+  }
+ }
+ return planned;
+}
+export function applyPersonResidentialAddressUpdates(book,candidates){
+ const changes=planPersonResidentialAddressUpdates(book,candidates);
+ if(!changes.length)return {book,changed:0,details:[]};
+ const updated=structuredClone(book);
+ for(const change of changes)
+  updated.sheets[change.sheetIndex].rows[change.row][change.col]=change.newCell;
+ return {book:updated,changed:changes.length,details:changes};
+}
+
+/**
+ * Extract consistent individual residential address records from existing
+ * Annual Return cloud drafts, filtered to the user-entered Director's name.
+ * A conflicting address for the same identification number is NOT guessed.
+ */
+export function directorAddressesFromAnnualReturnDrafts(drafts,requestedFullName){
+ const target=key(requestedFullName),seen=new Map(),conflicts=[];
+ if(!target)return {candidates:[],conflicts:[]};
+ for(const draft of drafts||[]){
+  const particulars=Array.isArray(draft?.payload?.particulars)?
+   draft.payload.particulars: Array.isArray(draft?.particulars)?draft.particulars:[];
+  for(let i=0;i<particulars.length;i++){
+   const heading=particulars[i];
+   if(!/^DIRECTOR\s+\d+$/i.test(tidy(heading?.en))||heading?.type!=='heading')continue;
+   const record={};
+   for(let j=i+1;j<particulars.length;j++){
+    const item=particulars[j],label=tidy(item?.en);
+    if(item?.type==='heading'||item?.type==='section')break;
+    if(label==='Full Name')record.fullName=item.value;
+    else if(label==='NRIC / Passport No.')record.identificationNo=item.value;
+    else if(label==='Residential Address')record.newAddress=item.value;
+   }
+   if(key(record.fullName)!==target||!key(record.identificationNo)||
+      !houseParts(record.newAddress))continue;
+   const id=key(record.identificationNo);
+   const previous=seen.get(id);
+   if(!previous){seen.set(id,record);continue;}
+   if(addressKey(previous.newAddress)!==addressKey(record.newAddress))
+    conflicts.push({fullName:record.fullName,identificationNo:record.identificationNo});
+  }
+ }
+ const conflictsIds=new Set(conflicts.map(x=>key(x.identificationNo)));
+ return {candidates:[...seen.values()].filter(x=>!conflictsIds.has(key(x.identificationNo))),
+  conflicts};
+}
