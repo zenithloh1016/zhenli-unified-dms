@@ -17,6 +17,7 @@ import {savePdfToAndroidFiles} from './native-pdf-save.js';
 import {secretaryFromAnnualReturn,unanimousSecretaryReferences,mergeSecretaryIntoBook} from './statutory-secretary-sync.js';
 import {currentCompanyRegisterView,recordedFormerCompanyName} from './statutory-register-company-context.js';
 import {recoverFormerNameFromOriginalExcels} from './statutory-register-original-former-name.js';
+import {applyDirectorAddressCorrections,proposeDirectorAddressCorrections} from './statutory-director-address-correction.js';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const act=(label,action,id='',style='secondary')=>'<button type="button" class="btn '+style+'" data-action="'+action+'" data-id="'+esc(id)+'">'+esc(label)+'</button>';
@@ -249,6 +250,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    '<div class="rb-editor-actions">'+act('Save Changes','sr-save','','primary')+
      (state.conflict?act('Overwrite Latest (Back Up First)','sr-force-save','','secondary'):'')+
     act('Previous Versions','sr-history')+
+    act('Check Director Address Against Annual Return','sr-check-director-address')+
     (state.originalDocs.some(d=>/\.xlsx$/i.test(String(d.name||'')))?
      act('Recheck Original Excel Former Name','sr-recheck-former','','secondary'):'')+
     (state.dirty?act('Discard Unsaved Edits','sr-discard'):'')+
@@ -425,7 +427,58 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   document.getElementById('sr-text-value')?.select();
   return null;
  }
+ async function checkDirectorAddressAgainstAnnualReturn(){
+  if(!state.book||!state.selectedId||state.loading||state.saving)return;
+  if(state.dirty){
+   status('Save Changes before checking Annual Return residential address corrections.',
+    'Unsaved edits were preserved. No cloud register has been changed.');
+   return;
+  }
+  const uid=getUser?.()?.id,cid=state.selectedId;
+  if(!uid)return;
+  state.loading=true;status('Comparing this company\'s Director register with its Annual Return draft…');
+  try{
+   const {data,error}=await db.from('annual_return_drafts').select('payload')
+    .eq('user_id',uid).eq('company_id',cid).maybeSingle();
+   if(error)throw Error('Could not load this company\'s Annual Return draft: '+error.message);
+   if(!data?.payload){status('No saved Annual Return draft exists for this company.');return;}
+   const latest=await remoteBook(uid,cid);
+   if(!latest){status('No saved Statutory Register exists for this company.');return;}
+   const proposals=proposeDirectorAddressCorrections(latest,data.payload);
+   if(!proposals.length){
+    status('No matching Director residential house-number corrections found between this company\'s saved registers and Annual Return. '+
+     'Other address differences must be reviewed manually.');
+    return;
+   }
+   const preview=proposals.slice(0,5).map(p=>p.fullName+'\nOld: '+
+    p.previousAddress.replace(/\s+/g,' ')+'\nNew: '+
+    p.newAddress.replace(/\s+/g,' ')).join('\n\n');
+   if(!window.confirm('Update '+proposals.length+' Director residential address record(s) for this company?\n\n'+
+    preview+(proposals.length>5?'\n\nMore matching records will also be updated.':'')+
+    '\n\nOnly the residential house number changes; the current private register will be backed up.')){
+    status('Correction cancelled. No saved register was changed.');return;
+   }
+   if(state.selectedId!==cid||getUser?.()?.id!==uid)throw Error('Selection changed before correction.');
+   const change=applyDirectorAddressCorrections(latest,proposals);
+   if(!change.changed){status('No change was required in the saved register.');return;}
+   const {updated,syncError}=await writeBook(change.book,{
+    expectedUpdatedAt:latest.updatedAt,baseBook:latest
+   });
+   if(state.selectedId!==cid||getUser?.()?.id!==uid)return;
+   state.book=updated;state.baseBook=structuredClone(updated);
+   state.originalUpdatedAt=updated.updatedAt;state.conflict=false;state.dirty=false;
+   status('Corrected '+change.changed+' Director residential address cell(s) and saved private previous version.'+
+    (syncError?' Automatic Annual Return reconciliation needs review.':''),syncError||'');
+  }catch(error){
+   status('No confirmed correction was completed.',String(error?.message||error));
+  }finally{state.loading=false;notify();}
+ }
+
  function command(action,id='',submitted){
+  if(action==='sr-check-director-address'){
+   void checkDirectorAddressAgainstAnnualReturn();
+   return true;
+  }
   if(action==='sr-recheck-former'){
    // This is an additive lookup. Keep all unsaved statutory edits and never
    // overwrite a conflicting Former Name value found in the working register.
