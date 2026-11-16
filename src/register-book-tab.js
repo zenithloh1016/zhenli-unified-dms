@@ -17,7 +17,7 @@ import {savePdfToAndroidFiles} from './native-pdf-save.js';
 import {secretaryFromAnnualReturn,unanimousSecretaryReferences,mergeSecretaryIntoBook} from './statutory-secretary-sync.js';
 import {currentCompanyRegisterView,recordedFormerCompanyName} from './statutory-register-company-context.js';
 import {recoverFormerNameFromOriginalExcels} from './statutory-register-original-former-name.js';
-import {applyDirectorAddressCorrections} from './statutory-director-address-correction.js';
+import {applyDirectorAddressCorrections,proposeDirectorAddressCorrections} from './statutory-director-address-correction.js';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const act=(label,action,id='',style='secondary')=>'<button type="button" class="btn '+style+'" data-action="'+action+'" data-id="'+esc(id)+'">'+esc(label)+'</button>';
@@ -86,17 +86,6 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
        '. Select Refresh to retry without overwriting saved records.';
     }
    }
-   // Annual Return edits live in a separate cloud record. Only an explicitly
-   // queued, owner-scoped correction is applied to the real private register.
-   const corrections=await applyQueuedDirectorAddressCorrections(user);
-   if(getUser?.()?.id===user.id&&state.userId===user.id){
-    if(corrections.updated)
-     state.message='Updated '+corrections.updated+' saved director residential address cell(s) '+
-      'in private Statutory Registers. Previous versions were backed up.';
-    if(corrections.errors.length)
-     state.error='Some director-address corrections need review: '+
-      corrections.errors.slice(0,3).join(' | ')+'. Select Refresh to retry.';
-   }
   }catch(error){state.error=String(error?.message||error);}
   finally{state.loading=false;notify();}
  }
@@ -159,37 +148,6 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   validateRegisterBook(value);
   if(value.companyId!==cid)throw Error('Stored register belongs to a different company.');
   return value;
- }
-
- async function applyQueuedDirectorAddressCorrections(user){
-  const result={updated:0,errors:[]};
-  // Registered owners alone can retrieve their private Annual Return drafts.
-  // Read corrections from the RLS-protected cloud; no personal particulars
-  // are embedded in the public source repository.
-  const {data,error}=await db.from('annual_return_drafts')
-   .select('company_id,payload').eq('user_id',user.id);
-  if(error)throw Error('Could not check director address corrections: '+error.message);
-  const owned=new Set((getCompanies?.()||[]).filter(company=>
-   company?.id&&(!company.user_id||company.user_id===user.id)).map(company=>company.id));
-  for(const row of data||[]){
-   const instructions=row?.payload?.pendingStatutoryDirectorAddressCorrections;
-   if(!owned.has(row?.company_id)||!Array.isArray(instructions)||!instructions.length)continue;
-   if(getUser?.()?.id!==user.id||state.userId!==user.id)return result;
-   try{
-    const original=await remoteBook(user.id,row.company_id);
-    if(!original)continue;
-    const change=applyDirectorAddressCorrections(original,instructions);
-    if(!change.changed)continue; // Idempotent; never replace correct records.
-    const {syncError}=await writeBook(change.book,{
-     expectedUpdatedAt:original.updatedAt,baseBook:original
-    });
-    result.updated+=change.changed;
-    if(syncError)result.errors.push(row.company_id+': Annual Return sync: '+syncError);
-   }catch(error){
-    result.errors.push(row.company_id+': '+String(error?.message||error));
-   }
-  }
-  return result;
  }
 
  async function legacyOriginals(cid){
@@ -292,6 +250,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    '<div class="rb-editor-actions">'+act('Save Changes','sr-save','','primary')+
      (state.conflict?act('Overwrite Latest (Back Up First)','sr-force-save','','secondary'):'')+
     act('Previous Versions','sr-history')+
+    act('Check Director Address Against Annual Return','sr-check-director-address')+
     (state.originalDocs.some(d=>/\.xlsx$/i.test(String(d.name||'')))?
      act('Recheck Original Excel Former Name','sr-recheck-former','','secondary'):'')+
     (state.dirty?act('Discard Unsaved Edits','sr-discard'):'')+
@@ -468,7 +427,58 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   document.getElementById('sr-text-value')?.select();
   return null;
  }
+ async function checkDirectorAddressAgainstAnnualReturn(){
+  if(!state.book||!state.selectedId||state.loading||state.saving)return;
+  if(state.dirty){
+   status('Save Changes before checking Annual Return residential address corrections.',
+    'Unsaved edits were preserved. No cloud register has been changed.');
+   return;
+  }
+  const uid=getUser?.()?.id,cid=state.selectedId;
+  if(!uid)return;
+  state.loading=true;status('Comparing this company\'s Director register with its Annual Return draft…');
+  try{
+   const {data,error}=await db.from('annual_return_drafts').select('payload')
+    .eq('user_id',uid).eq('company_id',cid).maybeSingle();
+   if(error)throw Error('Could not load this company\'s Annual Return draft: '+error.message);
+   if(!data?.payload){status('No saved Annual Return draft exists for this company.');return;}
+   const latest=await remoteBook(uid,cid);
+   if(!latest){status('No saved Statutory Register exists for this company.');return;}
+   const proposals=proposeDirectorAddressCorrections(latest,data.payload);
+   if(!proposals.length){
+    status('No matching Director residential house-number corrections found between this company\'s saved registers and Annual Return. '+
+     'Other address differences must be reviewed manually.');
+    return;
+   }
+   const preview=proposals.slice(0,5).map(p=>p.fullName+'\nOld: '+
+    p.previousAddress.replace(/\s+/g,' ')+'\nNew: '+
+    p.newAddress.replace(/\s+/g,' ')).join('\n\n');
+   if(!window.confirm('Update '+proposals.length+' Director residential address record(s) for this company?\n\n'+
+    preview+(proposals.length>5?'\n\nMore matching records will also be updated.':'')+
+    '\n\nOnly the residential house number changes; the current private register will be backed up.')){
+    status('Correction cancelled. No saved register was changed.');return;
+   }
+   if(state.selectedId!==cid||getUser?.()?.id!==uid)throw Error('Selection changed before correction.');
+   const change=applyDirectorAddressCorrections(latest,proposals);
+   if(!change.changed){status('No change was required in the saved register.');return;}
+   const {updated,syncError}=await writeBook(change.book,{
+    expectedUpdatedAt:latest.updatedAt,baseBook:latest
+   });
+   if(state.selectedId!==cid||getUser?.()?.id!==uid)return;
+   state.book=updated;state.baseBook=structuredClone(updated);
+   state.originalUpdatedAt=updated.updatedAt;state.conflict=false;state.dirty=false;
+   status('Corrected '+change.changed+' Director residential address cell(s) and saved private previous version.'+
+    (syncError?' Automatic Annual Return reconciliation needs review.':''),syncError||'');
+  }catch(error){
+   status('No confirmed correction was completed.',String(error?.message||error));
+  }finally{state.loading=false;notify();}
+ }
+
  function command(action,id='',submitted){
+  if(action==='sr-check-director-address'){
+   void checkDirectorAddressAgainstAnnualReturn();
+   return true;
+  }
   if(action==='sr-recheck-former'){
    // This is an additive lookup. Keep all unsaved statutory edits and never
    // overwrite a conflicting Former Name value found in the working register.
