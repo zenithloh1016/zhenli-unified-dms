@@ -17,7 +17,7 @@ import {savePdfToAndroidFiles} from './native-pdf-save.js';
 import {secretaryFromAnnualReturn,unanimousSecretaryReferences,mergeSecretaryIntoBook} from './statutory-secretary-sync.js';
 import {currentCompanyRegisterView,recordedFormerCompanyName} from './statutory-register-company-context.js';
 import {recoverFormerNameFromOriginalExcels} from './statutory-register-original-former-name.js';
-import {applyDirectorAddressCorrections,proposeDirectorAddressCorrections} from './statutory-director-address-correction.js';
+import {applyDirectorAddressCorrections,proposeDirectorAddressCorrections,applyPersonResidentialAddressUpdates,planPersonResidentialAddressUpdates,directorAddressesFromAnnualReturnDrafts} from './statutory-director-address-correction.js';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const act=(label,action,id='',style='secondary')=>'<button type="button" class="btn '+style+'" data-action="'+action+'" data-id="'+esc(id)+'">'+esc(label)+'</button>';
@@ -29,7 +29,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  const storage=db?.storage?.from(bucket);
  const state={
   userId:'',loaded:false,loading:false,saving:false,error:'',message:'',
-  search:'',page:0,available:new Set(),selectedId:null,book:null,
+  search:'',personAddressName:'',page:0,available:new Set(),selectedId:null,book:null,
   originalUpdatedAt:null,baseBook:null,conflict:false,dirty:false,sheetIndex:0,rowPage:0,
   reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:true,
   importPreview:null,importFilename:'',importing:false,originalDocs:[],
@@ -43,7 +43,7 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  const status=(message,error='')=>{state.message=message;state.error=error;notify();};
  function reset(){
   Object.assign(state,{userId:'',loaded:false,loading:false,saving:false,error:'',message:'',
-   search:'',page:0,available:new Set(),selectedId:null,book:null,originalUpdatedAt:null,baseBook:null,conflict:false,
+   search:'',personAddressName:'',page:0,available:new Set(),selectedId:null,book:null,originalUpdatedAt:null,baseBook:null,conflict:false,
    dirty:false,sheetIndex:0,rowPage:0,reviewMode:'review',reviewQuery:'',reviewStatus:'all',reviewPage:0,reviewExpanded:'',showBlankFields:true,
     importPreview:null,importFilename:'',importing:false,originalDocs:[],
     historyOpen:false,historyItems:[],historyPreview:null,historyPreviewName:'',
@@ -354,6 +354,10 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
    '<div><strong>'+state.available.size+'</strong><span>Editable registers saved</span></div>'+
    '<div><strong>'+filtered.length+'</strong><span>Matching companies</span></div></div>'+
    '<div class="rb-help">Import ZIP files containing Excel Register Books (.xlsx), text-based PDFs or Word (.docx). Excel worksheets and extracted text become editable. Scanned PDFs need manual transcription; older .xls files must be converted to .xlsx. The original ZIP is not published or stored.</div>'+
+   '<div class="rb-help"><strong>Synchronize a director’s residential address across your company portfolio.</strong> UNICOSEC checks the existing Annual Return drafts against editable Directors, Members, Beneficial Owners and Secretaries registers, and asks for your confirmation before saving a change. Unrelated addresses are never changed.</div>'+
+   '<label class="rb-search-label" for="sr-person-address-name">Director’s full name (as recorded in the Annual Return)</label>'+
+   '<input type="text" id="sr-person-address-name" maxlength="180" autocomplete="off" value="'+esc(state.personAddressName||'')+'" placeholder="Enter the director’s full name" />'+
+   '<div class="rb-editor-actions">'+act('Preview and Sync Residential Address Across All Registers','sr-sync-person-addresses','','secondary')+'</div>'+
    '<label class="rb-search-label" for="rb-search">Find company by name or registration number</label>'+
    '<input type="search" id="rb-search" value="'+esc(state.search)+'" placeholder="Search companies"/>'+
    '<div class="rb-table-scroll"><table class="rb-table"><thead><tr><th>No.</th><th>Company</th><th>Registration No.</th><th>Record</th><th>Action</th></tr></thead><tbody>'+
@@ -427,6 +431,101 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
   document.getElementById('sr-text-value')?.select();
   return null;
  }
+ async function syncPersonResidentialAddressAcrossPortfolio(){
+  if(state.loading||state.saving)return;
+  if(state.selectedId||state.dirty){
+   status('Return to All Companies and save any pending register changes before bulk syncing addresses.');
+   return;
+  }
+  const name=String(document.getElementById('sr-person-address-name')?.value||
+   state.personAddressName||'').trim();
+  if(name.length<4||name.length>180){
+   status('', 'Enter the director’s full name before starting a portfolio-wide residential address check.');
+   return;
+  }
+  const uid=getUser?.()?.id;
+  if(!uid){status('', 'Sign in before reviewing private statutory registers.');return;}
+  state.personAddressName=name;state.saving=true;
+  status('Checking private Annual Return drafts for '+name+'…');
+  try{
+   const {data,error}=await db.from('annual_return_drafts')
+    .select('company_id,payload').eq('user_id',uid).limit(1000);
+   if(error)throw Error('Could not load your Annual Return drafts: '+error.message);
+   const {candidates,conflicts}=directorAddressesFromAnnualReturnDrafts(data,name);
+   if(conflicts.length){
+    throw Error('Conflicting residential addresses were recorded for this Director across Annual Return drafts. '+
+     'Please correct the contradictory drafts before bulk synchronization.');
+   }
+   if(candidates.length!==1){
+    throw Error(candidates.length===0?
+     'No confirmed matching Director with a complete residential address was found in saved Annual Return drafts.':
+     'More than one identification number matched that name. Review the identity before synchronizing.');
+   }
+   const owned=(getCompanies?.()||[]).filter(company=>
+    company?.id&&(!company.user_id||company.user_id===uid)&&state.available.has(company.id));
+   const proposals=[],warnings=[];
+   for(let i=0;i<owned.length;i++){
+    if(getUser?.()?.id!==uid)throw Error('The signed-in user changed; no more registers will be processed.');
+    const company=owned[i];
+    try{
+     const existing=await remoteBook(uid,company.id);
+     if(existing){
+      const changes=planPersonResidentialAddressUpdates(existing,candidates);
+      if(changes.length)proposals.push({company,changes});
+     }
+    }catch(e){warnings.push(company.name+': '+String(e?.message||e));}
+    if((i+1)%10===0||i+1===owned.length)
+     status('Reviewed '+(i+1)+' / '+owned.length+' company register sets; '+
+      proposals.reduce((sum,proposal)=>sum+proposal.changes.length,0)+' address cell(s) require correction.');
+   }
+   if(!proposals.length){
+    status('No matching residential house-number differences remain in the accessible statutory registers.'+
+     (warnings.length?' '+warnings.length+' register set(s) could not be checked.':''),
+     warnings.slice(0,3).join(' | '));
+    return;
+   }
+   const total=proposals.reduce((sum,p)=>sum+p.changes.length,0);
+   const details=proposals.slice(0,10).map(p=>p.company.name+
+    ' — '+p.changes.length+' field(s) in '+
+    [...new Set(p.changes.map(x=>x.sheetName))].join(', ')).join('\n');
+   const confirmation='Director: '+name+'\n'+
+    'Residential address from Annual Return: '+candidates[0].newAddress.replace(/\s+/g,' ')+
+    '\n\n'+total+' address cell(s) across '+proposals.length+' company register set(s):\n'+
+    details+(proposals.length>10?'\n… and '+(proposals.length-10)+' more companies':'')+
+    '\n\nOnly a matching person with the same identification number and unchanged street, town, postcode and state will be updated. Each affected company register is backed up first.\n\nProceed?';
+   if(!window.confirm(confirmation)){
+    status('Portfolio-wide correction cancelled; no Statutory Registers were changed.');
+    return;
+   }
+   let changed=0,savedCompanies=0;
+   for(let i=0;i<proposals.length;i++){
+    if(getUser?.()?.id!==uid)throw Error('The signed-in user changed; stopped further updates.');
+    const {company}=proposals[i];
+    try{
+     // Reload immediately before writing. Never replace an out-of-date draft,
+     // and let the existing writeBook conflict and private backup rules apply.
+     const previous=await remoteBook(uid,company.id);
+     if(!previous)continue;
+     const update=applyPersonResidentialAddressUpdates(previous,candidates);
+     if(!update.changed)continue;
+     const {syncError}=await writeBook(update.book,{
+      expectedUpdatedAt:previous.updatedAt,baseBook:previous
+     });
+     savedCompanies++;changed+=update.changed;
+     if(syncError)warnings.push(company.name+' Annual Return: '+syncError);
+    }catch(e){warnings.push(company.name+': '+String(e?.message||e));}
+    status('Saved '+(i+1)+' / '+proposals.length+' matching company register set(s). '+
+     changed+' residential address cell(s) corrected.');
+   }
+   status('Residential address synchronization finished: '+changed+' cell(s) updated across '+
+    savedCompanies+' companies. The original uploaded Register Book Excel files were preserved.'+
+    (warnings.length?' '+warnings.length+' warning(s) require review.':''),
+    warnings.slice(0,4).join(' | '));
+  }catch(e){status('Residential address synchronization did not finish: '+String(e?.message||e),
+    String(e?.message||e));}
+  finally{state.saving=false;notify();}
+ }
+
  async function checkDirectorAddressAgainstAnnualReturn(){
   if(!state.book||!state.selectedId||state.loading||state.saving)return;
   if(state.dirty){
@@ -475,6 +574,10 @@ export function createRegisterBookTab({db,bucket='dms-private',getUser,getCompan
  }
 
  function command(action,id='',submitted){
+  if(action==='sr-sync-person-addresses'){
+   void syncPersonResidentialAddressAcrossPortfolio();
+   return true;
+  }
   if(action==='sr-check-director-address'){
    void checkDirectorAddressAgainstAnnualReturn();
    return true;
