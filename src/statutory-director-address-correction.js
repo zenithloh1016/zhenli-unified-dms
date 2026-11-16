@@ -75,3 +75,75 @@ export function applyDirectorAddressCorrections(book, corrections) {
   }
   return {book: changed ? updated : book, changed};
 }
+
+
+/**
+ * Build a reviewable correction proposal from an existing Annual Return draft.
+ * Require an exact name + identification-number match and the same street /
+ * postcode; only the residence's house number may change automatically.
+ */
+export function proposeDirectorAddressCorrections(book, draft) {
+  const particulars=Array.isArray(draft?.particulars)?draft.particulars:[];
+  const draftDirectors=[];
+  for(let i=0;i<particulars.length;i++){
+    const label=tidy(particulars[i]?.en);
+    if(!/^DIRECTOR\s+\d+$/i.test(label))continue;
+    const record={};
+    for(let j=i+1;j<Math.min(i+12,particulars.length);j++){
+      const item=particulars[j],field=tidy(item?.en);
+      if(/^DIRECTOR\s+\d+$|^COMPANY SECRETARY$|^SECTION\s+[A-Z]\b/i.test(field))break;
+      if(field==='Full Name')record.fullName=item.value;
+      if(field==='NRIC / Passport No.')record.identificationNo=item.value;
+      if(field==='Residential Address')record.newAddress=item.value;
+    }
+    if(record.fullName&&record.identificationNo&&record.newAddress)
+      draftDirectors.push(record);
+  }
+  const proposals=[],seen=new Set();
+  const consider=fields=>{
+    const name=fields.find(f=>nameLabels.has(labelKey(f.label)));
+    const id=fields.find(f=>idLabels.has(labelKey(f.label)));
+    const address=fields.find(f=>addressLabels.has(labelKey(f.label)));
+    if(!name||!id||!address||!id.value||!address.value)return;
+    const match=draftDirectors.find(d=>key(d.fullName)===key(name.value)&&
+      key(d.identificationNo)===key(id.value));
+    if(!match)return;
+    const oldNo=/^NO\s+(\d+)\b/.exec(addressKey(address.value));
+    const nextNo=/^NO\s+(\d+)\b/.exec(addressKey(match.newAddress));
+    if(!oldNo||!nextNo||oldNo[1]===nextNo[1])return;
+    const oldStreet=addressKey(address.value).replace(/^NO\s+\d+\s+/,'');
+    const newStreet=addressKey(match.newAddress).replace(/^NO\s+\d+\s+/,'');
+    if(oldStreet!==newStreet)return; // Never silently change street, postcode, or state.
+    const proposal={fullName:match.fullName,identificationNo:match.identificationNo,
+      previousAddress:String(address.value),newAddress:String(match.newAddress)};
+    const signature=[key(proposal.fullName),key(proposal.identificationNo),
+      addressKey(proposal.previousAddress),addressKey(proposal.newAddress)].join(':');
+    if(!seen.has(signature)){seen.add(signature);proposals.push(proposal);}
+  };
+  for(const sheet of book?.sheets||[]){
+    if(!isDirectors(sheet.name))continue;
+    const rows=sheet.rows||[];
+    for(let hi=0;hi<Math.min(rows.length,40);hi++){
+      const headings=(rows[hi]||[]).map(labelKey);
+      if(!headings.some(label=>nameLabels.has(label))||
+        !headings.some(label=>addressLabels.has(label)))continue;
+      for(let ri=hi+1;ri<rows.length;ri++){
+        const row=rows[ri]||[];
+        consider(headings.map((label,col)=>({label,value:row[col]})));
+      }
+      break;
+    }
+    for(let ri=0;ri<rows.length;ri++){
+      const row=rows[ri]||[];
+      if(!nameLabels.has(labelKey(row[0]))||!row[1])continue;
+      const fields=[];
+      for(let j=ri;j<Math.min(ri+18,rows.length);j++){
+        const r=rows[j]||[];
+        if(j>ri&&nameLabels.has(labelKey(r[0])))break;
+        if(r.length>=2)fields.push({label:r[0],value:r[1]});
+      }
+      consider(fields);
+    }
+  }
+  return proposals;
+}
