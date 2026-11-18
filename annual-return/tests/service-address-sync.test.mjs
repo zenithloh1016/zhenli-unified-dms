@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {cloneBlank} from '../src/core.js';
-import {importCombinedRegisterSnapshot} from '../src/register-import.js';
+import {readFileSync} from 'node:fs';
+import {importCombinedRegisterSnapshot,currentStatutoryServiceAddresses,useStatutoryServiceAddress} from '../src/register-import.js';
 
 const field=(label,value)=>({type:'field',label,value});
 const group=title=>({type:'group',title});
@@ -72,4 +73,71 @@ test('financial records address follows an existing principal business address w
  const {document}=importCombinedRegisterSnapshot(cloneBlank(),data);
  assert.equal(value(document,business),'PENANG');
  assert.equal(value(document,financial),'PENANG');
+});
+
+test('distinct current Service Addresses are offered without guessing; former offices excluded',()=>{
+ const data=snapshot({
+  directors:[['DIRECTOR A','IPOH'],['DIRECTOR B','KUALA LUMPUR'],['FORMER DIRECTOR','OLD TOWN','Former']],
+  secretaries:[['SECRETARY A','IPOH'],['FORMER SECRETARY','FORMER SECRETARY OFFICE','Former']]
+ });
+ const choices=currentStatutoryServiceAddresses(data);
+ assert.deepEqual(choices.map(x=>x.value),['IPOH','KUALA LUMPUR']);
+ assert(choices[0].label.includes('DIRECTOR A'));
+ assert(choices[0].label.includes('SECRETARY A'));
+ const {document}=importCombinedRegisterSnapshot(cloneBlank(),data);
+ assert.equal(value(document,business),'','ambiguous addresses must not auto-select');
+ assert.equal(value(document,financial),'');
+});
+
+test('explicit Service Address selection replaces both old saved values before PDF',()=>{
+ const data=snapshot({directors:[['DIRECTOR A','IPOH'],['DIRECTOR B','KUALA LUMPUR']],
+  company:[['Business Address','LEGACY BIZ'],['Address Where Financial Records Are Kept','OLD FINANCIAL']]
+ });
+ const original=cloneBlank();
+ original.particulars.find(x=>x.en===business).value='OLD MANUAL BUSINESS ADDRESS';
+ original.particulars.find(x=>x.en===financial).value='OLD MANUAL ACCOUNTING OFFICE';
+ const pre=structuredClone(original),source=structuredClone(data);
+ const result=useStatutoryServiceAddress(original,data,'KUALA LUMPUR');
+ assert.equal(value(result.document,business),'KUALA LUMPUR');
+ assert.equal(value(result.document,financial),'KUALA LUMPUR');
+ assert.equal(result.overwritten,2);
+ assert.equal(result.changed,2);
+ assert.deepEqual(original,pre,'do not mutate current draft before its backup');
+ assert.deepEqual(data,source,'do not alter archived statutory entries');
+ assert.equal(value(useStatutoryServiceAddress(result.document,data,'KUALA LUMPUR').document,business),'KUALA LUMPUR');
+ assert.equal(useStatutoryServiceAddress(result.document,data,'KUALA LUMPUR').changed,0);
+});
+
+test('only an actual current saved Service Address can be chosen',()=>{
+ const data=snapshot({directors:[['D','CURRENT','Current'],['F','FORMER','Former']]});
+ assert.throws(()=>useStatutoryServiceAddress(cloneBlank(),data,'FORMER'),/Choose an address/);
+ assert.throws(()=>useStatutoryServiceAddress(cloneBlank(),data,'INVENTED'),/Choose an address/);
+});
+
+test('company mismatch and removed destination fields are blocked',()=>{
+ const data=snapshot({directors:[['DIRECTOR','IPOH']]});
+ const other=cloneBlank();other.company.no='209999999999';
+ assert.throws(()=>useStatutoryServiceAddress(other,data,'IPOH'),/another company/);
+ const missing=cloneBlank();
+ missing.particulars=missing.particulars.filter(x=>x.en!==financial);
+ assert.throws(()=>useStatutoryServiceAddress(missing,data,'IPOH'),/Restore both/);
+});
+
+test('when one of many statutory Service Addresses already matches financial records, blank business can follow it',()=>{
+ const data=snapshot({directors:[['A','IPOH'],['B','PENANG']],
+  company:[['Address Where Financial Records Are Kept','PENANG']]
+ });
+ const {document}=importCombinedRegisterSnapshot(cloneBlank(),data);
+ assert.equal(value(document,business),'PENANG');
+ assert.equal(value(document,financial),'PENANG');
+});
+
+test('Annual Return UI includes an explicit address selector and pre-PDF application handler',()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const main=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+ for(const id of ['sync-service-address','service-address-chooser','service-address-choice','apply-service-address'])
+  assert(html.includes('id="'+id+'"'));
+ assert(main.includes("useStatutoryServiceAddress(doc,serviceAddressSource,value)"));
+ assert(main.includes("applyServiceAddressFromSavedRegisters("));
+ assert(main.includes("doc=result.document;normalizeReviewValues()"));
 });
