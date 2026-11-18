@@ -92,22 +92,56 @@ const bos={
  'Criteria of Beneficial Ownership':[/^criteria of (?:beneficial ownership|bo)$/i,/^criteria$/i,/^beneficial owner criteria$/i]
 };
 /**
- * Read service-address defaults from active officeholders only.
- * Conflicting or missing service addresses are not a reliable company address.
+ * Distinct currently recorded officer service addresses. Different
+ * directors/secretaries may have different addresses; do not guess.
  */
-function commonCurrentServiceAddress(sections){
- const candidates=[];
- for(const title of [/^register of directors$/i,/^register of secretaries$/i]){
-  const section=sections.find(s=>title.test(txt(s.title)));
+export function currentStatutoryServiceAddresses(snapshot){
+ const found=new Map();
+ for(const [role,title] of [['Director',/^register of directors$/i],
+                            ['Secretary',/^register of secretaries$/i]]){
+  const section=(snapshot?.sections||[]).find(s=>title.test(txt(s.title)));
   if(!section)continue;
   for(const record of getRecords(section)){
-   const address=select(record.fields,
-    /^service address$/i,/^service \/ business address$/i,/^business address$/i);
-   if(address)candidates.push(address);
+   const value=select(record.fields,/^service address$/i,
+    /^service \/ business address$/i,/^business address$/i);
+   if(!value)continue;
+   const key=norm(value),source=role+(record.title?' — '+txt(record.title).slice(0,70):'');
+   if(!found.has(key))found.set(key,{value,sources:[source]});
+   else found.get(key).sources.push(source);
   }
  }
- const distinct=new Set(candidates.map(address=>norm(address)));
- return distinct.size===1?candidates[0]:'';
+ return [...found.values()].map(item=>({
+  value:item.value,label:item.sources.join(', ').slice(0,180)
+ }));
+}
+/**
+ * One deliberate user selection updates both company address fields for
+ * the selected company, including already-filled but outdated draft values.
+ * Source register particulars and unrelated Annual Return fields stay intact.
+ */
+export function useStatutoryServiceAddress(document,snapshot,address){
+ if(snapshot?.version!==1||!snapshot?.companyId||!Array.isArray(snapshot.sections))
+  throw Error('Invalid statutory register data.');
+ if(!document||!Array.isArray(document.particulars))
+  throw Error('Open an Annual Return before selecting a service address.');
+ if((txt(document.company?.no)&&txt(snapshot.registrationNo)&&
+     norm(document.company.no)!==norm(snapshot.registrationNo))||
+    (txt(document.company?.name)&&norm(document.company.name)!==norm(snapshot.companyName)))
+  throw Error('The service address belongs to another company.');
+ const option=currentStatutoryServiceAddresses(snapshot).find(x=>x.value===address);
+ if(!option)throw Error('Choose an address listed in this company’s current statutory registers.');
+ const copy=structuredClone(document);
+ const keys=['Principal Place of Business','Address Where Financial Records Are Kept'];
+ const targets=keys.map(key=>copy.particulars.find(x=>x.type==='field'&&x.en===key));
+ if(targets.some(item=>!item))
+  throw Error('Restore both company address fields in the Annual Return before syncing.');
+ const old=targets.map(x=>txt(x.value));
+ let changed=0;
+ for(const item of targets){
+  if(txt(item.value)!==option.value){item.value=option.value;changed++;}
+ }
+ return {document:copy,changed,address:option.value,
+  overwritten:old.filter(value=>exists(value)&&value!==option.value).length};
 }
 const charges={
  'Registered No.':[/^registered no\.?$/i,/^charge registration (?:no|number)$/i],
@@ -330,16 +364,20 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
    write(doc.particulars,key,value);
   }
  }
- // Use the common CURRENT statutory service address only as a missing
- // principal-place-of-business default. Existing recorded company addresses
- // and verified Annual Return values always take precedence. The default
- // below also fills a blank financial-records address from the business one.
+ // Automatically fill blank business address only if current officeholders
+ // agree, or the financial-records address matches one service option.
+ // Do not silently replace existing, possibly verified particulars.
  if(!shareholdingOnly){
-  const business=doc.particulars.find(p=>
-   p.type==='field'&&p.en==='Principal Place of Business');
-  if(!exists(business?.value))
-   write(doc.particulars,'Principal Place of Business',
-    commonCurrentServiceAddress(sections));
+  const business=doc.particulars.find(x=>
+   x.type==='field'&&x.en==='Principal Place of Business');
+  const financial=doc.particulars.find(x=>
+   x.type==='field'&&x.en==='Address Where Financial Records Are Kept');
+  if(!exists(business?.value)){
+   const options=currentStatutoryServiceAddresses(snapshot);
+   const selected=options.length===1?options[0]:
+    options.find(x=>norm(x.value)===norm(financial?.value));
+   if(selected)write(doc.particulars,'Principal Place of Business',selected.value);
+  }
  }
  // Share capital must come from EXPRESS capital particulars, not from a
  // sum of members' holdings or transfer/allotment consideration.

@@ -4,7 +4,7 @@ import {Capacitor} from '@capacitor/core';
 import {Filesystem,Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
 import {cloneBlank,importAnnualReturnText,normalizeDocument,emptyCount,populatedCount,setCompanyDetail,syncCompanyDetails,deleteParticularField,showMemberField,removeAnnualReturnRecord,displayParticularLabel,updateParticularLabel,removeParticularSection,removeParticularHeading,moveParticularField,moveParticularSection,insertParticularHeading,restoreRsshAuditorHeading,removeRsshRegisteredCharge2,isRetiredAnnualReturnField} from './core.js';
-import {importCombinedRegisterSnapshot} from './register-import.js';
+import {importCombinedRegisterSnapshot,currentStatutoryServiceAddresses,useStatutoryServiceAddress} from './register-import.js';
 import {prepopulateAnnualReturnFromMasterListing} from './master-listing-import.js';
 import {buildPdf,savePdf,exposeDownload,renderPages} from './pdf.js';
 import {MAX_MSIC_CODES,MSIC_FIELD,SSM_MSIC_LOOKUP,SSM_MSIC_ROC_PDF,extractMSICCodes,formatMSICCodes,matchesMSIC,mergeMSICCatalogues,completeMSICDescriptions} from './msic.js';
@@ -65,6 +65,32 @@ let selectedDmsCompanyId=null,dmsCompanies=[],cloudDrafts=[];
 let selectedDmsFormerName='';
 const applySelectedFormerName=()=>syncFormerNameField(doc,selectedDmsFormerName);
 let pendingRegisterImport='',pendingSecretaryImport='',pendingAuditorImport='';
+let pendingServiceAddressImport='',serviceAddressSource=null,serviceAddressChoices=[];
+function clearServiceAddressChoice(){
+ serviceAddressSource=null;serviceAddressChoices=[];
+ const chooser=$('service-address-chooser');if(chooser)chooser.hidden=true;
+ const select=$('service-address-choice');if(select)select.innerHTML='';
+}
+function applyServiceAddressFromSavedRegisters(value){
+ if(!serviceAddressSource||serviceAddressSource.companyId!==selectedDmsCompanyId)
+  return status('Select the matching company and load its statutory service addresses again.',true);
+ try{
+  const result=useStatutoryServiceAddress(doc,serviceAddressSource,value);
+  if(result.overwritten&&!confirm('This will replace '+result.overwritten+
+    ' already-filled Annual Return address field(s) with the selected statutory Service Address. '+
+    'The previous draft will be backed up. Continue?'))return;
+  if(result.changed){
+   if(!flushDraft())throw Error('Current draft could not be backed up.');
+   doc=result.document;normalizeReviewValues();
+   generated=null;$('download-box').hidden=true;
+   resetView({preserveHistory:true});queueDraftSave();
+  }
+  clearServiceAddressChoice();
+  status(result.changed?
+   'Updated Principal Place of Business and Address Where Financial Records Are Kept from the selected current Service Address. Save/Sync the draft, then generate a NEW PDF to see both addresses.':
+   'Both Annual Return company addresses already match the selected current Service Address.');
+ }catch(error){status('Service Address sync failed: '+String(error.message||error),true);}
+}
 const cloudDraft=createCloudDraftClient({
  getCompanyId:()=>selectedDmsCompanyId,
  getScope:()=>draftScope,
@@ -303,7 +329,7 @@ function applyDmsCompany(company){
  }
  selectedDmsCompanyId=company.id;
  selectedDmsFormerName=String(company.formerName||'').trim();
- pendingSecretaryImport='';pendingAuditorImport='';
+ pendingSecretaryImport='';pendingAuditorImport='';pendingServiceAddressImport='';clearServiceAddressChoice();
  generated=null;$('download-box').hidden=true;
  let previous=null;
  try{previous=readAnnualReturnDraft(localStorage,draftScope,company.id);}
@@ -378,6 +404,37 @@ if(window.parent!==window){
    return;
   }
   if(event.data?.type==='ZHENLI_DMS_AR_IMPORT_COMBINED_RESPONSE'){
+   if(pendingServiceAddressImport&&event.data.id===pendingServiceAddressImport){
+    pendingServiceAddressImport='';
+    $('sync-service-address').disabled=false;
+    if(!event.data.ok){
+     return status('Unable to load statutory Service Addresses: '+
+      String(event.data.error||'Registers not available').slice(0,240),true);
+    }
+    const payload=event.data.payload;
+    if(payload?.companyId!==selectedDmsCompanyId)
+     return status('Company changed; reload its current Service Addresses.',true);
+    try{
+     const choices=currentStatutoryServiceAddresses(payload);
+     if(!choices.length){
+      clearServiceAddressChoice();
+      return status('No current Service Address was recorded in this company’s saved Directors or Secretaries registers. Enter and SAVE it in Statutory Registers, then retry.',true);
+     }
+     serviceAddressSource=payload;serviceAddressChoices=choices;
+     if(choices.length===1){
+      applyServiceAddressFromSavedRegisters(choices[0].value);
+     }else{
+      const select=$('service-address-choice');
+      select.innerHTML='<option value="">Select the correct Service Address…</option>'+
+       choices.map((item,i)=>'<option value="'+i+'">'+
+        esc(item.label+' · '+item.value.slice(0,230))+'</option>').join('');
+      $('service-address-chooser').hidden=false;
+      status('The current directors/secretaries have '+choices.length+
+       ' different Service Addresses. Select the verified principal-business address below, then apply it to both Annual Return fields. No address has been overwritten.');
+     }
+    }catch(error){status('Unable to review statutory Service Addresses: '+error.message,true);}
+    return;
+   }
    const automatic=Boolean(pendingSecretaryImport&&event.data.id===pendingSecretaryImport);
    if(!automatic&&(!pendingRegisterImport||event.data.id!==pendingRegisterImport))return;
    if(automatic){
@@ -1123,6 +1180,24 @@ $('import-combined-register').addEventListener('click',()=>{
   type:'ZHENLI_DMS_AR_IMPORT_COMBINED_REQUEST',
   id:pendingRegisterImport,companyId:selectedDmsCompanyId
  },window.location.origin);
+});
+$('sync-service-address').addEventListener('click',()=>{
+ if(window.parent===window)return status('Open Annual Return inside UNICOSEC to read the saved statutory registers.',true);
+ if(!selectedDmsCompanyId)return status('Select the company before synchronizing its addresses.',true);
+ if(pendingRegisterImport||pendingSecretaryImport||pendingServiceAddressImport)
+  return status('Another statutory register import is still running. Try again when it completes.',true);
+ clearServiceAddressChoice();
+ pendingServiceAddressImport='ar_register_service_'+Date.now().toString(36);
+ $('sync-service-address').disabled=true;
+ status('Reading current Service Addresses from this company’s saved Statutory Registers…');
+ window.parent.postMessage({type:'ZHENLI_DMS_AR_IMPORT_COMBINED_REQUEST',
+  id:pendingServiceAddressImport,companyId:selectedDmsCompanyId},window.location.origin);
+});
+$('apply-service-address').addEventListener('click',()=>{
+ const select=$('service-address-choice');
+ if(select.value===''||!serviceAddressChoices[Number(select.value)])
+  return status('Choose the correct current Service Address before applying it.',true);
+ applyServiceAddressFromSavedRegisters(serviceAddressChoices[Number(select.value)].value);
 });
 $('save-draft').addEventListener('click',()=>{if(!hasDraftData())return draftStatus('Enter some particulars before saving.',true);saveDraftNow();});
 $('cloud-sync-now').addEventListener('click',()=>cloudDraft.syncNow());
