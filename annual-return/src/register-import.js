@@ -91,6 +91,24 @@ const bos={
  'Type of Beneficial Ownership':[/^type of beneficial ownership$/i,/^type of ownership$/i,/^nature of ownership$/i],
  'Criteria of Beneficial Ownership':[/^criteria of (?:beneficial ownership|bo)$/i,/^criteria$/i,/^beneficial owner criteria$/i]
 };
+/**
+ * Read service-address defaults from active officeholders only.
+ * Conflicting or missing service addresses are not a reliable company address.
+ */
+function commonCurrentServiceAddress(sections){
+ const candidates=[];
+ for(const title of [/^register of directors$/i,/^register of secretaries$/i]){
+  const section=sections.find(s=>title.test(txt(s.title)));
+  if(!section)continue;
+  for(const record of getRecords(section)){
+   const address=select(record.fields,
+    /^service address$/i,/^service \/ business address$/i,/^business address$/i);
+   if(address)candidates.push(address);
+  }
+ }
+ const distinct=new Set(candidates.map(address=>norm(address)));
+ return distinct.size===1?candidates[0]:'';
+}
 const charges={
  'Registered No.':[/^registered no\.?$/i,/^charge registration (?:no|number)$/i],
  'Date of Registration':[/^date of registration$/i],
@@ -311,6 +329,17 @@ export function importCombinedRegisterSnapshot(document,snapshot,{overwrite=fals
    if(/Date of Incorporation|Anniversary Date/i.test(key))value=safeDate(value);
    write(doc.particulars,key,value);
   }
+ }
+ // Use the common CURRENT statutory service address only as a missing
+ // principal-place-of-business default. Existing recorded company addresses
+ // and verified Annual Return values always take precedence. The default
+ // below also fills a blank financial-records address from the business one.
+ if(!shareholdingOnly){
+  const business=doc.particulars.find(p=>
+   p.type==='field'&&p.en==='Principal Place of Business');
+  if(!exists(business?.value))
+   write(doc.particulars,'Principal Place of Business',
+    commonCurrentServiceAddress(sections));
  }
  // Share capital must come from EXPRESS capital particulars, not from a
  // sum of members' holdings or transfer/allotment consideration.
